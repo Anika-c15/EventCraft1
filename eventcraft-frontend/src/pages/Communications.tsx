@@ -1,0 +1,266 @@
+import React, { useState, useEffect } from 'react'
+import { Send, Plus, Mail, Clock, CheckCircle, AlertCircle, FileText, Sparkles } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { Modal } from '../components/ui/Modal'
+import { communicationsApi } from '../api/client'
+import { useAppContext } from '../context/AppContext'
+
+const statusVariant = (status: string) => {
+  switch (status) {
+    case 'Sent': return 'success'
+    case 'Draft': return 'gray'
+    case 'Scheduled': return 'info'
+    case 'Failed': return 'danger'
+    default: return 'default'
+  }
+}
+
+const statusIcon = (status: string) => {
+  switch (status) {
+    case 'Sent': return <CheckCircle size={14} className="text-green-500" />
+    case 'Draft': return <FileText size={14} className="text-gray-400" />
+    case 'Scheduled': return <Clock size={14} className="text-blue-500" />
+    case 'Failed': return <AlertCircle size={14} className="text-red-500" />
+    default: return null
+  }
+}
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+
+const STAGES = ['Participant Intake', 'Team Formation', 'Evaluation', 'Results', 'Progression']
+const RECIPIENT_TYPES = [
+  { value: 'all_participants', label: 'All Participants' },
+  { value: 'judges', label: 'Judges Panel' },
+  { value: 'winners', label: 'Winners' },
+]
+
+export const Communications: React.FC = () => {
+  const { eventId } = useAppContext()
+  const [comms, setComms] = useState<any[]>([])
+  const [showModal, setShowModal] = useState(false)
+  const [drafting, setDrafting] = useState(false)
+  const [sending, setSending] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    stage: 'Team Formation',
+    recipient_type: 'all_participants',
+    subject: '',
+    body: '',
+    extra_context: '',
+  })
+
+  useEffect(() => {
+    if (eventId) load()
+  }, [eventId])
+
+  const load = async () => {
+    if (!eventId) return
+    try {
+      const data = await communicationsApi.list(eventId)
+      setComms(data)
+    } catch { setComms([]) }
+  }
+
+  const handleDraftWithAI = async () => {
+    if (!eventId) return
+    setDrafting(true)
+    try {
+      const comm = await communicationsApi.draft(eventId, {
+        stage: form.stage,
+        recipient_type: form.recipient_type,
+        extra_context: form.extra_context || undefined,
+      })
+      setForm((f) => ({ ...f, subject: comm.subject, body: comm.body }))
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  const handleSaveDraft = async () => {
+    if (!eventId || !form.subject || !form.body) return
+    try {
+      await communicationsApi.create(eventId, {
+        recipient: RECIPIENT_TYPES.find((r) => r.value === form.recipient_type)?.label || form.recipient_type,
+        subject: form.subject,
+        body: form.body,
+        stage: form.stage,
+      })
+      setShowModal(false)
+      setForm({ stage: 'Team Formation', recipient_type: 'all_participants', subject: '', body: '', extra_context: '' })
+      load()
+    } catch (e: any) {
+      alert(e.message)
+    }
+  }
+
+  const handleSend = async (commId: string) => {
+    if (!eventId) return
+    setSending(commId)
+    try {
+      await communicationsApi.send(eventId, commId)
+      setTimeout(load, 1500) // reload after send completes
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setSending(null)
+    }
+  }
+
+  const sentCount = comms.filter((c) => c.status === 'Sent').length
+  const draftCount = comms.filter((c) => c.status === 'Draft').length
+  const scheduledCount = comms.filter((c) => c.status === 'Scheduled').length
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Communications</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {sentCount} sent · {draftCount} drafts · {scheduledCount} scheduled
+          </p>
+        </div>
+        <Button variant="primary" onClick={() => setShowModal(true)}>
+          <Plus size={15} />
+          New Communication
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {[
+          { count: sentCount, label: 'Sent', icon: <CheckCircle size={18} className="text-green-500" />, bg: 'bg-green-50' },
+          { count: draftCount, label: 'Drafts', icon: <FileText size={18} className="text-gray-400" />, bg: 'bg-gray-50' },
+          { count: scheduledCount, label: 'Scheduled', icon: <Clock size={18} className="text-blue-500" />, bg: 'bg-blue-50' },
+        ].map(({ count, label, icon, bg }) => (
+          <div key={label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+            <div className={`w-9 h-9 ${bg} rounded-lg flex items-center justify-center`}>{icon}</div>
+            <div>
+              <p className="text-xl font-bold text-gray-900">{count}</p>
+              <p className="text-xs text-gray-500">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Log */}
+      <Card padding={false}>
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Communication Log</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {['Recipient', 'Subject', 'Stage', 'Status', 'Date', 'Action'].map((h) => (
+                  <th key={h} className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3 text-left">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {comms.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
+                    No communications yet
+                  </td>
+                </tr>
+              ) : (
+                comms.map((c: any) => (
+                  <tr key={c.id} className="hover:bg-gray-50/50">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <Mail size={14} className="text-gray-400 flex-shrink-0" />
+                        <span className="text-sm text-gray-700">{c.recipient}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-800 font-medium max-w-xs truncate">{c.subject}</td>
+                    <td className="px-5 py-3">
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{c.stage}</span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-1.5">
+                        {statusIcon(c.status)}
+                        <Badge variant={statusVariant(c.status) as any}>{c.status}</Badge>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500">{formatDate(c.created_at)}</td>
+                    <td className="px-5 py-3">
+                      {c.status === 'Draft' && (
+                        <Button variant="primary" size="sm"
+                          onClick={() => handleSend(c.id)}
+                          disabled={sending === c.id}>
+                          <Send size={12} />
+                          {sending === c.id ? 'Sending...' : 'Send'}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* New Communication Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="New Communication" maxWidth="max-w-2xl">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+              <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                {STAGES.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Recipient</label>
+              <select value={form.recipient_type} onChange={(e) => setForm({ ...form, recipient_type: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+                {RECIPIENT_TYPES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Extra Context (optional)</label>
+            <input type="text" value={form.extra_context}
+              onChange={(e) => setForm({ ...form, extra_context: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="e.g. Deadline is tomorrow at 11:59 PM" />
+          </div>
+
+          <Button variant="secondary" onClick={handleDraftWithAI} disabled={drafting} className="w-full justify-center">
+            <Sparkles size={15} />
+            {drafting ? 'Drafting with AI...' : 'Draft with Gemini AI'}
+          </Button>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+            <input type="text" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="Email subject..." />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Message Body</label>
+            <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })}
+              rows={8} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none font-mono" />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={handleSaveDraft}>Save as Draft</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
