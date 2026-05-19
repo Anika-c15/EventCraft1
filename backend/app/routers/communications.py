@@ -188,3 +188,111 @@ def get_activity_log(
          "created_at": l.created_at.isoformat()}
         for l in logs
     ]
+
+
+@router.post("/send-portal-links")
+async def send_portal_links(
+    event_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    """
+    Send each participant their personal JWT portal link via email.
+    Reuses the existing portal-link draft if it exists, otherwise creates one.
+    """
+    from ..config import settings
+
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    participants = db.query(models.Participant).filter(
+        models.Participant.event_id == event_id,
+        models.Participant.status.in_([
+            models.ParticipantStatus.active,
+            models.ParticipantStatus.pending,
+        ]),
+    ).all()
+
+    if not participants:
+        raise HTTPException(400, "No participants found")
+
+    # Build personalised recipients with their unique portal URL
+    recipients = []
+    for p in participants:
+        if not p.portal_token:
+            continue
+        portal_url = f"{settings.FRONTEND_URL}/portal/{p.portal_token}?event={event_id}"
+        recipients.append({
+            "email": p.email,
+            "name": p.name,
+            "vars": {
+                "participant_name": p.name,
+                "portal_url": portal_url,
+                "event_name": event.name,
+            },
+        })
+
+    subject = f"Your Personal Portal Link — {event.name}"
+    body_template = """Dear {participant_name},
+
+Welcome to {event_name}!
+
+You can access your personal participant portal using the link below.
+No account or password is required — just click the link:
+
+{portal_url}
+
+Your portal shows:
+• Your current stage in the event journey
+• Team details and teammates (once teams are formed)
+• Key event dates and milestones
+• Progression status
+
+This link is unique to you — please do not share it.
+
+Best regards,
+EventCraft Committee"""
+
+    # Reuse existing portal-link draft instead of creating a duplicate
+    existing_comm = db.query(models.Communication).filter(
+        models.Communication.event_id == event_id,
+        models.Communication.subject.like("%Personal Portal Link%"),
+        models.Communication.status == models.CommStatus.draft,
+    ).first()
+
+    if existing_comm:
+        comm = existing_comm
+    else:
+        comm = models.Communication(
+            event_id=event_id,
+            recipient="All Participants",
+            subject=subject,
+            body=body_template,
+            status=models.CommStatus.draft,
+            stage="Participant Intake",
+        )
+        db.add(comm)
+        db.commit()
+        db.refresh(comm)
+
+    async def do_send():
+        results = await send_bulk_emails(recipients, subject, body_template)
+        comm.status = models.CommStatus.sent
+        comm.sent_at = datetime.utcnow()
+        db.commit()
+
+        db.add(models.ActivityLog(
+            event_id=event_id,
+            message=f"Portal links sent to {results['sent']} participants ({results['failed']} failed)",
+            log_type="success" if results["failed"] == 0 else "warning",
+        ))
+        db.commit()
+
+    background_tasks.add_task(do_send)
+
+    return {
+        "message": f"Sending portal links to {len(recipients)} participants",
+        "recipients": len(recipients),
+    }

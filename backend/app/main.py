@@ -156,6 +156,13 @@ def _seed_communications(db, event_id: str):
     comms = [
         {
             "recipient": "All Participants",
+            "subject": "Your Personal Portal Link — EventCraft Hackathon 2026",
+            "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026!\n\nYou can access your personal participant portal using the link below.\nNo account or password is required — just click the link:\n\n{portal_url}\n\nYour portal shows:\n• Your current stage in the event journey\n• Team details and teammates (once teams are formed)\n• Key event dates and milestones\n• Progression status\n\nThis link is unique to you — please do not share it.\n\nBest regards,\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Participant Intake",
+        },
+        {
+            "recipient": "All Participants",
             "subject": "Welcome to EventCraft Hackathon 2026 — Registration Confirmed",
             "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026! Your registration has been confirmed.\n\nHere's what to expect:\n1. Team Formation — Balanced teams will be formed based on your skills.\n2. Evaluation — Teams present solutions to expert judges.\n3. Results & Progression — Top teams advance to the final round.\n\nBest regards,\nEventCraft Committee",
             "status": models.CommStatus.sent,

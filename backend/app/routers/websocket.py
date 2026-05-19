@@ -53,22 +53,19 @@ async def websocket_endpoint(
 ):
     db = SessionLocal()
     try:
-        # Auth check
+        # Auth check — accept if token is valid for ANY user or participant
+        # (stale event_id is handled gracefully — WS still connects, just no data)
         if not _validate_token(token, db):
             await websocket.close(code=4001, reason="Unauthorized")
             return
 
-        # Verify event exists
-        event = db.query(models.Event).filter(models.Event.id == event_id).first()
-        if not event:
-            await websocket.close(code=4004, reason="Event not found")
-            return
+        # Don't reject on wrong event_id — just connect and let client handle it
+        # This prevents 403 errors when DB is reset and event IDs change
     finally:
         db.close()
 
     await manager.connect(websocket, event_id)
 
-    # Send initial connection confirmation
     await websocket.send_text(json.dumps({
         "type": "connected",
         "event_id": event_id,
@@ -77,7 +74,6 @@ async def websocket_endpoint(
 
     try:
         while True:
-            # Keep connection alive — handle ping/pong from client
             data = await websocket.receive_text()
             try:
                 msg = json.loads(data)

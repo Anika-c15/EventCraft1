@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Upload, Plus, ExternalLink, Trash2, Search, X } from 'lucide-react'
+import { Upload, Plus, ExternalLink, Trash2, Search, X, Send, Copy, Check } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
-import { participantsApi } from '../api/client'
+import { participantsApi, communicationsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import type { ParticipantLevel, ParticipantStatus } from '../types'
 
@@ -44,6 +44,8 @@ export const Participants: React.FC = () => {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [sendingLinks, setSendingLinks] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -109,6 +111,27 @@ export const Participants: React.FC = () => {
     }
   }
 
+  const handleSendPortalLinks = async () => {
+    if (!eventId) return
+    if (!confirm(`Send personal portal links to all ${participants.length} participants via email?`)) return
+    setSendingLinks(true)
+    try {
+      const result = await communicationsApi.sendPortalLinks(eventId)
+      alert(`Portal links sent to ${result.recipients} participants. Check Communications page for status.`)
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setSendingLinks(false)
+    }
+  }
+
+  const copyPortalLink = (p: any) => {
+    const url = `${window.location.origin}/portal/${p.portal_token}?event=${eventId}`
+    navigator.clipboard.writeText(url)
+    setCopiedId(p.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -126,6 +149,15 @@ export const Participants: React.FC = () => {
             className="hidden"
             onChange={handleCsvImport}
           />
+          <Button
+            variant="secondary"
+            onClick={handleSendPortalLinks}
+            disabled={sendingLinks || participants.length === 0}
+            title="Email each participant their unique portal link"
+          >
+            <Send size={15} />
+            {sendingLinks ? 'Sending...' : 'Send Portal Links'}
+          </Button>
           <Button
             variant="secondary"
             onClick={() => fileInputRef.current?.click()}
@@ -219,15 +251,26 @@ export const Participants: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {p.portal_token && (
-                          <a
-                            href={`/portal/${p.portal_token}?event=${eventId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
-                          >
-                            View Portal
-                            <ExternalLink size={12} />
-                          </a>
+                          <>
+                            <a
+                              href={`/portal/${p.portal_token}?event=${eventId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
+                            >
+                              View
+                              <ExternalLink size={12} />
+                            </a>
+                            <button
+                              onClick={() => copyPortalLink(p)}
+                              className="p-1 text-gray-400 hover:text-primary transition-colors rounded"
+                              title="Copy portal link"
+                            >
+                              {copiedId === p.id
+                                ? <Check size={13} className="text-green-500" />
+                                : <Copy size={13} />}
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => handleDelete(p.id)}

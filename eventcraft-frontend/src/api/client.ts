@@ -152,6 +152,8 @@ export const communicationsApi = {
     request<any>(`/api/events/${eventId}/communications/${commId}/send`, { method: 'POST' }),
   activityLog: (eventId: string) =>
     request<any[]>(`/api/events/${eventId}/communications/activity-log`),
+  sendPortalLinks: (eventId: string) =>
+    request<any>(`/api/events/${eventId}/communications/send-portal-links`, { method: 'POST' }),
 }
 
 // ── Agent ──────────────────────────────────────────────────────────────────────

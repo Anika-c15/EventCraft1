@@ -66,7 +66,7 @@ export function useWebSocket(
       setConnected(false)
       wsRef.current = null
 
-      // Don't reconnect on auth failure
+      // Don't reconnect on auth failure or stale event
       if (e.code === 4001 || e.code === 4004) return
 
       // Exponential backoff reconnect (max 30s)

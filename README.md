@@ -27,15 +27,15 @@ Make sure these are installed on your machine before starting:
 ### Step 1 — Clone / open the project
 
 ```cmd
-cd C:\Users\<your-name>\Desktop\EventCraft
+cd C:\Users\Administrator\Desktop\EventCraft\backend
 ```
 
 ### Step 2 — Backend setup
 
 ```cmd
-cd backend
+cd C:\Users\Administrator\Desktop\EventCraft\backend
 
-:: Create virtual environment (use Python 3.12 explicitly if needed)
+:: Create virtual environment
 python -m venv venv
 
 :: Install dependencies
@@ -69,7 +69,7 @@ Get a **free** key at: https://aistudio.google.com/app/apikey
 Open a **second** CMD window:
 
 ```cmd
-cd C:\Users\<your-name>\Desktop\EventCraft\eventcraft-frontend
+cd C:\Users\Administrator\Desktop\EventCraft\eventcraft-frontend
 
 npm install
 npm run dev
