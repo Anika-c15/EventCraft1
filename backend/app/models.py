@@ -8,7 +8,7 @@ import enum
 import uuid
 
 from .database import Base
-
+from datetime import datetime
 
 def gen_uuid():
     return str(uuid.uuid4())

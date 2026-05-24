@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from . import models
+import uuid
 
 # Use sha256_crypt — works on all Python versions without Rust/bcrypt issues
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
@@ -34,9 +35,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def create_portal_token(participant_id: str) -> str:
     """Long-lived JWT for participant portal — no expiry."""
-    data = {"sub": participant_id, "type": "portal"}
+    data = {
+        "sub": participant_id,
+        "type": "portal",
+        "jti": str(uuid.uuid4())  # ← makes every token unique
+    }
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
 
 def create_judge_token(judge_email: str, event_id: str) -> str:
     """
