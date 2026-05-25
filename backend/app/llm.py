@@ -10,7 +10,7 @@ from google import genai
 from .config import settings
 
 _client = genai.Client(api_key=settings.GEMINI_API_KEY)
-MODEL = "gemini-2.0-flash-lite"  # Fast, free-tier friendly, works with google-genai SDK
+MODEL = "gemini-1.5-flash"  # Higher free tier quota than 2.0-flash-lite
 
 
 def _call(prompt: str) -> str:
@@ -190,40 +190,77 @@ Write a brief 2-sentence neutral explanation for the committee dashboard."""
 # ── Dynamic Event Configuration Agent ─────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are EventCraft's intelligent event configuration assistant.
-Help committee members configure a competitive event by understanding their description
-and translating it into a structured pipeline configuration.
+Your job is to configure a complete event pipeline from a natural language description.
 
-When the user describes their event, extract:
-1. Event phases/stages (in order)
-2. Team formation rules
-3. Evaluation criteria and scoring model
-4. Communication touchpoints
-5. Approval gates
+When the user describes their event, extract ALL of the following:
+1. Event phases/stages (in order) with descriptions and tasks
+2. Team formation rules (team size, skill balance, institution diversity, experience grouping)
+3. Evaluation criteria and scoring weights
+4. Communication touchpoints (which stages need emails)
+5. Anomaly threshold for score divergence
 
-If the description is incomplete or contradictory, ask specific clarifying questions.
+Be proactive — if the user gives you enough info (event type, team size, judging criteria),
+generate the full config immediately. Only ask clarifying questions if critical info is missing.
 
-When you have enough information, respond with a JSON configuration block:
+For a hackathon with teams of N judged on X criteria, you have enough to configure everything.
+
+When ready, respond with EXACTLY this JSON block (no extra text before or after):
+
 ```json
 {
   "pipeline_ready": true,
   "stages": [
-    {"name": "Stage Name", "description": "...", "tasks": ["task1", "task2"]}
+    {
+      "name": "Participant Intake",
+      "description": "Register and verify all participants",
+      "tasks": ["Open registration", "Collect profiles", "Verify eligibility", "Approve roster"]
+    },
+    {
+      "name": "Team Formation",
+      "description": "Form balanced teams based on skills and background",
+      "tasks": ["Configure rules", "Run AI formation", "Review teams", "Approve compositions"]
+    },
+    {
+      "name": "Evaluation",
+      "description": "Judges evaluate team submissions",
+      "tasks": ["Open evaluation portal", "Collect scores", "Aggregate results", "Flag anomalies"]
+    },
+    {
+      "name": "Results",
+      "description": "Announce final rankings",
+      "tasks": ["Calculate rankings", "Generate reports", "Draft announcements", "Notify participants"]
+    },
+    {
+      "name": "Progression",
+      "description": "Advance qualifying teams",
+      "tasks": ["Identify qualifiers", "Send invitations", "Confirm participation", "Archive data"]
+    }
   ],
   "formation_rules": {
     "team_size": 3,
     "skill_balance": true,
     "institution_diversity": true,
     "experience_level_grouping": "mixed",
-    "max_teams": 10
+    "max_teams": 20,
+    "max_per_institution": 1
   },
   "evaluation_criteria": ["Innovation", "Execution", "Presentation", "Impact"],
-  "scoring_weights": {"Innovation": 0.25, "Execution": 0.25, "Presentation": 0.25, "Impact": 0.25},
+  "scoring_weights": {
+    "Innovation": 0.25,
+    "Execution": 0.25,
+    "Presentation": 0.25,
+    "Impact": 0.25
+  },
   "anomaly_threshold": 2.5,
-  "communication_stages": ["Team Formation", "Evaluation", "Results"]
+  "communication_stages": ["Participant Intake", "Team Formation", "Evaluation", "Results", "Progression"]
 }
 ```
 
-If you need more info, set "pipeline_ready": false and ask your questions."""
+Adapt the stages, team_size, criteria, and weights based on what the user describes.
+For example: coding contest → criteria might be ["Correctness", "Efficiency", "Code Quality"]
+Case competition → stages might include "Submission", "Presentation", "Final Pitch"
+
+If info is missing, make reasonable assumptions and mention them in your reply before the JSON."""
 
 
 def agent_chat(

@@ -131,24 +131,47 @@ export const Agent: React.FC = () => {
           <div className="flex items-start gap-3">
             <CheckCircle size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-green-800 mb-2">
-                Pipeline successfully configured!
+              <p className="text-sm font-semibold text-green-800 mb-1">
+                ✅ Pipeline configured! The following were auto-generated:
               </p>
-              <div className="flex flex-wrap gap-2">
-                {pipelineConfig.stages?.map((s: any, i: number) => (
-                  <span
-                    key={i}
-                    className="text-xs bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-full"
-                  >
-                    {i + 1}. {s.name}
-                  </span>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                {/* Stages */}
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <p className="text-xs font-semibold text-green-700 mb-1.5">Pipeline Stages</p>
+                  <div className="space-y-1">
+                    {pipelineConfig.stages?.map((s: any, i: number) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-green-100 text-green-700 text-[10px] flex items-center justify-center font-bold flex-shrink-0">{i + 1}</span>
+                        <span className="text-xs text-gray-700">{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Formation Rules */}
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <p className="text-xs font-semibold text-green-700 mb-1.5">Team Formation</p>
+                  <div className="space-y-1 text-xs text-gray-700">
+                    <p>Team size: <strong>{pipelineConfig.formation_rules?.team_size ?? 3}</strong></p>
+                    <p>Max teams: <strong>{pipelineConfig.formation_rules?.max_teams ?? 10}</strong></p>
+                    <p>Skill balance: <strong>{pipelineConfig.formation_rules?.skill_balance ? 'Yes' : 'No'}</strong></p>
+                    <p>Grouping: <strong>{pipelineConfig.formation_rules?.experience_level_grouping ?? 'mixed'}</strong></p>
+                  </div>
+                </div>
+                {/* Criteria + Comms */}
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <p className="text-xs font-semibold text-green-700 mb-1.5">Evaluation Criteria</p>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {pipelineConfig.evaluation_criteria?.map((c: string) => (
+                      <span key={c} className="text-[10px] bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">{c}</span>
+                    ))}
+                  </div>
+                  <p className="text-xs font-semibold text-green-700 mb-1">Draft Emails</p>
+                  <p className="text-xs text-gray-600">Auto-generated for {pipelineConfig.communication_stages?.length ?? 0} stages</p>
+                </div>
               </div>
-              {pipelineConfig.evaluation_criteria && (
-                <p className="text-xs text-green-700 mt-2">
-                  Criteria: {pipelineConfig.evaluation_criteria.join(', ')}
-                </p>
-              )}
+              <p className="text-xs text-green-600 mt-2">
+                Check <strong>Pipeline</strong>, <strong>Formation Rules</strong>, and <strong>Communications</strong> pages to review. Go to <strong>Approvals</strong> to activate.
+              </p>
             </div>
           </div>
         </Card>

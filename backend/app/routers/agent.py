@@ -1,6 +1,10 @@
 """
 Dynamic Event Configuration via Conversational Agent.
-Committee describes their event in natural language; Gemini configures the pipeline.
+When the agent has enough info, it:
+1. Configures the pipeline stages
+2. Sets formation rules
+3. Auto-generates draft communications for every stage
+4. Creates an activity log entry
 """
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
@@ -40,7 +44,7 @@ def chat(
     if not event:
         raise HTTPException(404, "Event not found")
 
-    # Load chat history for Gemini
+    # Load chat history
     history_records = (
         db.query(models.AgentMessage)
         .filter(models.AgentMessage.event_id == event_id)
@@ -48,67 +52,25 @@ def chat(
         .all()
     )
 
-    # Convert to Gemini format
     gemini_history = [
         {"role": "user" if m.role == "user" else "model", "parts": m.content}
         for m in history_records
     ]
 
-    # Call LLM agent
+    # Call LLM
     result = llm.agent_chat(gemini_history, payload.content)
 
-    # Save user message
-    user_msg = models.AgentMessage(
-        event_id=event_id,
-        role="user",
-        content=payload.content,
-    )
-    db.add(user_msg)
-
-    # Save assistant reply
+    # Save messages
+    db.add(models.AgentMessage(event_id=event_id, role="user", content=payload.content))
     assistant_msg = models.AgentMessage(
-        event_id=event_id,
-        role="assistant",
-        content=result["reply"],
+        event_id=event_id, role="assistant", content=result["reply"]
     )
     db.add(assistant_msg)
 
-    # If pipeline is ready, apply it to the event
+    # ── Apply full configuration when pipeline is ready ────────────────────────
     if result["pipeline_ready"] and result["pipeline_config"]:
         config = result["pipeline_config"]
-        event.pipeline_config = config
-
-        # Update formation rules if provided
-        if "formation_rules" in config:
-            event.formation_rules = config["formation_rules"]
-
-        # Rebuild pipeline stages from agent config
-        existing_stages = db.query(models.PipelineStage).filter(
-            models.PipelineStage.event_id == event_id
-        ).all()
-        for s in existing_stages:
-            db.delete(s)
-        db.flush()
-
-        for i, stage_def in enumerate(config.get("stages", [])):
-            stage = models.PipelineStage(
-                event_id=event_id,
-                name=stage_def["name"],
-                description=stage_def.get("description", ""),
-                order_index=i,
-                status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
-                tasks=stage_def.get("tasks", []),
-            )
-            db.add(stage)
-
-        event.current_stage_index = 0
-
-        log = models.ActivityLog(
-            event_id=event_id,
-            message="Dynamic pipeline configured via conversational agent",
-            log_type="success",
-        )
-        db.add(log)
+        _apply_full_config(event, config, db)
 
     db.commit()
     db.refresh(assistant_msg)
@@ -124,6 +86,132 @@ def chat(
         pipeline_config=result.get("pipeline_config"),
         needs_clarification=result["needs_clarification"],
     )
+
+
+def _apply_full_config(event: models.Event, config: dict, db: Session):
+    """
+    Apply the full agent configuration:
+    - Rebuild pipeline stages
+    - Update formation rules
+    - Auto-generate draft communications for each stage
+    - Create approval gate
+    - Log activity
+    """
+    event_id = event.id
+
+    # 1. Save pipeline config
+    event.pipeline_config = config
+
+    # 2. Update formation rules
+    if "formation_rules" in config:
+        fr = config["formation_rules"]
+        event.formation_rules = {
+            "event_name": event.name,
+            "team_size": fr.get("team_size", 3),
+            "allow_incomplete_teams": fr.get("allow_incomplete_teams", False),
+            "skill_balance": fr.get("skill_balance", True),
+            "institution_diversity": fr.get("institution_diversity", True),
+            "max_per_institution": fr.get("max_per_institution", 1),
+            "experience_level_grouping": fr.get("experience_level_grouping", "mixed"),
+            "max_teams": fr.get("max_teams", 10),
+        }
+
+    # 3. Rebuild pipeline stages
+    existing = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).all()
+    for s in existing:
+        db.delete(s)
+    db.flush()
+
+    stages = config.get("stages", [])
+    for i, stage_def in enumerate(stages):
+        db.add(models.PipelineStage(
+            event_id=event_id,
+            name=stage_def["name"],
+            description=stage_def.get("description", ""),
+            order_index=i,
+            status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
+            tasks=stage_def.get("tasks", []),
+        ))
+
+    event.current_stage_index = 0
+
+    # 4. Auto-generate draft communications for each stage
+    # Remove old agent-generated comms first
+    db.query(models.Communication).filter(
+        models.Communication.event_id == event_id,
+        models.Communication.stage.in_([s["name"] for s in stages]),
+    ).delete(synchronize_session=False)
+    db.flush()
+
+    criteria = config.get("evaluation_criteria", ["Innovation", "Execution", "Presentation", "Impact"])
+    comm_stages = config.get("communication_stages", [s["name"] for s in stages])
+
+    for stage_name in comm_stages:
+        # Participant communication
+        drafted = llm.draft_communication(
+            stage=stage_name,
+            recipient_type="all_participants",
+            event_name=event.name,
+            extra_context=f"Evaluation criteria: {', '.join(criteria)}",
+        )
+        db.add(models.Communication(
+            event_id=event_id,
+            recipient="All Participants",
+            subject=drafted["subject"],
+            body=drafted["body"],
+            status=models.CommStatus.draft,
+            stage=stage_name,
+        ))
+
+        # Judge communication for evaluation stages
+        if any(word in stage_name.lower() for word in ["eval", "judg", "scor", "review"]):
+            judge_drafted = llm.draft_communication(
+                stage=stage_name,
+                recipient_type="judges",
+                event_name=event.name,
+                extra_context=f"Scoring criteria: {', '.join(criteria)}",
+            )
+            db.add(models.Communication(
+                event_id=event_id,
+                recipient="Judges Panel",
+                subject=judge_drafted["subject"],
+                body=judge_drafted["body"],
+                status=models.CommStatus.draft,
+                stage=stage_name,
+            ))
+
+    # 5. Create approval gate for the new pipeline
+    db.add(models.Approval(
+        event_id=event_id,
+        type=models.ApprovalType.rule_change,
+        status=models.ApprovalStatus.pending,
+        description=(
+            f"AI Agent configured a new pipeline with {len(stages)} stages: "
+            f"{', '.join(s['name'] for s in stages)}. "
+            f"Team size: {config.get('formation_rules', {}).get('team_size', 3)}. "
+            f"Evaluation criteria: {', '.join(criteria)}. "
+            f"Review and approve to activate this configuration."
+        ),
+        payload={"pipeline_config": config},
+    ))
+
+    # 6. Activity log
+    db.add(models.ActivityLog(
+        event_id=event_id,
+        message=(
+            f"AI Agent configured pipeline: {len(stages)} stages, "
+            f"team size {config.get('formation_rules', {}).get('team_size', 3)}, "
+            f"criteria: {', '.join(criteria)}"
+        ),
+        log_type="success",
+    ))
+    db.add(models.ActivityLog(
+        event_id=event_id,
+        message=f"Auto-generated {len(comm_stages)} draft communications from agent config",
+        log_type="info",
+    ))
 
 
 @router.delete("/history")
