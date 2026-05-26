@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, RefreshCw, CheckCircle, Sparkles } from 'lucide-react'
+import { Send, Bot, User, RefreshCw, CheckCircle, Sparkles, ArrowRight, Settings, Users, Mail, GitBranch } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { agentApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useNavigate } from 'react-router-dom'
 
 interface Message {
   id: string
@@ -15,6 +16,7 @@ interface Message {
 
 export const Agent: React.FC = () => {
   const { eventId } = useAppContext()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -46,7 +48,6 @@ export const Agent: React.FC = () => {
     setInput('')
     setLoading(true)
 
-    // Optimistic user message
     const tempId = `temp-${Date.now()}`
     setMessages((prev) => [
       ...prev,
@@ -108,7 +109,7 @@ export const Agent: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Event Configuration Agent</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Describe your event in natural language — the AI will configure the pipeline for you
+            Describe your event in natural language — the AI configures the entire pipeline end-to-end
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -125,23 +126,27 @@ export const Agent: React.FC = () => {
         </div>
       </div>
 
-      {/* Pipeline Config Summary */}
+      {/* Pipeline Config Summary — shown after agent configures */}
       {pipelineConfigured && pipelineConfig && (
         <Card className="mb-4 border-green-200 bg-green-50">
           <div className="flex items-start gap-3">
             <CheckCircle size={18} className="text-green-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-green-800 mb-1">
-                ✅ Pipeline configured! The following were auto-generated:
+              <p className="text-sm font-semibold text-green-800 mb-2">
+                ✅ Full event configured! Here's what was auto-generated:
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                 {/* Stages */}
                 <div className="bg-white rounded-lg p-3 border border-green-200">
-                  <p className="text-xs font-semibold text-green-700 mb-1.5">Pipeline Stages</p>
+                  <p className="text-xs font-semibold text-green-700 mb-1.5 flex items-center gap-1">
+                    <GitBranch size={11} /> Pipeline Stages
+                  </p>
                   <div className="space-y-1">
                     {pipelineConfig.stages?.map((s: any, i: number) => (
                       <div key={i} className="flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-green-100 text-green-700 text-[10px] flex items-center justify-center font-bold flex-shrink-0">{i + 1}</span>
+                        <span className="w-4 h-4 rounded-full bg-green-100 text-green-700 text-[10px] flex items-center justify-center font-bold flex-shrink-0">
+                          {i + 1}
+                        </span>
                         <span className="text-xs text-gray-700">{s.name}</span>
                       </div>
                     ))}
@@ -149,7 +154,9 @@ export const Agent: React.FC = () => {
                 </div>
                 {/* Formation Rules */}
                 <div className="bg-white rounded-lg p-3 border border-green-200">
-                  <p className="text-xs font-semibold text-green-700 mb-1.5">Team Formation</p>
+                  <p className="text-xs font-semibold text-green-700 mb-1.5 flex items-center gap-1">
+                    <Users size={11} /> Team Formation
+                  </p>
                   <div className="space-y-1 text-xs text-gray-700">
                     <p>Team size: <strong>{pipelineConfig.formation_rules?.team_size ?? 3}</strong></p>
                     <p>Max teams: <strong>{pipelineConfig.formation_rules?.max_teams ?? 10}</strong></p>
@@ -159,19 +166,63 @@ export const Agent: React.FC = () => {
                 </div>
                 {/* Criteria + Comms */}
                 <div className="bg-white rounded-lg p-3 border border-green-200">
-                  <p className="text-xs font-semibold text-green-700 mb-1.5">Evaluation Criteria</p>
+                  <p className="text-xs font-semibold text-green-700 mb-1.5 flex items-center gap-1">
+                    <Settings size={11} /> Evaluation Criteria
+                  </p>
                   <div className="flex flex-wrap gap-1 mb-2">
                     {pipelineConfig.evaluation_criteria?.map((c: string) => (
-                      <span key={c} className="text-[10px] bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">{c}</span>
+                      <span key={c} className="text-[10px] bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded">
+                        {c}
+                      </span>
                     ))}
                   </div>
-                  <p className="text-xs font-semibold text-green-700 mb-1">Draft Emails</p>
-                  <p className="text-xs text-gray-600">Auto-generated for {pipelineConfig.communication_stages?.length ?? 0} stages</p>
+                  <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1">
+                    <Mail size={11} /> Draft Emails
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Auto-generated for {pipelineConfig.communication_stages?.length ?? 0} stages
+                  </p>
                 </div>
               </div>
-              <p className="text-xs text-green-600 mt-2">
-                Check <strong>Pipeline</strong>, <strong>Formation Rules</strong>, and <strong>Communications</strong> pages to review. Go to <strong>Approvals</strong> to activate.
-              </p>
+
+              {/* Next steps navigation */}
+              <div className="bg-white rounded-lg p-3 border border-green-200">
+                <p className="text-xs font-semibold text-green-700 mb-2">
+                  Next steps to run your event end-to-end:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => navigate('/approvals')}
+                    className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <CheckCircle size={11} /> 1. Approve Pipeline
+                  </button>
+                  <button
+                    onClick={() => navigate('/participants')}
+                    className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Users size={11} /> 2. Manage Participants
+                  </button>
+                  <button
+                    onClick={() => navigate('/teams')}
+                    className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    <Users size={11} /> 3. Form Teams
+                  </button>
+                  <button
+                    onClick={() => navigate('/communications')}
+                    className="flex items-center gap-1.5 text-xs bg-orange-600 text-white px-3 py-1.5 rounded-lg hover:bg-orange-700 transition-colors"
+                  >
+                    <Mail size={11} /> 4. Send Communications
+                  </button>
+                  <button
+                    onClick={() => navigate('/pipeline')}
+                    className="flex items-center gap-1.5 text-xs bg-gray-700 text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    <GitBranch size={11} /> 5. View Pipeline <ArrowRight size={11} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </Card>
@@ -185,12 +236,15 @@ export const Agent: React.FC = () => {
               <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center mb-4">
                 <Sparkles size={24} className="text-primary" />
               </div>
-              <h3 className="text-base font-semibold text-gray-800 mb-1">
-                Describe your event
-              </h3>
-              <p className="text-sm text-gray-500 max-w-md mb-6">
+              <h3 className="text-base font-semibold text-gray-800 mb-1">Describe your event</h3>
+              <p className="text-sm text-gray-500 max-w-md mb-2">
                 Tell the agent about your event format, team structure, evaluation model, and any
-                special requirements. It will configure the entire pipeline for you.
+                special requirements. It will configure the <strong>entire pipeline</strong> — stages,
+                team rules, scoring criteria, and draft emails — all from your description.
+              </p>
+              <p className="text-xs text-gray-400 mb-6">
+                If your description is incomplete or contradictory, the agent will ask clarifying
+                questions before proceeding.
               </p>
               <div className="space-y-2 w-full max-w-lg">
                 {starterPrompts.map((prompt, i) => (
@@ -207,11 +261,7 @@ export const Agent: React.FC = () => {
           )}
 
           {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-            >
-              {/* Avatar */}
+            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                   msg.role === 'user' ? 'bg-primary' : 'bg-gray-100'
@@ -223,8 +273,6 @@ export const Agent: React.FC = () => {
                   <Bot size={14} className="text-gray-600" />
                 )}
               </div>
-
-              {/* Bubble */}
               <div
                 className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   msg.role === 'user'
@@ -280,7 +328,7 @@ export const Agent: React.FC = () => {
             </Button>
           </div>
           <p className="text-xs text-gray-400 mt-1.5">
-            Powered by Gemini 2.0 Flash · Enter to send
+            Powered by Groq · llama-3.3-70b-versatile · Enter to send
           </p>
         </div>
       </div>

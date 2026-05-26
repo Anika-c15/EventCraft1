@@ -8,8 +8,6 @@ from ..database import get_db
 from ..auth import require_committee, create_portal_token, decode_portal_token
 from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData
 from .. import models
-from ..email_service import send_portal_link_email, send_bulk_emails
-from ..config import settings
 
 router = APIRouter(prefix="/api/events/{event_id}/participants", tags=["participants"])
 
@@ -40,15 +38,14 @@ def list_participants(
 
 
 @router.post("", response_model=ParticipantOut)
-async def add_participant(
+def add_participant(
     event_id: str,
     payload: ParticipantCreate,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    event = _get_event(event_id, db)
+    _get_event(event_id, db)
 
-    # Check duplicate email within event
     existing = (
         db.query(models.Participant)
         .filter(
@@ -70,26 +67,17 @@ async def add_participant(
         status=payload.status,
         metadata_json=payload.metadata_json,
     )
-    participant.portal_token = create_portal_token(participant.id)
     db.add(participant)
+    db.flush()  # assigns participant.id before generating token
+    participant.portal_token = create_portal_token(participant.id)
 
-    log = models.ActivityLog(
+    db.add(models.ActivityLog(
         event_id=event_id,
         message=f"Participant '{payload.name}' added ({payload.level})",
         log_type="success",
-    )
-    db.add(log)
+    ))
     db.commit()
     db.refresh(participant)
-
-    await send_portal_link_email(
-    name=participant.name,
-    email=participant.email,
-    event_name=event.name,
-    token=participant.portal_token,
-    event_id=participant.event_id,    # ← add this
-    role="participant"
-)
     return participant
 
 
@@ -112,13 +100,11 @@ def delete_participant(
         raise HTTPException(404, "Participant not found")
     name = p.name
     db.delete(p)
-
-    log = models.ActivityLog(
+    db.add(models.ActivityLog(
         event_id=event_id,
         message=f"Participant '{name}' removed from roster",
         log_type="warning",
-    )
-    db.add(log)
+    ))
     db.commit()
     return {"message": f"Participant {name} deleted"}
 
@@ -130,16 +116,15 @@ async def import_csv(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    event = _get_event(event_id, db)
+    _get_event(event_id, db)
 
     content = await file.read()
-    text = content.decode("utf-8-sig")  # handle BOM
+    text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
 
     imported = 0
     skipped = 0
     errors = []
-    new_participants = []
 
     for row_num, row in enumerate(reader, start=2):
         try:
@@ -150,7 +135,6 @@ async def import_csv(
                 skipped += 1
                 continue
 
-            # Check duplicate
             existing = (
                 db.query(models.Participant)
                 .filter(
@@ -183,7 +167,6 @@ async def import_csv(
             )
             p.portal_token = create_portal_token(p.id)
             db.add(p)
-            new_participants.append(p)
             imported += 1
 
         except Exception as e:
@@ -191,51 +174,35 @@ async def import_csv(
             skipped += 1
 
     if imported > 0:
-        log = models.ActivityLog(
+        db.add(models.ActivityLog(
             event_id=event_id,
             message=f"CSV import: {imported} participants added, {skipped} skipped",
             log_type="success",
-        )
-        db.add(log)
+        ))
 
     db.commit()
-
-    if new_participants:
-        recipients = [
-            {
-                "email": p.email,
-                "name": p.name,
-                "vars": {
-                    "participant_name": p.name,
-                    "event_name": event.name,
-                    "portal_link": f"{settings.FRONTEND_URL}/participant-portal?token={p.portal_token}"
-                }
-            }
-            for p in new_participants
-        ]
-
-        body_template = """Hi {participant_name},
-
-Welcome to {event_name}! 🎉
-
-You have been successfully registered as a participant.
-Access your personal portal using the link below:
-
-👉 {portal_link}
-
-⚠️  This link is valid for 48 hours.
-    No login or password required — just click and you are in.
-
-Regards,
-EventCraft Team"""
-
-        await send_bulk_emails(
-            recipients=recipients,
-            subject=f"Welcome to {event.name} — Your Portal Access",
-            body_template=body_template
-        )
-
     return CSVImportResult(imported=imported, skipped=skipped, errors=errors)
+
+
+@router.post("/regenerate-tokens")
+def regenerate_portal_tokens(
+    event_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    """Regenerate portal tokens for any participants missing them."""
+    participants = db.query(models.Participant).filter(
+        models.Participant.event_id == event_id,
+        models.Participant.portal_token.is_(None),
+    ).all()
+
+    count = 0
+    for p in participants:
+        p.portal_token = create_portal_token(p.id)
+        count += 1
+
+    db.commit()
+    return {"message": f"Regenerated tokens for {count} participants"}
 
 
 # ── Participant Portal (public, JWT-token based) ───────────────────────────────
@@ -246,6 +213,7 @@ def get_portal(
     token: str,
     db: Session = Depends(get_db),
 ):
+    """Public endpoint — no auth required. Token IS the credential."""
     participant_id = decode_portal_token(token)
     if not participant_id:
         raise HTTPException(401, "Invalid or expired portal token")
@@ -262,9 +230,12 @@ def get_portal(
         raise HTTPException(404, "Participant not found")
 
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
+
     team = None
     if participant.team_id:
         team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
+        if team:
+            _ = team.members  # eager load
 
     current_stage = (
         db.query(models.PipelineStage)

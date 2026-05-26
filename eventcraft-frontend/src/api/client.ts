@@ -22,9 +22,14 @@ async function request<T>(
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
 
   if (res.status === 401) {
-    localStorage.removeItem('ec_token')
-    localStorage.removeItem('ec_event_id')
-    window.location.href = '/login'
+    // Only redirect to login if we're not on a public portal page
+    const isPublicPage = window.location.pathname.startsWith('/portal/') ||
+                         window.location.pathname.startsWith('/judge/')
+    if (!isPublicPage) {
+      localStorage.removeItem('ec_token')
+      localStorage.removeItem('ec_event_id')
+      window.location.href = '/login'
+    }
     throw new Error('Unauthorized')
   }
 

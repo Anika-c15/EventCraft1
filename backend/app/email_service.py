@@ -7,8 +7,6 @@ Email service with three tiers:
 import asyncio
 import logging
 from typing import Optional
-import jwt
-from datetime import datetime, timedelta
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -176,60 +174,7 @@ async def send_bulk_emails(
 
     return results
 
-async def send_portal_link_email(
-    name: str,
-    email: str,
-    event_name: str,
-    token: str,
-    event_id: str,        # ← add this
-    role: str = "participant"
-) -> bool:
-    from .config import settings
 
-    portal_map = {
-        "participant": f"{settings.FRONTEND_URL}/portal",
-        "judge": f"{settings.FRONTEND_URL}/judge",
-        "committee": f"{settings.FRONTEND_URL}/dashboard"
-    }
-    link = f"{portal_map.get(role, settings.FRONTEND_URL)}/{token}?event={event_id}"
-    subject = f"Welcome to {event_name} — Your Portal Access"
-
-    body = f"""Hi {name},
-
-Welcome to {event_name}! 🎉
-
-You have been successfully registered as a {role.capitalize()}.
-
-Access your personal portal using the link below:
-
-👉 {link}
-
-⚠️  This link is valid for 48 hours.
-    No login or password required — just click and you're in.
-
-If you did not register for this event, please ignore this email.
-
-Regards,
-EventCraft Team"""
-
-    return await send_email(
-        to_email=email,
-        subject=subject,
-        body=body,
-        to_name=name
-    )
-
-
-def generate_portal_token(participant_id: str, email: str, event_id: str, role: str = "participant") -> str:
-    from .config import settings
-    payload = {
-        "participant_id": participant_id,
-        "email": email,
-        "event_id": event_id,
-        "role": role,
-        "exp": datetime.utcnow() + timedelta(hours=48)
-    }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _to_html(plain_text: str) -> str:

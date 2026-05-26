@@ -52,13 +52,13 @@ def chat(
         .all()
     )
 
-    gemini_history = [
-        {"role": "user" if m.role == "user" else "model", "parts": m.content}
+    chat_history = [
+        {"role": "user" if m.role == "user" else "assistant", "parts": m.content}
         for m in history_records
     ]
 
     # Call LLM
-    result = llm.agent_chat(gemini_history, payload.content)
+    result = llm.agent_chat(chat_history, payload.content)
 
     # Save messages
     db.add(models.AgentMessage(event_id=event_id, role="user", content=payload.content))

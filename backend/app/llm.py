@@ -1,32 +1,51 @@
 """
-Gemini LLM service using the new google-genai SDK.
+Groq LLM service — fast inference via llama-3.3-70b-versatile (free tier).
 """
 import json
 import re
 from typing import List, Dict, Any, Optional
 
-from google import genai
+from groq import Groq
 
 from .config import settings
 
-_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-MODEL = "gemini-1.5-flash"  # Higher free tier quota than 2.0-flash-lite
+_client: Optional[Groq] = None
 
 
-def _call(prompt: str) -> str:
-    """Single-turn Gemini call."""
-    if not settings.GEMINI_API_KEY or settings.GEMINI_API_KEY == "your-gemini-api-key-here":
-        return "[LLM not configured — add GEMINI_API_KEY to backend/.env]"
+def _get_client() -> Optional[Groq]:
+    global _client
+    if _client is None and settings.GROQ_API_KEY and settings.GROQ_API_KEY not in ("", "your-groq-api-key-here"):
+        _client = Groq(api_key=settings.GROQ_API_KEY)
+    return _client
+
+
+MODEL = "llama-3.3-70b-versatile"
+
+
+def _call(prompt: str, system: Optional[str] = None) -> str:
+    """Single-turn Groq call."""
+    client = _get_client()
+    if client is None:
+        return "[LLM not configured — add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)]"
     try:
-        response = _client.models.generate_content(
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        response = client.chat.completions.create(
             model=MODEL,
-            contents=prompt,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2048,
         )
-        return response.text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         err = str(e)
-        if "429" in err or "RESOURCE_EXHAUSTED" in err:
-            return "[Gemini quota exceeded — try again in a few minutes or upgrade your API plan at https://aistudio.google.com]"
+        if "429" in err or "rate_limit" in err.lower():
+            return "[Groq rate limit hit — wait a moment and try again]"
+        if "401" in err or "invalid_api_key" in err.lower():
+            return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
         return f"[LLM Error: {err}]"
 
 
@@ -52,9 +71,7 @@ def generate_team_rationale(
         f"- {m['name']} ({m['institution']}, {m['level']}): {', '.join(m['skills'])}"
         for m in members
     )
-    prompt = f"""You are an expert event coordinator writing team rationale for a hackathon committee.
-
-Team Name: {team_name}
+    prompt = f"""Team Name: {team_name}
 Members:
 {member_desc}
 
@@ -64,7 +81,9 @@ Write a compelling 3-4 sentence rationale explaining why this team composition i
 Focus on skill complementarity, institutional diversity, and how the members' backgrounds
 will help them succeed together. Be specific about each member's contribution.
 Write in third person, professional tone."""
-    return _call(prompt)
+
+    system = "You are an expert event coordinator writing team rationale for a hackathon committee."
+    return _call(prompt, system)
 
 
 def generate_all_team_rationales(
@@ -79,9 +98,7 @@ def generate_all_team_rationales(
         )
         teams_desc += f"\nTeam: {t['name']}\nMembers:\n{member_desc}\n"
 
-    prompt = f"""You are an expert event coordinator. Generate rationales for these hackathon teams.
-
-Formation Rules: {json.dumps(rules, indent=2)}
+    prompt = f"""Formation Rules: {json.dumps(rules, indent=2)}
 
 Teams:
 {teams_desc}
@@ -94,7 +111,8 @@ Example:
 {{"Team Alpha": "rationale here...", "Team Beta": "rationale here..."}}
 ```"""
 
-    result = _call(prompt)
+    system = "You are an expert event coordinator. Generate rationales for hackathon teams. Return only valid JSON."
+    result = _call(prompt, system)
     parsed = _extract_json(result)
     if isinstance(parsed, dict):
         return parsed
@@ -113,9 +131,7 @@ def draft_communication(
     context = extra_context or ""
     team_ctx = f"\nTeam Info: {json.dumps(team_info)}" if team_info else ""
 
-    prompt = f"""You are drafting an official email for a competitive event management system.
-
-Event: {event_name}
+    prompt = f"""Event: {event_name}
 Stage: {stage}
 Recipient Type: {recipient_type}
 {context}
@@ -131,7 +147,8 @@ Return ONLY a JSON object inside a ```json block with exactly two keys:
 {{"subject": "...", "body": "..."}}
 ```"""
 
-    result = _call(prompt)
+    system = "You are drafting official emails for a competitive event management system. Return only valid JSON."
+    result = _call(prompt, system)
     parsed = _extract_json(result)
     if isinstance(parsed, dict) and "subject" in parsed and "body" in parsed:
         return parsed
@@ -163,6 +180,7 @@ Write a concise guide (200-300 words) covering:
 1. What to look for in each criterion
 2. 2-3 specific questions to ask the team
 3. Scoring guidance (what 9-10 vs 5-6 vs 1-3 looks like)"""
+
     return _call(prompt)
 
 
@@ -204,7 +222,7 @@ generate the full config immediately. Only ask clarifying questions if critical 
 
 For a hackathon with teams of N judged on X criteria, you have enough to configure everything.
 
-When ready, respond with EXACTLY this JSON block (no extra text before or after):
+When ready, respond with EXACTLY this JSON block (no extra text before or after the JSON block):
 
 ```json
 {
@@ -267,22 +285,33 @@ def agent_chat(
     history: List[Dict[str, str]],
     new_message: str,
 ) -> Dict[str, Any]:
-    """Multi-turn conversation with the event config agent."""
+    """Multi-turn conversation with the event config agent using Groq."""
+    client = _get_client()
+    if client is None:
+        return {
+            "reply": "Groq API key not configured. Please add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)",
+            "pipeline_config": None,
+            "pipeline_ready": False,
+            "needs_clarification": False,
+        }
+
     try:
-        # Build the full prompt with history inline (simpler than multi-turn API)
-        conversation = SYSTEM_PROMPT + "\n\n"
+        # Build messages array for Groq chat completions
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
         for msg in history:
-            role_label = "User" if msg["role"] == "user" else "Assistant"
-            conversation += f"{role_label}: {msg['parts']}\n\n"
+            role = "user" if msg["role"] == "user" else "assistant"
+            messages.append({"role": role, "content": msg["parts"]})
 
-        conversation += f"User: {new_message}\n\nAssistant:"
+        messages.append({"role": "user", "content": new_message})
 
-        response = _client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL,
-            contents=conversation,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=4096,
         )
-        reply = response.text.strip()
+        reply = response.choices[0].message.content.strip()
 
         # Try to extract pipeline config
         pipeline_config = None
@@ -309,8 +338,15 @@ def agent_chat(
             "needs_clarification": needs_clarification,
         }
     except Exception as e:
+        err = str(e)
+        if "429" in err or "rate_limit" in err.lower():
+            msg = "Groq rate limit hit — wait a moment and try again."
+        elif "401" in err or "invalid_api_key" in err.lower():
+            msg = "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
+        else:
+            msg = f"I encountered an error: {err}. Please check your Groq API key in backend/.env"
         return {
-            "reply": f"I encountered an error: {str(e)}. Please check your Gemini API key in backend/.env",
+            "reply": msg,
             "pipeline_config": None,
             "pipeline_ready": False,
             "needs_clarification": False,

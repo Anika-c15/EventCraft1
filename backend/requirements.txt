@@ -6,7 +6,7 @@ pydantic-settings
 python-jose[cryptography]
 passlib
 python-multipart
-google-genai
+groq
 aiosmtplib
 email-validator
 python-dotenv

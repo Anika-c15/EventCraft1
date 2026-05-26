@@ -9,9 +9,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from . import models
-import uuid
 
-# Use sha256_crypt — works on all Python versions without Rust/bcrypt issues
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
@@ -35,19 +33,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def create_portal_token(participant_id: str) -> str:
     """Long-lived JWT for participant portal — no expiry."""
-    data = {
-        "sub": participant_id,
-        "type": "portal",
-        "jti": str(uuid.uuid4())  # ← makes every token unique
-    }
+    data = {"sub": participant_id, "type": "portal"}
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+
+def decode_portal_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_exp": False},  # portal tokens have no expiry
+        )
+        if payload.get("type") != "portal":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
 def create_judge_token(judge_email: str, event_id: str) -> str:
-    """
-    Signed JWT for judge/evaluator link-based access.
-    No account required — the link IS the credential.
-    Expires in 7 days.
-    """
+    """Signed JWT for judge link-based access. Expires in 7 days."""
     data = {
         "sub": judge_email,
         "type": "judge",
@@ -55,16 +61,6 @@ def create_judge_token(judge_email: str, event_id: str) -> str:
         "exp": datetime.utcnow() + timedelta(days=7),
     }
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-
-def decode_portal_token(token: str) -> Optional[str]:
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        if payload.get("type") != "portal":
-            return None
-        return payload.get("sub")
-    except JWTError:
-        return None
 
 
 def decode_judge_token(token: str) -> Optional[dict]:
