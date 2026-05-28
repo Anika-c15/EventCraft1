@@ -28,6 +28,8 @@ export const Pipeline: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [selectedStageName, setSelectedStageName] = useState('')
+  const [overriding, setOverriding] = useState(false)
 
   useEffect(() => {
     if (eventId) load()
@@ -39,8 +41,27 @@ export const Pipeline: React.FC = () => {
     try {
       const data = await eventsApi.stages(eventId)
       setStages(data)
+      const active = data.find((s) => s.status === 'active')
+      if (active) setSelectedStageName(active.name)
+      else if (data.length > 0) setSelectedStageName(data[0].name)
     } catch { setStages([]) }
     finally { setLoading(false) }
+  }
+
+  const handleOverrideStage = async () => {
+    if (!eventId || !selectedStageName) return
+    setOverriding(true)
+    setSuccessMsg('')
+    try {
+      const res = await eventsApi.setStageDirect(eventId, selectedStageName)
+      setSuccessMsg(`Debug: Successfully set pipeline stage to '${res.current_stage}' directly.`)
+      await load()
+      await loadApprovals()
+    } catch (e: any) {
+      alert(e.message || 'Failed to override stage')
+    } finally {
+      setOverriding(false)
+    }
   }
 
   // Count pending progression approvals — must be 0 before requesting another
@@ -282,6 +303,38 @@ export const Pipeline: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Debug Stage Override Controller */}
+          <div className="mt-8 bg-gray-50 border border-dashed border-gray-300 rounded-xl p-5 shadow-sm">
+            <h3 className="font-bold text-gray-700 mb-1 flex items-center gap-1.5">
+              ⚙️ Debug: Pipeline Stage Override
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Directly transition the event stage in the database. This updates stage statuses and broadcasts a WebSocket notification to sync all portals and dashboards instantly.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={selectedStageName}
+                onChange={(e) => setSelectedStageName(e.target.value)}
+                className="flex-1 max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">Select target stage...</option>
+                {stages.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} {s.status === 'active' ? '(Current Active)' : ''}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="secondary"
+                onClick={handleOverrideStage}
+                disabled={overriding || !selectedStageName}
+                className="hover:bg-gray-100"
+              >
+                {overriding ? 'Overriding...' : 'Override Active Phase'}
+              </Button>
+            </div>
+          </div>
         </>
       )}
     </div>

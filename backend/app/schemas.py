@@ -358,3 +358,7 @@ class PortalData(BaseModel):
     scoring_phase_active: bool = False   # True when showroom & peer voting unlock
     showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
     leaderboard: List[Dict[str, Any]] = []
+
+
+class StageSetPayload(BaseModel):
+    stage_name: str

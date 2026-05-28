@@ -71,6 +71,11 @@ export const eventsApi = {
     }),
   advanceStage: (id: string) =>
     request<any>(`/api/events/${id}/advance-stage`, { method: 'POST' }),
+  setStageDirect: (id: string, stageName: string) =>
+    request<any>(`/api/events/${id}/set-stage-direct`, {
+      method: 'POST',
+      body: JSON.stringify({ stage_name: stageName }),
+    }),
 }
 
 // ── Participants ───────────────────────────────────────────────────────────────

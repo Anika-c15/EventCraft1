@@ -309,9 +309,14 @@ export const ParticipantPortal: React.FC = () => {
   }
 
   const {
-    participant, team, current_stage, key_dates, event_name,
+    participant, team, current_stage, current_stage_index, key_dates, event_name,
     progression_eligible, scoring_phase_active,
   } = data
+
+  const stageLower = current_stage?.toLowerCase() || ''
+  const isPhase3 = stageLower.includes('result') || stageLower.includes('progression') || stageLower.includes('final') || current_stage_index >= 3
+  const isPhase2 = !isPhase3 && (stageLower.includes('eval') || stageLower.includes('score') || stageLower.includes('judg') || stageLower.includes('peer') || current_stage_index === 2)
+  const isPhase1 = !isPhase2 && !isPhase3
 
   const teammates = (team?.members || []).filter((m: any) => m.id !== participant.id)
   const votedCount = showroom.filter(t => t.my_vote !== null && t.my_vote !== undefined).length
@@ -374,15 +379,21 @@ export const ParticipantPortal: React.FC = () => {
 
             <button
               id="showroom-tab-button"
-              onClick={() => setActiveTab('showroom')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                activeTab === 'showroom'
+              disabled={isPhase1}
+              onClick={() => !isPhase1 && setActiveTab('showroom')}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
+                isPhase1
+                  ? 'opacity-50 cursor-not-allowed text-gray-400'
+                  : activeTab === 'showroom'
                   ? 'bg-primary/10 text-primary font-bold shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
-              <BarChart2 size={14} />
-              <span>Project Showroom & Voting</span>
+              <div className="flex items-center gap-2.5">
+                <BarChart2 size={14} />
+                <span>Project Showroom & Voting</span>
+              </div>
+              {isPhase1 && <Lock size={12} className="text-gray-400" />}
             </button>
 
             <button
@@ -399,8 +410,41 @@ export const ParticipantPortal: React.FC = () => {
             </button>
           </nav>
 
-          {/* Live Mini Leaderboard Widget */}
-          {data?.leaderboard && data.leaderboard.length > 0 && (
+          {/* Live Mini Leaderboard Widget — Phase Gated */}
+          {/* Phase 1: Hidden entirely */}
+          {/* Phase 2: Locked & Obfuscated */}
+          {isPhase2 && (
+            <div className="pt-4 border-t border-gray-100 space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                  🏆 Top Standings <Lock size={10} className="text-gray-400" />
+                </span>
+                <span className="text-[9px] font-semibold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
+                  Fluctuating
+                </span>
+              </div>
+              <div className="space-y-1 opacity-60 select-none pointer-events-none filter blur-[1.5px]">
+                {[1, 2, 3].map((rank) => (
+                  <div
+                    key={rank}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs border border-transparent text-gray-400"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono text-[10px] text-gray-400 font-bold w-3">
+                        {rank}
+                      </span>
+                      <span>Team ••••••••</span>
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">
+                      Score: 9.••
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Phase 3: Fully Revealed */}
+          {isPhase3 && data?.leaderboard && data.leaderboard.length > 0 && (
             <div className="pt-4 border-t border-gray-100 space-y-2">
               <div className="flex items-center justify-between px-1">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -627,7 +671,7 @@ export const ParticipantPortal: React.FC = () => {
             </div>
 
             {/* Lower Dashboard Row */}
-            {team && team.final_score !== null && team.final_score !== undefined ? (
+            {isPhase3 && team && team.final_score !== null && team.final_score !== undefined ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
                 {/* Final Scoring & Rationale Card */}
                 {(() => {
@@ -710,7 +754,7 @@ export const ParticipantPortal: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Event Pipeline only */
+              /* Event Pipeline only (Phase 1 & 2, or if team/score is missing) */
               <div className="w-full mt-6">
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                   <div className="flex items-center gap-2 mb-4">

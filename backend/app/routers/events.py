@@ -4,7 +4,7 @@ from typing import List
 
 from ..database import get_db
 from ..auth import require_committee
-from ..schemas import EventCreate, EventOut, StageOut, DashboardStats, FormationRulesUpdate
+from ..schemas import EventCreate, EventOut, StageOut, DashboardStats, FormationRulesUpdate, StageSetPayload
 from .. import models
 
 router = APIRouter(prefix="/api/events", tags=["events"])
@@ -304,5 +304,82 @@ def advance_stage_direct(
     return {
         "message": f"Advanced to '{next_stage.name}'",
         "current_stage": next_stage.name,
+        "current_stage_index": to_index,
+    }
+
+
+@router.post("/{event_id}/set-stage-direct")
+def set_stage_direct(
+    event_id: str,
+    payload: StageSetPayload,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    """Directly set the pipeline stage to a specific stage by name (for debugging/testing)."""
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    stages = (
+        db.query(models.PipelineStage)
+        .filter(models.PipelineStage.event_id == event_id)
+        .order_by(models.PipelineStage.order_index)
+        .all()
+    )
+
+    # Find the target stage
+    target_stage = None
+    to_index = None
+    for stage in stages:
+        if stage.name.lower() == payload.stage_name.lower():
+            target_stage = stage
+            to_index = stage.order_index
+            break
+
+    if target_stage is None or to_index is None:
+        raise HTTPException(400, f"Stage '{payload.stage_name}' not found. Available: {[s.name for s in stages]}")
+
+    from datetime import datetime
+    # Update stage statuses immediately
+    for stage in stages:
+        if stage.order_index < to_index:
+            stage.status = models.StageStatus.completed
+            if not stage.completed_at:
+                stage.completed_at = datetime.utcnow()
+        elif stage.order_index == to_index:
+            stage.status = models.StageStatus.active
+            if not stage.started_at:
+                stage.started_at = datetime.utcnow()
+            stage.completed_at = None
+        else:
+            stage.status = models.StageStatus.pending
+            stage.started_at = None
+            stage.completed_at = None
+
+    event.current_stage_index = to_index
+
+    # Also log in ActivityLog
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Pipeline debug override: stage set to '{target_stage.name}'",
+        log_type="warning",
+    )
+    db.add(log)
+    db.commit()
+
+    # Broadcast WebSocket update
+    from ..ws import broadcast_sync
+    try:
+        broadcast_sync(event_id, {
+            "type": "stage_advanced",
+            "current_stage": target_stage.name,
+            "current_stage_index": to_index
+        })
+    except Exception as e:
+        print(f"⚠️ WS broadcast error: {e}")
+
+    return {
+        "message": f"Directly set stage to '{target_stage.name}'",
+        "current_stage": target_stage.name,
         "current_stage_index": to_index,
     }
