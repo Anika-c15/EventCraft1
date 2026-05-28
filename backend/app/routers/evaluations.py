@@ -221,26 +221,55 @@ class JudgeInviteRequest(BaseModel):
 
 
 @router.post("/invite-judge")
-def invite_judge(
+async def invite_judge(
     event_id: str,
     payload: JudgeInviteRequest,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
     """
-    Generate a signed JWT link for a judge.
+    Generate a signed JWT link for a judge and email it to them.
     The judge clicks the link and can submit scores without creating an account.
     """
+    # Import your email service
+    from ..email_service import send_email
+
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
+        
+    event_name = event.name if event else "the event"
 
+    # Generate token and portal URL
     token = create_judge_token(payload.judge_email, event_id)
     portal_url = f"{settings.FRONTEND_URL}/judge/{event_id}?token={token}"
 
+    # Send the email
+    body = f"""Hi {payload.judge_name},
+
+You have been invited to judge {event_name}!
+
+Access your judge portal using the link below:
+
+👉 {portal_url}
+
+⚠️  This link is valid for 7 days.
+    No login or account required — just click and start scoring.
+
+Regards,
+EventCraft Team"""
+
+    await send_email(
+        to_email=payload.judge_email,
+        subject=f"Judge Invitation — {event_name}",
+        body=body,
+        to_name=payload.judge_name
+    )
+
+    # Log the activity
     db.add(models.ActivityLog(
         event_id=event_id,
-        message=f"Judge invite generated for {payload.judge_name} ({payload.judge_email})",
+        message=f"Judge invite generated and sent to {payload.judge_name} ({payload.judge_email})",
         log_type="info",
     ))
     db.commit()
@@ -250,7 +279,7 @@ def invite_judge(
         "judge_email": payload.judge_email,
         "portal_url": portal_url,
         "token": token,
-        "message": f"Share this link with {payload.judge_name}: {portal_url}",
+        "message": f"Invite sent to {payload.judge_email}",
     }
 
 
@@ -444,4 +473,3 @@ async def lock_composite_score(
     })
 
     return {"message": "Score successfully locked", "final_score": team.final_score}
-
