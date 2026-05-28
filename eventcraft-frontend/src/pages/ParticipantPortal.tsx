@@ -246,6 +246,56 @@ export const ParticipantPortal: React.FC = () => {
               )}
             </div>
 
+            {/* Final Scoring & Rationale Card */}
+            {team && team.final_score !== null && team.final_score !== undefined && (() => {
+              const publicVote = team.public_vote_score;
+              let judgeAvg = team.final_score;
+              if (publicVote !== null && publicVote !== undefined) {
+                judgeAvg = (team.final_score - 0.30 * publicVote) / 0.70;
+              }
+              return (
+                <div className="bg-purple-50 border border-purple-100 rounded-xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4 border-b border-purple-100 pb-3">
+                    <h3 className="text-sm font-bold text-purple-950 uppercase tracking-wider">Final Balanced Result</h3>
+                    {team.rank && (
+                      <Badge variant="purple" className="font-extrabold px-3 py-1">
+                        Rank #{team.rank}
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div className="bg-white rounded-lg p-3 border border-purple-100/50 shadow-xs text-center">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Judges Weight (70%)</span>
+                      <span className="text-base font-extrabold text-purple-950">{judgeAvg.toFixed(2)}</span>
+                      <span className="text-xs text-gray-400"> / 10</span>
+                    </div>
+
+                    <div className="bg-white rounded-lg p-3 border border-purple-100/50 shadow-xs text-center">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Public Vote (30%)</span>
+                      <span className="text-base font-extrabold text-purple-950">
+                        {publicVote !== null && publicVote !== undefined ? publicVote.toFixed(2) : '—'}
+                      </span>
+                      <span className="text-xs text-gray-400"> / 10</span>
+                    </div>
+
+                    <div className="bg-purple-600 rounded-lg p-3 text-white shadow-xs text-center">
+                      <span className="text-[10px] opacity-80 uppercase tracking-wider block font-medium">Final Balanced Score</span>
+                      <span className="text-base font-black">{team.final_score.toFixed(2)}</span>
+                      <span className="text-xs opacity-80"> / 10</span>
+                    </div>
+                  </div>
+
+                  {team.bias_rationale && (
+                    <div className="bg-purple-100/40 border border-purple-100/60 rounded-lg p-3 text-xs text-purple-900 leading-relaxed">
+                      <span className="font-bold block mb-1 text-purple-950">Audience & Judge Balance Rationale</span>
+                      {team.bias_rationale}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Key Dates */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-center gap-2 mb-4">

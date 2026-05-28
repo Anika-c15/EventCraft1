@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..auth import require_committee, create_judge_token, decode_judge_token
-from ..schemas import ScoreSubmit, EvaluationScoreOut
+from ..schemas import ScoreSubmit, EvaluationScoreOut, PublicVoteInput, LockScoreRequest
 from ..config import settings
 from .. import models, llm
 from ..ws import broadcast
@@ -327,3 +327,121 @@ async def judge_submit_score(
     payload.judge_email = judge_data["email"]
 
     return _save_score(event_id, payload, db, background_tasks)
+
+
+# ── AI Bias Mitigation & Public Consensus Endpoints ────────────────────────────
+
+@router.put("/teams/{team_id}/public-vote")
+def update_public_vote(
+    event_id: str,
+    team_id: str,
+    payload: PublicVoteInput,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    team = db.query(models.Team).filter(
+        models.Team.id == team_id,
+        models.Team.event_id == event_id,
+    ).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    team.public_vote_score = payload.public_vote_score
+    db.commit()
+    db.refresh(team)
+    return {"message": "Public vote score updated", "public_vote_score": team.public_vote_score}
+
+
+@router.get("/bias-mitigation")
+def get_bias_mitigation(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    # Only evaluate teams in active/approved status
+    teams = db.query(models.Team).filter(
+        models.Team.event_id == event_id,
+        models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active]),
+    ).all()
+
+    results = []
+    for team in teams:
+        scores = db.query(models.EvaluationScore).filter(
+            models.EvaluationScore.team_id == team.id
+        ).all()
+
+        judge_avg = 0.0
+        if scores:
+            judge_avg = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+
+        public_vote = team.public_vote_score
+        
+        # Calculate AI Proposed Fair Score: 70% Judge, 30% Public
+        ai_proposed = None
+        if public_vote is not None:
+            ai_proposed = round(0.70 * judge_avg + 0.30 * public_vote, 2)
+            
+            # If deviation is significant (> 2.0) and no rationale generated yet, generate one
+            deviation = abs(judge_avg - public_vote)
+            if deviation > 2.0 and not team.bias_rationale:
+                rationale = llm.generate_bias_mitigation_rationale(
+                    team_name=team.name,
+                    judge_score=judge_avg,
+                    public_score=public_vote,
+                    deviation=deviation,
+                )
+                team.bias_rationale = rationale
+                team.ai_proposed_score = ai_proposed
+                db.commit()
+                db.refresh(team)
+        
+        results.append({
+            "team_id": team.id,
+            "team_name": team.name,
+            "judge_avg": judge_avg,
+            "public_vote_score": public_vote,
+            "ai_proposed_score": team.ai_proposed_score or ai_proposed,
+            "bias_rationale": team.bias_rationale,
+            "final_score": team.final_score,
+        })
+
+    return results
+
+
+@router.post("/teams/{team_id}/lock-score")
+async def lock_composite_score(
+    event_id: str,
+    team_id: str,
+    payload: LockScoreRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    team = db.query(models.Team).filter(
+        models.Team.id == team_id,
+        models.Team.event_id == event_id,
+    ).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    team.final_score = payload.final_score
+    if payload.bias_rationale:
+        team.bias_rationale = payload.bias_rationale
+
+    db.add(models.ActivityLog(
+        event_id=event_id,
+        message=f"Final score locked for {team.name} at {payload.final_score}/10 by {current_user.name}",
+        log_type="success",
+    ))
+    db.commit()
+
+    # WebSocket update to refresh frontend
+    background_tasks.add_task(broadcast, event_id, {
+        "type": "score_locked",
+        "team_id": team_id,
+        "team_name": team.name,
+        "final_score": payload.final_score,
+    })
+
+    return {"message": "Score successfully locked", "final_score": team.final_score}
+

@@ -13,8 +13,38 @@ from .routers.websocket import router as ws_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
+    _migrate_db()
     _seed_db()
     yield
+
+
+def _migrate_db():
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        # Check columns of table 'teams'
+        result = db.execute(text("PRAGMA table_info(teams)"))
+        columns = [row[1] for row in result.fetchall()]
+        
+        if "public_vote_score" not in columns:
+            db.execute(text("ALTER TABLE teams ADD COLUMN public_vote_score FLOAT"))
+            print("🚀 Migrated database: added public_vote_score to teams table")
+            
+        if "ai_proposed_score" not in columns:
+            db.execute(text("ALTER TABLE teams ADD COLUMN ai_proposed_score FLOAT"))
+            print("🚀 Migrated database: added ai_proposed_score to teams table")
+            
+        if "bias_rationale" not in columns:
+            db.execute(text("ALTER TABLE teams ADD COLUMN bias_rationale TEXT"))
+            print("🚀 Migrated database: added bias_rationale to teams table")
+            
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️ Migration error: {e}")
+    finally:
+        db.close()
+
 
 
 def _seed_db():

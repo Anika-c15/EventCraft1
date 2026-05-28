@@ -99,11 +99,24 @@ class TeamOut(BaseModel):
     challenge: Optional[str]
     final_score: Optional[float]
     rank: Optional[int]
+    public_vote_score: Optional[float] = None
+    ai_proposed_score: Optional[float] = None
+    bias_rationale: Optional[str] = None
     members: List[ParticipantOut] = []
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class PublicVoteInput(BaseModel):
+    public_vote_score: float
+
+
+class LockScoreRequest(BaseModel):
+    final_score: float
+    bias_rationale: Optional[str] = None
+
 
 
 class FormTeamsRequest(BaseModel):

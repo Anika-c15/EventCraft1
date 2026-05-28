@@ -126,6 +126,18 @@ export const evaluationsApi = {
     request<any>(`/api/events/${eventId}/evaluations/consolidate`, { method: 'POST' }),
   assessmentGuide: (eventId: string, teamId: string) =>
     request<any>(`/api/events/${eventId}/evaluations/assessment-guide/${teamId}`),
+  savePublicVote: (eventId: string, teamId: string, publicScore: number) =>
+    request<any>(`/api/events/${eventId}/evaluations/teams/${teamId}/public-vote`, {
+      method: 'PUT',
+      body: JSON.stringify({ public_vote_score: publicScore }),
+    }),
+  getBiasMitigation: (eventId: string) =>
+    request<any[]>(`/api/events/${eventId}/evaluations/bias-mitigation`),
+  lockScore: (eventId: string, teamId: string, data: { final_score: number; bias_rationale?: string }) =>
+    request<any>(`/api/events/${eventId}/evaluations/teams/${teamId}/lock-score`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }
 
 // ── Approvals ──────────────────────────────────────────────────────────────────

@@ -156,6 +156,9 @@ class Team(Base):
     challenge = Column(Text, nullable=True)
     final_score = Column(Float, nullable=True)
     rank = Column(Integer, nullable=True)
+    public_vote_score = Column(Float, nullable=True)
+    ai_proposed_score = Column(Float, nullable=True)
+    bias_rationale = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event", back_populates="teams")

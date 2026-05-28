@@ -371,3 +371,50 @@ Final Rankings:
 Write 2-3 sentences congratulating the winners and acknowledging all participants.
 Professional, celebratory tone."""
     return _call(prompt)
+
+
+# ── Bias Mitigation Rationale ──────────────────────────────────────────────────
+
+def generate_bias_mitigation_rationale(
+    team_name: str,
+    judge_score: float,
+    public_score: float,
+    deviation: float,
+) -> str:
+    """
+    Generates a short, conversational rationale explaining the score difference.
+    Strictly follows the prefix structure:
+    'Why did this get flagged? [1-2 sentences generated dynamically by the LLM]'
+    """
+    system_prompt = (
+        "You are an AI assistant designed to balance expert judge scores with public consensus voting.\n"
+        "Explain in a conversational tone why the judges and public diverged (e.g. judges focused on technical details while the public voted on appeal/presentation).\n"
+        "Strictly adhere to the following constraint:\n"
+        "Start your response EXACTLY with the text 'Why did this get flagged? ' (including the trailing space), "
+        "and then write exactly 1-2 simple, conversational sentences. Do not add any other formatting, quotes, or conversational preamble."
+    )
+    prompt = (
+        f"Team: '{team_name}'\n"
+        f"Expert Judge Score: {judge_score:.2f}/10\n"
+        f"Public Vote Score: {public_score:.2f}/10\n"
+        f"Absolute Difference: {deviation:.2f} points\n\n"
+        "Generate the justification now."
+    )
+    try:
+        explanation = _call(prompt, system=system_prompt)
+        explanation = explanation.strip()
+        
+        # Ensure it starts with the correct prefix
+        prefix = "Why did this get flagged? "
+        if not explanation.startswith(prefix):
+            # Clean up other variants
+            if "Why did this get flagged?" in explanation:
+                explanation = explanation.replace("Why did this get flagged?", "").strip()
+                explanation = explanation.lstrip(":").strip()
+            explanation = f"{prefix}{explanation}"
+            
+        return explanation
+    except Exception as e:
+        print(f"Error generating LLM bias mitigation rationale: {e}")
+        return f"Why did this get flagged? The judge average of {judge_score:.1f} and public voting score of {public_score:.1f} diverged significantly, reflecting differing assessments of technical execution versus presentation appeal."
+

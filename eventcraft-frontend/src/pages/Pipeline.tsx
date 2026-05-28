@@ -6,7 +6,7 @@ import {
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
-import { eventsApi, approvalsApi } from '../api/client'
+import { eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 
 const stageIcon = (name: string) => {
@@ -23,7 +23,7 @@ const formatDate = (iso?: string) => {
 }
 
 export const Pipeline: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard, approvals } = useAppContext()
+  const { eventId, loadApprovals, approvals } = useAppContext()
   const [stages, setStages] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [requesting, setRequesting] = useState(false)

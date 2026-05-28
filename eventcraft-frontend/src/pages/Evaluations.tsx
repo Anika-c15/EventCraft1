@@ -40,10 +40,54 @@ export const Evaluations: React.FC = () => {
   const [inviteResult, setInviteResult] = useState<any>(null)
   const [copied, setCopied]           = useState(false)
 
+  // AI Bias Mitigation & Public Consensus State
+  const [mitigations, setMitigations] = useState<any[]>([])
+  const [publicScores, setPublicScores] = useState<{ [key: string]: string }>({})
+  const [customScores, setCustomScores] = useState<{ [key: string]: string }>({})
+
+  const loadBiasMitigation = async () => {
+    if (!eventId) return
+    try {
+      const data = await evaluationsApi.getBiasMitigation(eventId)
+      setMitigations(data)
+    } catch (e) {
+      console.error('Error fetching bias mitigation:', e)
+    }
+  }
+
+  const handleSavePublicVote = async (teamId: string) => {
+    const val = publicScores[teamId]
+    if (!val || isNaN(parseFloat(val))) return
+    try {
+      await evaluationsApi.savePublicVote(eventId!, teamId, parseFloat(val))
+      setPublicScores({ ...publicScores, [teamId]: '' })
+      await loadBiasMitigation()
+      await loadScores()
+    } catch (e: any) {
+      alert(e.message || 'Error saving public score')
+    }
+  }
+
+  const handleLockScore = async (teamId: string, finalScore: number, rationale?: string) => {
+    try {
+      await evaluationsApi.lockScore(eventId!, teamId, {
+        final_score: finalScore,
+        bias_rationale: rationale,
+      })
+      await loadBiasMitigation()
+      await loadScores()
+      await loadApprovals()
+      await loadDashboard()
+    } catch (e: any) {
+      alert(e.message || 'Error locking score')
+    }
+  }
+
   useEffect(() => {
     if (eventId) {
       loadScores()
       teamsApi.list(eventId).then(setTeams).catch(() => setTeams([]))
+      loadBiasMitigation()
     }
   }, [eventId])
 
@@ -75,6 +119,7 @@ export const Evaluations: React.FC = () => {
       await loadScores()
       await loadApprovals()
       await loadDashboard()
+      await loadBiasMitigation()
     } catch (e: any) { alert(e.message) }
   }
 
@@ -85,6 +130,7 @@ export const Evaluations: React.FC = () => {
       alert(`Scores consolidated! ${result.rankings?.length ?? 0} teams ranked.`)
       await loadApprovals()
       await loadDashboard()
+      await loadBiasMitigation()
     } catch (e: any) { alert(e.message) }
   }
 
@@ -245,6 +291,141 @@ export const Evaluations: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* ── AI Bias Mitigation & Public Consensus Panel ── */}
+      <div className="mt-8">
+        <Card>
+          <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Score: Audience & Judge Balance</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Balances expert judge scores (70%) with live public voting (30%) to prevent scoring bias.
+              </p>
+            </div>
+            <Badge variant="purple" className="font-bold">AI Active</Badge>
+          </div>
+
+          <div className="space-y-4">
+            {mitigations.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">No approved/active teams to evaluate yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {mitigations.map((m: any) => {
+                  const hasPublic = m.public_vote_score !== null && m.public_vote_score !== undefined;
+                  const isLocked = m.final_score !== null && m.final_score !== undefined;
+                  const deviation = hasPublic ? Math.abs(m.judge_avg - m.public_vote_score) : 0;
+                  const isFlagged = deviation > 2.0;
+
+                  return (
+                    <div key={m.team_id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-semibold text-sm text-gray-800">{m.team_name}</span>
+                        {isLocked ? (
+                          <Badge variant="purple">Locked ({m.final_score.toFixed(2)})</Badge>
+                        ) : isFlagged ? (
+                          <Badge variant="danger">Bias Flagged</Badge>
+                        ) : hasPublic ? (
+                          <Badge variant="success">Balanced</Badge>
+                        ) : (
+                          <Badge variant="yellow">Pending Public Vote</Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
+                          <span className="text-[10px] text-gray-400 block uppercase">Judges (70%)</span>
+                          <span className="text-sm font-bold text-gray-800">{m.judge_avg.toFixed(2)}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
+                          <span className="text-[10px] text-gray-400 block uppercase">Public (30%)</span>
+                          <span className="text-sm font-bold text-gray-800">
+                            {hasPublic ? m.public_vote_score.toFixed(2) : '—'}
+                          </span>
+                        </div>
+                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
+                          <span className="text-[10px] text-gray-400 block uppercase">AI Proposed</span>
+                          <span className="text-sm font-bold text-primary">
+                            {m.ai_proposed_score !== null && m.ai_proposed_score !== undefined ? m.ai_proposed_score.toFixed(2) : '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Public score entry */}
+                      {!hasPublic && !isLocked && (
+                        <div className="flex gap-2 mb-3">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="10"
+                            placeholder="Public score (0-10)..."
+                            value={publicScores[m.team_id] || ''}
+                            onChange={(e) => setPublicScores({ ...publicScores, [m.team_id]: e.target.value })}
+                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                          />
+                          <Button size="sm" variant="secondary" onClick={() => handleSavePublicVote(m.team_id)}>
+                            Save Score
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Bias alert box */}
+                      {hasPublic && isFlagged && m.bias_rationale && (
+                        <div className="bg-yellow-50 border border-yellow-100 text-[11px] text-yellow-800 rounded-lg p-2.5 mb-3 leading-relaxed">
+                          <span className="font-bold block text-yellow-950 mb-0.5">⚠️ AI Bias Mitigation Alert</span>
+                          {m.bias_rationale}
+                        </div>
+                      )}
+
+                      {/* Lock controls */}
+                      {hasPublic && !isLocked && (
+                        <div className="space-y-2.5">
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              className="flex-1 text-xs"
+                              onClick={() => handleLockScore(m.team_id, m.ai_proposed_score, m.bias_rationale)}
+                            >
+                              Accept & Lock AI Score
+                            </Button>
+                          </div>
+                          
+                          <div className="flex gap-2 border-t border-gray-100/50 pt-2">
+                            <input
+                              type="number"
+                              step="0.05"
+                              min="0"
+                              max="10"
+                              placeholder="Override score..."
+                              value={customScores[m.team_id] || ''}
+                              onChange={(e) => setCustomScores({ ...customScores, [m.team_id]: e.target.value })}
+                              className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                            />
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                const val = customScores[m.team_id];
+                                if (val && !isNaN(parseFloat(val)) && m.ai_proposed_score !== null) {
+                                  handleLockScore(m.team_id, parseFloat(val), m.bias_rationale || undefined);
+                                }
+                              }}
+                            >
+                              Lock Custom
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
 
       {/* ── Invite Judge Modal ── */}
       <Modal
