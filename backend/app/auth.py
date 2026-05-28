@@ -32,8 +32,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def create_portal_token(participant_id: str) -> str:
-    """Long-lived JWT for participant portal — no expiry."""
-    data = {"sub": participant_id, "type": "portal"}
+    """JWT for participant portal — expires in 14 days."""
+    data = {
+        "sub": participant_id,
+        "type": "portal",
+        "exp": datetime.utcnow() + timedelta(days=14),
+    }
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -43,7 +47,6 @@ def decode_portal_token(token: str) -> Optional[str]:
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            options={"verify_exp": False},  # portal tokens have no expiry
         )
         if payload.get("type") != "portal":
             return None
