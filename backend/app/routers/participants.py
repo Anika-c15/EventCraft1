@@ -279,7 +279,7 @@ def get_portal(
     # ── Scoring Phase Detection ──────────────────────────────────────────────
     # Phase is "active" when the current stage name contains scoring/eval keywords
     # OR when stage index >= 2 (configurable) — this means past Team Formation.
-    SCORING_KEYWORDS = ("scor", "eval", "judg", "peer", "review", "voting")
+    SCORING_KEYWORDS = ("intake", "scor", "eval", "judg", "peer", "review", "voting")
     scoring_phase_active = False
     if current_stage:
         stage_lower = current_stage.name.lower()
