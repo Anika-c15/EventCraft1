@@ -154,16 +154,31 @@ class Team(Base):
     status = Column(SAEnum(TeamStatus), default=TeamStatus.proposed)
     rationale = Column(Text, nullable=True)  # LLM-generated
     challenge = Column(Text, nullable=True)
+    # Links for the Project Showroom (participants fill in)
+    github_link = Column(String, nullable=True)
+    demo_link = Column(String, nullable=True)
+    project_title = Column(String, nullable=True)
+    project_description = Column(Text, nullable=True)
+    github_url = Column(String, nullable=True)
+    video_url = Column(String, nullable=True)
+    presentation_url = Column(String, nullable=True)
+    submission_status = Column(String, default="Draft", server_default="Draft")
     final_score = Column(Float, nullable=True)
     rank = Column(Integer, nullable=True)
-    public_vote_score = Column(Float, nullable=True)
+    judge_avg_score = Column(Float, nullable=True)       # cached judge panel average
+    social_vote_score = Column(Float, nullable=True)     # raw score from social scraping
+    public_vote_score = Column(Float, nullable=True)     # combined avg(social, peer) — the 30%
     ai_proposed_score = Column(Float, nullable=True)
     bias_rationale = Column(Text, nullable=True)
+    is_locked = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event", back_populates="teams")
     members = relationship("Participant", back_populates="team", foreign_keys=[Participant.team_id])
     scores = relationship("EvaluationScore", back_populates="team", cascade="all, delete-orphan")
+    peer_reviews_received = relationship("PeerReview", back_populates="to_team",
+                                         foreign_keys="PeerReview.to_team_id",
+                                         cascade="all, delete-orphan")
 
 
 class EvaluationScore(Base):
@@ -239,3 +254,20 @@ class AgentMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event", back_populates="agent_messages")
+
+
+class PeerReview(Base):
+    """Stores peer ratings submitted by one team for another during the scoring phase."""
+    __tablename__ = "peer_reviews"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    from_team_id = Column(String, ForeignKey("teams.id"), nullable=False)
+    to_team_id = Column(String, ForeignKey("teams.id"), nullable=False)
+    score = Column(Float, nullable=False)  # 0-10 scale
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    to_team = relationship("Team", back_populates="peer_reviews_received",
+                           foreign_keys=[to_team_id])
+    from_team = relationship("Team", foreign_keys=[from_team_id])
+

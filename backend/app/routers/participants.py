@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import require_committee, create_portal_token, decode_portal_token
-from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData
+from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData, TeamSubmissionUpdate, TeamOut
 from .. import models
 
 router = APIRouter(prefix="/api/events/{event_id}/participants", tags=["participants"])
@@ -276,6 +276,94 @@ def get_portal(
             top_half = all_teams[: max(1, len(all_teams) // 2)]
             progression_eligible = team.id in [t.id for t in top_half]
 
+    # ── Scoring Phase Detection ──────────────────────────────────────────────
+    # Phase is "active" when the current stage name contains scoring/eval keywords
+    # OR when stage index >= 2 (configurable) — this means past Team Formation.
+    SCORING_KEYWORDS = ("scor", "eval", "judg", "peer", "review", "voting")
+    scoring_phase_active = False
+    if current_stage:
+        stage_lower = current_stage.name.lower()
+        scoring_phase_active = any(kw in stage_lower for kw in SCORING_KEYWORDS)
+    # Fallback: if at least 2 stages have been completed, unlock the showroom
+    if not scoring_phase_active:
+        completed_count = sum(1 for s in stages if s.status == models.StageStatus.completed)
+        scoring_phase_active = completed_count >= 2
+
+    # ── Showroom Teams (only populated when scoring phase is active) ─────────
+    showroom_teams = []
+    if scoring_phase_active:
+        all_event_teams = db.query(models.Team).filter(
+            models.Team.event_id == event_id,
+            models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active]),
+            models.Team.submission_status == "Submitted",
+        ).all()
+
+        # Votes already cast by this participant's team
+        existing_votes: dict = {}
+        if participant.team_id:
+            from .. import models as m
+            reviews = db.query(m.PeerReview).filter(
+                m.PeerReview.from_team_id == participant.team_id,
+                m.PeerReview.event_id == event_id,
+            ).all()
+            existing_votes = {r.to_team_id: r.score for r in reviews}
+
+        for t in all_event_teams:
+            if t.id == participant.team_id:
+                continue  # skip own team
+            from ..schemas import ShowroomTeam
+            showroom_teams.append(ShowroomTeam(
+                id=t.id,
+                name=t.name,
+                challenge=t.challenge,
+                github_link=t.github_url or t.github_link,
+                demo_link=t.video_url or t.demo_link,
+                project_title=t.project_title,
+                project_description=t.project_description,
+                github_url=t.github_url,
+                video_url=t.video_url,
+                presentation_url=t.presentation_url,
+                submission_status=t.submission_status,
+                member_count=len(t.members),
+                my_vote=existing_votes.get(t.id),
+            ))
+
+    # ── Leaderboard Standings ──────────────────────────────────────────────────
+    # Fetch all active/approved teams in this event and compute their scores
+    teams = (
+        db.query(models.Team)
+        .filter(
+            models.Team.event_id == event_id,
+            models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active])
+        )
+        .all()
+    )
+    
+    leaderboard_entries = []
+    for t in teams:
+        score = None
+        if t.final_score is not None:
+            score = t.final_score
+        else:
+            scores = db.query(models.EvaluationScore).filter(
+                models.EvaluationScore.team_id == t.id
+            ).all()
+            if scores:
+                score = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+        
+        leaderboard_entries.append({
+            "team_id": t.id,
+            "team_name": t.name,
+            "score": score,
+        })
+    
+    # Sort teams by score descending (putting None scores at the bottom)
+    leaderboard_entries.sort(key=lambda x: (x["score"] is None, -(x["score"] or 0)))
+    
+    # Assign ranks
+    for i, item in enumerate(leaderboard_entries):
+        item["rank"] = i + 1
+
     return PortalData(
         participant=participant,
         team=team,
@@ -284,4 +372,53 @@ def get_portal(
         key_dates=key_dates,
         event_name=event.name,
         progression_eligible=progression_eligible,
+        scoring_phase_active=scoring_phase_active,
+        showroom_teams=showroom_teams,
+        leaderboard=leaderboard_entries,
     )
+
+
+@router.put("/portal/{token}/team", response_model=TeamOut)
+def update_team_submission(
+    event_id: str,
+    token: str,
+    payload: TeamSubmissionUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update team submission links (github_link, demo_link) and optionally lock the submission."""
+    participant_id = decode_portal_token(token)
+    if not participant_id:
+        raise HTTPException(401, "Invalid or expired portal token")
+
+    participant = (
+        db.query(models.Participant)
+        .filter(
+            models.Participant.id == participant_id,
+            models.Participant.event_id == event_id,
+        )
+        .first()
+    )
+    if not participant:
+        raise HTTPException(404, "Participant not found")
+
+    if not participant.team_id:
+        raise HTTPException(400, "Participant is not assigned to a team")
+
+    team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    if team.is_locked:
+        raise HTTPException(400, "Team submission is locked and cannot be modified")
+
+    if payload.github_link is not None:
+        team.github_link = payload.github_link
+    if payload.demo_link is not None:
+        team.demo_link = payload.demo_link
+    if payload.lock:
+        team.is_locked = True
+
+    db.commit()
+    db.refresh(team)
+    return team
+

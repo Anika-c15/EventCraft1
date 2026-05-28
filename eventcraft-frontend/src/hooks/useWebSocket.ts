@@ -25,6 +25,7 @@ interface UseWebSocketReturn {
 export function useWebSocket(
   eventId: string | null,
   onMessage?: (msg: WsMessage) => void,
+  customToken?: string | null,
 ): UseWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -37,7 +38,7 @@ export function useWebSocket(
   const connect = useCallback(() => {
     if (!eventId || !mountedRef.current) return
 
-    const token = localStorage.getItem('ec_token') || ''
+    const token = customToken || localStorage.getItem('ec_token') || ''
     const url = `${WS_BASE}/ws/${eventId}?token=${encodeURIComponent(token)}`
 
     const ws = new WebSocket(url)
@@ -78,7 +79,7 @@ export function useWebSocket(
     ws.onerror = () => {
       ws.close()
     }
-  }, [eventId, onMessage])
+  }, [eventId, onMessage, customToken])
 
   // Ping every 25s to keep connection alive
   useEffect(() => {

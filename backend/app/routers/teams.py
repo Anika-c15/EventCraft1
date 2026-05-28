@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..auth import require_committee
-from ..schemas import TeamOut
+from ..auth import require_committee, decode_portal_token
+from ..schemas import TeamOut, TeamSubmissionDraft, TeamSubmissionFinal
 from .. import models, llm
 from ..team_formation import form_teams
 
@@ -225,3 +225,129 @@ def get_leaderboard(
         item["rank"] = i + 1
 
     return result
+
+
+from urllib.parse import urlparse
+
+def is_valid_url(url: str) -> bool:
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc]) and result.scheme in ("http", "https")
+    except Exception:
+        return False
+
+submission_router = APIRouter(prefix="/api/teams/submission", tags=["teams-submission"])
+
+@submission_router.post("/save-draft")
+def save_submission_draft(
+    payload: TeamSubmissionDraft,
+    db: Session = Depends(get_db)
+):
+    participant_id = decode_portal_token(payload.token)
+    if not participant_id:
+        raise HTTPException(401, "Invalid or expired portal token")
+
+    participant = db.query(models.Participant).filter(models.Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(404, "Participant not found")
+
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == participant.event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Submissions are closed because the event has advanced past the Evaluation phase")
+
+    if not participant.team_id:
+        raise HTTPException(400, "Participant has no team assigned")
+
+    team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    if team.submission_status == "Submitted":
+        raise HTTPException(400, "Submission is already finalized and locked")
+
+    if payload.project_title is not None:
+        team.project_title = payload.project_title
+    if payload.project_description is not None:
+        team.project_description = payload.project_description
+    if payload.github_url is not None:
+        team.github_url = payload.github_url
+    if payload.video_url is not None:
+        team.video_url = payload.video_url
+    if payload.presentation_url is not None:
+        team.presentation_url = payload.presentation_url
+
+    db.commit()
+    db.refresh(team)
+    return {"message": "Draft saved successfully", "team": team}
+
+
+@submission_router.post("/submit-final")
+def submit_final_submission(
+    payload: TeamSubmissionFinal,
+    db: Session = Depends(get_db)
+):
+    participant_id = decode_portal_token(payload.token)
+    if not participant_id:
+        raise HTTPException(401, "Invalid or expired portal token")
+
+    participant = db.query(models.Participant).filter(models.Participant.id == participant_id).first()
+    if not participant:
+        raise HTTPException(404, "Participant not found")
+
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == participant.event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Submissions are closed because the event has advanced past the Evaluation phase")
+
+    if not participant.team_id:
+        raise HTTPException(400, "Participant has no team assigned")
+
+    team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    if team.submission_status == "Submitted":
+        raise HTTPException(400, "Submission is already finalized and locked")
+
+    if not payload.project_title or not payload.project_title.strip():
+        raise HTTPException(422, "Project Title is required")
+    if not payload.project_description or not payload.project_description.strip():
+        raise HTTPException(422, "Project Description is required")
+
+    # Validate URLs
+    for name, url in [
+        ("GitHub URL", payload.github_url),
+        ("Video URL", payload.video_url),
+        ("Presentation URL", payload.presentation_url)
+    ]:
+        if not url or not url.strip():
+            raise HTTPException(422, f"{name} is required")
+        if not is_valid_url(url.strip()):
+            raise HTTPException(422, f"{name} must be a complete and valid URL (starting with http:// or https://)")
+
+    team.project_title = payload.project_title.strip()
+    team.project_description = payload.project_description.strip()
+    team.github_url = payload.github_url.strip()
+    team.video_url = payload.video_url.strip()
+    team.presentation_url = payload.presentation_url.strip()
+    team.submission_status = "Submitted"
+
+    db.commit()
+    db.refresh(team)
+
+    # Broadcast WebSocket update so other participant portals refresh automatically
+    try:
+        from ..ws import manager
+        manager.broadcast_sync(team.event_id, {
+            "type": "dashboard_update",
+            "message": f"Team {team.name} finalized project submission"
+        })
+    except Exception as e:
+        print(f"⚠️ WS broadcast error: {e}")
+
+    return {"message": "Project submitted successfully", "team": team}

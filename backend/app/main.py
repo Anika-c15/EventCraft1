@@ -7,6 +7,7 @@ from . import models
 from .config import settings
 from .auth import hash_password, create_portal_token
 from .routers import auth, events, participants, teams, evaluations, approvals, communications, agent
+from .routers import peer_review
 from .routers.websocket import router as ws_router
 
 
@@ -22,22 +23,46 @@ def _migrate_db():
     from sqlalchemy import text
     db = SessionLocal()
     try:
-        # Check columns of table 'teams'
+        # ── teams table migrations ──────────────────────────────────────────
         result = db.execute(text("PRAGMA table_info(teams)"))
         columns = [row[1] for row in result.fetchall()]
-        
-        if "public_vote_score" not in columns:
-            db.execute(text("ALTER TABLE teams ADD COLUMN public_vote_score FLOAT"))
-            print("🚀 Migrated database: added public_vote_score to teams table")
-            
-        if "ai_proposed_score" not in columns:
-            db.execute(text("ALTER TABLE teams ADD COLUMN ai_proposed_score FLOAT"))
-            print("🚀 Migrated database: added ai_proposed_score to teams table")
-            
-        if "bias_rationale" not in columns:
-            db.execute(text("ALTER TABLE teams ADD COLUMN bias_rationale TEXT"))
-            print("🚀 Migrated database: added bias_rationale to teams table")
-            
+
+        for col, col_type in [
+            ("public_vote_score",  "FLOAT"),
+            ("ai_proposed_score",  "FLOAT"),
+            ("bias_rationale",     "TEXT"),
+            ("judge_avg_score",    "FLOAT"),
+            ("social_vote_score",  "FLOAT"),
+            ("github_link",        "TEXT"),
+            ("demo_link",          "TEXT"),
+            ("is_locked",          "BOOLEAN DEFAULT 0"),
+            ("project_title",      "TEXT"),
+            ("project_description","TEXT"),
+            ("github_url",         "TEXT"),
+            ("video_url",          "TEXT"),
+            ("presentation_url",   "TEXT"),
+            ("submission_status",  "TEXT DEFAULT 'Draft'"),
+        ]:
+            if col not in columns:
+                db.execute(text(f"ALTER TABLE teams ADD COLUMN {col} {col_type}"))
+                print(f"🚀 Migrated: added {col} to teams")
+
+        # ── peer_reviews table ──────────────────────────────────────────────
+        tables_result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+        existing_tables = [row[0] for row in tables_result.fetchall()]
+        if "peer_reviews" not in existing_tables:
+            db.execute(text("""
+                CREATE TABLE peer_reviews (
+                    id          TEXT PRIMARY KEY,
+                    event_id    TEXT NOT NULL REFERENCES events(id),
+                    from_team_id TEXT NOT NULL REFERENCES teams(id),
+                    to_team_id  TEXT NOT NULL REFERENCES teams(id),
+                    score       FLOAT NOT NULL,
+                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            print("🚀 Migrated: created peer_reviews table")
+
         db.commit()
     except Exception as e:
         db.rollback()
@@ -263,10 +288,13 @@ app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(participants.router)
 app.include_router(teams.router)
+from .routers.teams import submission_router
+app.include_router(submission_router)
 app.include_router(evaluations.router)
 app.include_router(approvals.router)
 app.include_router(communications.router)
 app.include_router(agent.router)
+app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 
 

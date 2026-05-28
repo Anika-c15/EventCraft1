@@ -99,11 +99,38 @@ export const participantsApi = {
   },
   portal: (eventId: string, token: string) =>
     request<any>(`/api/events/${eventId}/participants/portal/${token}`, {}, true),
+  updateTeamSubmission: (eventId: string, token: string, data: { github_link?: string; demo_link?: string; lock?: boolean }) =>
+    request<any>(`/api/events/${eventId}/participants/portal/${token}/team`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, true),
 }
 
-// ── Teams ──────────────────────────────────────────────────────────────────────
-
 export const teamsApi = {
+  saveSubmissionDraft: (data: {
+    project_title?: string;
+    project_description?: string;
+    github_url?: string;
+    video_url?: string;
+    presentation_url?: string;
+    token: string;
+  }) =>
+    request<any>('/api/teams/submission/save-draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, true),
+  submitFinalSubmission: (data: {
+    project_title: string;
+    project_description: string;
+    github_url: string;
+    video_url: string;
+    presentation_url: string;
+    token: string;
+  }) =>
+    request<any>('/api/teams/submission/submit-final', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, true),
   list: (eventId: string) => request<any[]>(`/api/events/${eventId}/teams`),
   form: (eventId: string) =>
     request<any[]>(`/api/events/${eventId}/teams/form`, { method: 'POST' }),
@@ -185,3 +212,32 @@ export const agentApi = {
   clearHistory: (eventId: string) =>
     request<any>(`/api/events/${eventId}/agent/history`, { method: 'DELETE' }),
 }
+
+// ── Peer Reviews ───────────────────────────────────────────────────────────────
+
+export const peerReviewApi = {
+  /** Submit (or update) a peer vote for a team using a participant portal token */
+  submitVote: (eventId: string, token: string, toTeamId: string, score: number) =>
+    request<any>(
+      `/api/events/${eventId}/peer-reviews?token=${encodeURIComponent(token)}`,
+      { method: 'POST', body: JSON.stringify({ to_team_id: toTeamId, score }) },
+      true,  // skip auth header — token is in query string
+    ),
+
+  /** Get the map of {to_team_id: score} for already-submitted votes */
+  getMyVotes: (eventId: string, token: string) =>
+    request<Record<string, number>>(
+      `/api/events/${eventId}/peer-reviews/my-votes?token=${encodeURIComponent(token)}`,
+      {},
+      true,
+    ),
+
+  /** Get showroom cards for all other teams */
+  getShowroom: (eventId: string, token: string) =>
+    request<any[]>(
+      `/api/events/${eventId}/peer-reviews/showroom?token=${encodeURIComponent(token)}`,
+      {},
+      true,
+    ),
+}
+

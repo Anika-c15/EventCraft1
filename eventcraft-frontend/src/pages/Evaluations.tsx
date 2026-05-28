@@ -23,7 +23,10 @@ const emptyForm = {
 }
 
 export const Evaluations: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard } = useAppContext()
+  const { eventId, loadApprovals, loadDashboard, dashboardStats } = useAppContext()
+
+  const activeStage = dashboardStats?.current_stage?.toLowerCase() || ''
+  const isClosed = activeStage.includes('result') || activeStage.includes('progression')
 
   const [scores, setScores]           = useState<any[]>([])
   const [teams, setTeams]             = useState<any[]>([])
@@ -88,6 +91,7 @@ export const Evaluations: React.FC = () => {
       loadScores()
       teamsApi.list(eventId).then(setTeams).catch(() => setTeams([]))
       loadBiasMitigation()
+      loadDashboard()
     }
   }, [eventId])
 
@@ -181,10 +185,10 @@ export const Evaluations: React.FC = () => {
           <Button variant="secondary" onClick={handleConsolidate}>
             <RefreshCw size={15} /> Consolidate Scores
           </Button>
-          <Button variant="secondary" onClick={() => { setInviteResult(null); setInviteName(''); setInviteEmail(''); setShowInvite(true) }}>
+          <Button variant="secondary" onClick={() => { setInviteResult(null); setInviteName(''); setInviteEmail(''); setShowInvite(true) }} disabled={isClosed}>
             <Link2 size={15} /> Invite Judge
           </Button>
-          <Button variant="primary" onClick={() => setShowModal(true)}>
+          <Button variant="primary" onClick={() => setShowModal(true)} disabled={isClosed}>
             <Plus size={15} /> Submit Score
           </Button>
         </div>
@@ -299,7 +303,7 @@ export const Evaluations: React.FC = () => {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Score: Audience & Judge Balance</h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Balances expert judge scores (70%) with live public voting (30%) to prevent scoring bias.
+                70% expert judge average · 30% combined public (social scrape + peer review average)
               </p>
             </div>
             <Badge variant="purple" className="font-bold">AI Active</Badge>
@@ -311,15 +315,24 @@ export const Evaluations: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {mitigations.map((m: any) => {
-                  const hasPublic = m.public_vote_score !== null && m.public_vote_score !== undefined;
-                  const isLocked = m.final_score !== null && m.final_score !== undefined;
-                  const deviation = hasPublic ? Math.abs(m.judge_avg - m.public_vote_score) : 0;
-                  const isFlagged = deviation > 2.0;
+                  const hasPublic = m.public_vote_score !== null && m.public_vote_score !== undefined
+                  const isLocked = m.final_score !== null && m.final_score !== undefined
+                  const deviation = hasPublic ? Math.abs(m.judge_avg - m.public_vote_score) : 0
+                  const isFlagged = deviation > 2.0
+                  const peerCount = m.peer_review_count ?? 0
 
                   return (
                     <div key={m.team_id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                      {/* Team header */}
                       <div className="flex items-center justify-between mb-3">
-                        <span className="font-semibold text-sm text-gray-800">{m.team_name}</span>
+                        <div>
+                          <span className="font-semibold text-sm text-gray-800">{m.team_name}</span>
+                          {peerCount > 0 && (
+                            <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 font-semibold px-1.5 py-0.5 rounded-full">
+                              {peerCount} peer {peerCount === 1 ? 'vote' : 'votes'}
+                            </span>
+                          )}
+                        </div>
                         {isLocked ? (
                           <Badge variant="purple">Locked ({m.final_score.toFixed(2)})</Badge>
                         ) : isFlagged ? (
@@ -331,41 +344,65 @@ export const Evaluations: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Three score blocks */}
                       <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
-                          <span className="text-[10px] text-gray-400 block uppercase">Judges (70%)</span>
-                          <span className="text-sm font-bold text-gray-800">{m.judge_avg.toFixed(2)}</span>
+                        {/* JUDGES 70% */}
+                        <div className="bg-white p-2.5 rounded-lg border border-gray-100 text-center">
+                          <span className="text-[9px] text-gray-400 block uppercase tracking-wide font-semibold">Judges (70%)</span>
+                          <span className="text-sm font-bold text-gray-800 block mt-0.5">{m.judge_avg.toFixed(2)}</span>
+                          <span className="text-[9px] text-gray-400">/ 10</span>
                         </div>
-                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
-                          <span className="text-[10px] text-gray-400 block uppercase">Public (30%)</span>
-                          <span className="text-sm font-bold text-gray-800">
+
+                        {/* PUBLIC 30% — combined social + peer */}
+                        <div className="bg-white p-2.5 rounded-lg border border-indigo-100 text-center">
+                          <span className="text-[9px] text-indigo-500 block uppercase tracking-wide font-semibold">Public (30%)</span>
+                          <span className="text-sm font-bold text-indigo-700 block mt-0.5">
                             {hasPublic ? m.public_vote_score.toFixed(2) : '—'}
                           </span>
-                        </div>
-                        <div className="bg-white p-2 rounded border border-gray-100 text-center">
-                          <span className="text-[10px] text-gray-400 block uppercase">AI Proposed</span>
-                          <span className="text-sm font-bold text-primary">
-                            {m.ai_proposed_score !== null && m.ai_proposed_score !== undefined ? m.ai_proposed_score.toFixed(2) : '—'}
+                          <span className="text-[9px] text-gray-400">
+                            {m.social_vote_score != null && m.peer_avg != null
+                              ? `S:${m.social_vote_score.toFixed(1)} P:${m.peer_avg.toFixed(1)}`
+                              : m.social_vote_score != null
+                              ? `Social: ${m.social_vote_score.toFixed(1)}`
+                              : m.peer_avg != null
+                              ? `Peer: ${m.peer_avg.toFixed(1)}`
+                              : 'No data yet'}
                           </span>
+                        </div>
+
+                        {/* AI PROPOSED */}
+                        <div className="bg-white p-2.5 rounded-lg border border-orange-100 text-center">
+                          <span className="text-[9px] text-orange-500 block uppercase tracking-wide font-semibold">AI Proposed</span>
+                          <span className="text-sm font-bold text-primary block mt-0.5">
+                            {m.ai_proposed_score !== null && m.ai_proposed_score !== undefined
+                              ? m.ai_proposed_score.toFixed(2)
+                              : '—'}
+                          </span>
+                          <span className="text-[9px] text-gray-400">/ 10</span>
                         </div>
                       </div>
 
-                      {/* Public score entry */}
-                      {!hasPublic && !isLocked && (
-                        <div className="flex gap-2 mb-3">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="10"
-                            placeholder="Public score (0-10)..."
-                            value={publicScores[m.team_id] || ''}
-                            onChange={(e) => setPublicScores({ ...publicScores, [m.team_id]: e.target.value })}
-                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                          />
-                          <Button size="sm" variant="secondary" onClick={() => handleSavePublicVote(m.team_id)}>
-                            Save Score
-                          </Button>
+                      {/* Social score entry (admin input) */}
+                      {!isLocked && !isClosed && (
+                        <div className="mb-3">
+                          <p className="text-[10px] text-gray-400 font-medium mb-1.5 uppercase tracking-wide">
+                            Social Score Input {m.social_vote_score != null ? `(current: ${m.social_vote_score.toFixed(1)})` : '(not set)'}
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="10"
+                              placeholder="Social/scrape score (0-10)..."
+                              value={publicScores[m.team_id] || ''}
+                              onChange={(e) => setPublicScores({ ...publicScores, [m.team_id]: e.target.value })}
+                              className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                            />
+                            <Button size="sm" variant="secondary" onClick={() => handleSavePublicVote(m.team_id)}>
+                              Save
+                            </Button>
+                          </div>
                         </div>
                       )}
 
@@ -373,12 +410,15 @@ export const Evaluations: React.FC = () => {
                       {hasPublic && isFlagged && m.bias_rationale && (
                         <div className="bg-yellow-50 border border-yellow-100 text-[11px] text-yellow-800 rounded-lg p-2.5 mb-3 leading-relaxed">
                           <span className="font-bold block text-yellow-950 mb-0.5">⚠️ AI Bias Mitigation Alert</span>
+                          <span className="text-[10px] text-yellow-700 block mb-1">
+                            Judge avg vs combined public (social + {peerCount} peer votes) differs by {deviation.toFixed(2)} pts
+                          </span>
                           {m.bias_rationale}
                         </div>
                       )}
 
                       {/* Lock controls */}
-                      {hasPublic && !isLocked && (
+                      {hasPublic && !isLocked && !isClosed && (
                         <div className="space-y-2.5">
                           <div className="flex gap-2">
                             <Button
@@ -390,7 +430,7 @@ export const Evaluations: React.FC = () => {
                               Accept & Lock AI Score
                             </Button>
                           </div>
-                          
+
                           <div className="flex gap-2 border-t border-gray-100/50 pt-2">
                             <input
                               type="number"
@@ -406,25 +446,32 @@ export const Evaluations: React.FC = () => {
                               size="sm"
                               variant="secondary"
                               onClick={() => {
-                                const val = customScores[m.team_id];
-                                if (val && !isNaN(parseFloat(val)) && m.ai_proposed_score !== null) {
-                                  handleLockScore(m.team_id, parseFloat(val), m.bias_rationale || undefined);
+                                const val = customScores[m.team_id]
+                                if (val && !isNaN(parseFloat(val))) {
+                                  handleLockScore(m.team_id, parseFloat(val), m.bias_rationale || undefined)
                                 }
                               }}
                             >
-                              Lock Custom
+                              Override
                             </Button>
                           </div>
                         </div>
                       )}
+
+                      {!isLocked && isClosed && (
+                        <div className="text-[10px] text-gray-500 font-semibold bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-center mt-1">
+                          🔒 Evaluations & voting closed
+                        </div>
+                      )}
                     </div>
-                  );
+                  )
                 })}
               </div>
             )}
           </div>
         </Card>
       </div>
+
 
 
       {/* ── Invite Judge Modal ── */}

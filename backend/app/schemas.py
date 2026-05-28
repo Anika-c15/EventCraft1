@@ -97,11 +97,22 @@ class TeamOut(BaseModel):
     status: TeamStatus
     rationale: Optional[str]
     challenge: Optional[str]
+    github_link: Optional[str] = None
+    demo_link: Optional[str] = None
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
+    github_url: Optional[str] = None
+    video_url: Optional[str] = None
+    presentation_url: Optional[str] = None
+    submission_status: Optional[str] = "Draft"
     final_score: Optional[float]
     rank: Optional[int]
-    public_vote_score: Optional[float] = None
+    judge_avg_score: Optional[float] = None
+    social_vote_score: Optional[float] = None
+    public_vote_score: Optional[float] = None   # combined avg(social, peer)
     ai_proposed_score: Optional[float] = None
     bias_rationale: Optional[str] = None
+    is_locked: Optional[bool] = False
     members: List[ParticipantOut] = []
     created_at: datetime
 
@@ -109,13 +120,73 @@ class TeamOut(BaseModel):
         from_attributes = True
 
 
+class TeamSubmissionUpdate(BaseModel):
+    github_link: Optional[str] = None
+    demo_link: Optional[str] = None
+    lock: Optional[bool] = False
+
+
+class TeamSubmissionDraft(BaseModel):
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
+    github_url: Optional[str] = None
+    video_url: Optional[str] = None
+    presentation_url: Optional[str] = None
+    token: str
+
+
+class TeamSubmissionFinal(BaseModel):
+    project_title: str
+    project_description: str
+    github_url: str
+    video_url: str
+    presentation_url: str
+    token: str
+
+
 class PublicVoteInput(BaseModel):
-    public_vote_score: float
+    public_vote_score: float  # the social scrape score (0-10)
 
 
 class LockScoreRequest(BaseModel):
     final_score: float
     bias_rationale: Optional[str] = None
+
+
+# ── Peer Review ────────────────────────────────────────────────────────────────
+
+class PeerReviewCreate(BaseModel):
+    to_team_id: str
+    score: float  # 0-10
+
+
+class PeerReviewOut(BaseModel):
+    id: str
+    event_id: str
+    from_team_id: str
+    to_team_id: str
+    score: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ShowroomTeam(BaseModel):
+    """Lightweight team card shown in the Project Showroom."""
+    id: str
+    name: str
+    challenge: Optional[str]
+    github_link: Optional[str]
+    demo_link: Optional[str]
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
+    github_url: Optional[str] = None
+    video_url: Optional[str] = None
+    presentation_url: Optional[str] = None
+    submission_status: Optional[str] = "Draft"
+    member_count: int
+    my_vote: Optional[float]  # score this participant's team has already given
 
 
 
@@ -284,3 +355,6 @@ class PortalData(BaseModel):
     key_dates: List[Dict[str, Any]]
     event_name: str
     progression_eligible: bool
+    scoring_phase_active: bool = False   # True when showroom & peer voting unlock
+    showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
+    leaderboard: List[Dict[str, Any]] = []

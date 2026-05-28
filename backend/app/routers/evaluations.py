@@ -39,8 +39,38 @@ def _check_anomaly(new_avg: float, team_id: str, db: Session, threshold: float) 
     return abs(new_avg - panel_avg) > threshold
 
 
+def _recompute_combined_public(team: models.Team, db: Session) -> None:
+    """
+    Recompute the combined public_vote_score:
+        combined = avg(social_vote_score, peer_avg)
+    whichever components are available.  Updates team in-place; caller must commit.
+    """
+    peer_reviews = db.query(models.PeerReview).filter(
+        models.PeerReview.to_team_id == team.id
+    ).all()
+    peer_avg: Optional[float] = None
+    if peer_reviews:
+        peer_avg = sum(r.score for r in peer_reviews) / len(peer_reviews)
+
+    social = team.social_vote_score
+
+    if social is not None and peer_avg is not None:
+        team.public_vote_score = round((social + peer_avg) / 2, 2)
+    elif peer_avg is not None:
+        team.public_vote_score = round(peer_avg, 2)
+    elif social is not None:
+        team.public_vote_score = round(social, 2)
+
+
 def _save_score(event_id: str, payload: ScoreSubmit, db: Session, background_tasks: BackgroundTasks):
     """Core score-saving logic shared by committee and judge endpoints."""
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+
     team = db.query(models.Team).filter(
         models.Team.id == payload.team_id,
         models.Team.event_id == event_id,
@@ -237,8 +267,14 @@ async def invite_judge(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
-        
     event_name = event.name if event else "the event"
+
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
 
     # Generate token and portal URL
     token = create_judge_token(payload.judge_email, event_id)
@@ -301,6 +337,12 @@ def get_judge_portal(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
 
     teams = db.query(models.Team).filter(
         models.Team.event_id == event_id,
@@ -368,6 +410,18 @@ def update_public_vote(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    """
+    Admin endpoint: save the social-scraping score (0-10) for a team.
+    After saving, the combined public_vote_score is recomputed:
+        combined = avg(social_vote_score, peer_avg)
+    """
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+
     team = db.query(models.Team).filter(
         models.Team.id == team_id,
         models.Team.event_id == event_id,
@@ -375,10 +429,17 @@ def update_public_vote(
     if not team:
         raise HTTPException(404, "Team not found")
 
-    team.public_vote_score = payload.public_vote_score
+    # Store raw social score
+    team.social_vote_score = payload.public_vote_score
+    # Recompute combined
+    _recompute_combined_public(team, db)
     db.commit()
     db.refresh(team)
-    return {"message": "Public vote score updated", "public_vote_score": team.public_vote_score}
+    return {
+        "message": "Social vote score saved",
+        "social_vote_score": team.social_vote_score,
+        "public_vote_score": team.public_vote_score,
+    }
 
 
 @router.get("/bias-mitigation")
@@ -399,36 +460,63 @@ def get_bias_mitigation(
             models.EvaluationScore.team_id == team.id
         ).all()
 
+        # --- Judge average (70%) ---
         judge_avg = 0.0
         if scores:
             judge_avg = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+        team.judge_avg_score = judge_avg  # keep cached value fresh
 
-        public_vote = team.public_vote_score
-        
-        # Calculate AI Proposed Fair Score: 70% Judge, 30% Public
+        # --- Peer review average ---
+        peer_reviews = db.query(models.PeerReview).filter(
+            models.PeerReview.to_team_id == team.id
+        ).all()
+        peer_avg: Optional[float] = None
+        if peer_reviews:
+            peer_avg = round(sum(r.score for r in peer_reviews) / len(peer_reviews), 2)
+
+        # --- Combined public score (30%): avg(social, peer) ---
+        social = team.social_vote_score
+        if social is not None and peer_avg is not None:
+            combined_public = round((social + peer_avg) / 2, 2)
+        elif peer_avg is not None:
+            combined_public = round(peer_avg, 2)
+        elif social is not None:
+            combined_public = round(social, 2)
+        else:
+            combined_public = None
+
+        # Persist updated combined score if changed
+        if combined_public != team.public_vote_score:
+            team.public_vote_score = combined_public
+
+        # --- AI Proposed Fair Score: 70% Judge + 30% Combined Public ---
         ai_proposed = None
-        if public_vote is not None:
-            ai_proposed = round(0.70 * judge_avg + 0.30 * public_vote, 2)
-            
-            # If deviation is significant (> 2.0) and no rationale generated yet, generate one
-            deviation = abs(judge_avg - public_vote)
+        if combined_public is not None:
+            ai_proposed = round(0.70 * judge_avg + 0.30 * combined_public, 2)
+
+            # Flag deviation and generate rationale if needed
+            deviation = abs(judge_avg - combined_public)
             if deviation > 2.0 and not team.bias_rationale:
                 rationale = llm.generate_bias_mitigation_rationale(
                     team_name=team.name,
                     judge_score=judge_avg,
-                    public_score=public_vote,
+                    public_score=combined_public,
                     deviation=deviation,
                 )
                 team.bias_rationale = rationale
                 team.ai_proposed_score = ai_proposed
-                db.commit()
-                db.refresh(team)
-        
+
+        db.commit()
+        db.refresh(team)
+
         results.append({
             "team_id": team.id,
             "team_name": team.name,
             "judge_avg": judge_avg,
-            "public_vote_score": public_vote,
+            "social_vote_score": social,
+            "peer_avg": peer_avg,
+            "peer_review_count": len(peer_reviews),
+            "public_vote_score": team.public_vote_score,  # the combined 30% block
             "ai_proposed_score": team.ai_proposed_score or ai_proposed,
             "bias_rationale": team.bias_rationale,
             "final_score": team.final_score,
@@ -446,6 +534,13 @@ async def lock_composite_score(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage and active_stage.name.lower() in ("results", "progression"):
+        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+
     team = db.query(models.Team).filter(
         models.Team.id == team_id,
         models.Team.event_id == event_id,
