@@ -78,6 +78,9 @@ def _save_score(event_id: str, payload: ScoreSubmit, db: Session, background_tas
     if not team:
         raise HTTPException(404, "Team not found in this event")
 
+    if team.submission_status != "Submitted":
+        raise HTTPException(400, "Cannot submit score: this team has not submitted its project yet")
+
     avg = _compute_average(payload.scores)
     is_anomaly = _check_anomaly(avg, payload.team_id, db, settings.ANOMALY_THRESHOLD)
 
@@ -346,7 +349,8 @@ def get_judge_portal(
 
     teams = db.query(models.Team).filter(
         models.Team.event_id == event_id,
-        models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active]),
+        models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active, models.TeamStatus.proposed]),
+        models.Team.submission_status == "Submitted",
     ).all()
 
     # Check which teams this judge has already scored
@@ -369,6 +373,11 @@ def get_judge_portal(
             {
                 "id": t.id,
                 "name": t.name,
+                "project_title": t.project_title,
+                "project_description": t.project_description,
+                "github_url": t.github_url or t.github_link,
+                "video_url": t.video_url or t.demo_link,
+                "presentation_url": t.presentation_url,
                 "members": [{"name": m.name, "institution": m.institution, "skills": m.skills}
                              for m in t.members],
                 "already_scored": t.id in scored_team_ids,

@@ -255,8 +255,10 @@ def save_submission_draft(
         models.PipelineStage.event_id == participant.event_id,
         models.PipelineStage.status == models.StageStatus.active
     ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Submissions are closed because the event has advanced past the Evaluation phase")
+    from ..llm import check_stage_allows_submission
+    if not active_stage or not check_stage_allows_submission(active_stage.name, active_stage.description or ""):
+        stage_name = active_stage.name if active_stage else "Participant Intake"
+        raise HTTPException(400, f"Project submissions are not open during the '{stage_name}' stage")
 
     if not participant.team_id:
         raise HTTPException(400, "Participant has no team assigned")
@@ -301,8 +303,10 @@ def submit_final_submission(
         models.PipelineStage.event_id == participant.event_id,
         models.PipelineStage.status == models.StageStatus.active
     ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Submissions are closed because the event has advanced past the Evaluation phase")
+    from ..llm import check_stage_allows_submission
+    if not active_stage or not check_stage_allows_submission(active_stage.name, active_stage.description or ""):
+        stage_name = active_stage.name if active_stage else "Participant Intake"
+        raise HTTPException(400, f"Project submissions are not open during the '{stage_name}' stage")
 
     if not participant.team_id:
         raise HTTPException(400, "Participant has no team assigned")

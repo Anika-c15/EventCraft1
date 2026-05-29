@@ -9,7 +9,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { CheckCircle, ClipboardList, Send, Star } from 'lucide-react'
+import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -196,34 +196,68 @@ export const JudgePortal: React.FC = () => {
             return (
               <div
                 key={team.id}
-                className={`bg-white rounded-xl border shadow-sm p-5 ${
-                  isScored ? 'border-green-200 opacity-75' : 'border-gray-100'
+                className={`bg-white rounded-xl border shadow-sm p-5 transition-all hover:shadow-md ${
+                  isScored ? 'border-green-200 opacity-90' : 'border-gray-100'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-gray-900">{team.name}</h3>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-base text-gray-900">{team.name}</h3>
                       {isScored && (
-                        <Badge variant="success">
-                          <CheckCircle size={11} className="mr-1" />
+                        <Badge variant="success" className="flex items-center gap-1">
+                          <CheckCircle size={11} />
                           Scored
                         </Badge>
                       )}
                     </div>
+
+                    {/* Team Members */}
                     <div className="flex flex-wrap gap-1.5">
                       {(team.members || []).map((m: any) => (
-                        <div key={m.name} className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-1">
-                          <span className="text-xs font-medium text-gray-700">{m.name}</span>
-                          <span className="text-xs text-gray-400">· {m.institution}</span>
+                        <div key={m.name} className="flex items-center gap-1 bg-gray-50 rounded-lg px-2.5 py-1 border border-gray-100">
+                          <span className="text-xs font-semibold text-gray-700">{m.name}</span>
+                          <span className="text-[10px] text-gray-400">· {m.institution}</span>
                         </div>
                       ))}
                     </div>
+
+                    {/* Project Submission Details */}
+                    <div className="bg-orange-50/30 border border-orange-100/50 rounded-xl p-4 mt-2 space-y-2">
+                      <h4 className="font-bold text-sm text-gray-900">{team.project_title || 'Untitled Project'}</h4>
+                      <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
+                        {team.project_description || 'No project description provided.'}
+                      </p>
+                      
+                      {/* Submission Links */}
+                      <div className="flex gap-2 flex-wrap pt-1">
+                        {team.github_url ? (
+                          <a href={team.github_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
+                            <Github size={13} /> GitHub Repository
+                          </a>
+                        ) : null}
+                        {team.video_url ? (
+                          <a href={team.video_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 bg-white border border-red-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-50 transition-colors">
+                            <Youtube size={13} /> Video Demo
+                          </a>
+                        ) : null}
+                        {team.presentation_url ? (
+                          <a href={team.presentation_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">
+                            <ExternalLink size={13} /> Presentation Slides
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
+
                   {!isScored && (
-                    <Button variant="primary" size="sm" onClick={() => openScoring(team)}>
-                      <ClipboardList size={14} />
-                      Score
+                    <Button variant="primary" size="sm" onClick={() => openScoring(team)} className="flex-shrink-0">
+                      <ClipboardList size={14} className="mr-1" />
+                      Score Project
                     </Button>
                   )}
                 </div>
@@ -261,6 +295,34 @@ export const JudgePortal: React.FC = () => {
                     {m.name} · {m.institution}
                   </span>
                 ))}
+              </div>
+            </div>
+
+            {/* Project Submission */}
+            <div className="bg-orange-50/40 border border-orange-100/50 rounded-xl p-4 space-y-2">
+              <h4 className="font-bold text-sm text-gray-900">{scoringTeam.project_title || 'Untitled Project'}</h4>
+              <p className="text-xs text-gray-600 leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {scoringTeam.project_description || 'No project description provided.'}
+              </p>
+              <div className="flex gap-2 flex-wrap pt-1">
+                {scoringTeam.github_url && (
+                  <a href={scoringTeam.github_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
+                    <Github size={13} /> GitHub Repository
+                  </a>
+                )}
+                {scoringTeam.video_url && (
+                  <a href={scoringTeam.video_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 bg-white border border-red-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-50 transition-colors">
+                    <Youtube size={13} /> Video Demo
+                  </a>
+                )}
+                {scoringTeam.presentation_url && (
+                  <a href={scoringTeam.presentation_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">
+                    <ExternalLink size={13} /> Presentation Slides
+                  </a>
+                )}
               </div>
             </div>
 

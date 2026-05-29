@@ -293,6 +293,13 @@ def advance_stage_direct(
             stage.status = models.StageStatus.pending
 
     event.current_stage_index = to_index
+    if to_index >= 2:
+        db.query(models.Team).filter(
+            models.Team.event_id == event_id,
+            models.Team.status == models.TeamStatus.proposed
+        ).update({models.Team.status: models.TeamStatus.approved})
+    elif to_index == 0:
+        clear_event_teams_and_submissions(event_id, db)
 
     log = models.ActivityLog(
         event_id=event_id,
@@ -357,6 +364,13 @@ def set_stage_direct(
             stage.completed_at = None
 
     event.current_stage_index = to_index
+    if to_index >= 2:
+        db.query(models.Team).filter(
+            models.Team.event_id == event_id,
+            models.Team.status == models.TeamStatus.proposed
+        ).update({models.Team.status: models.TeamStatus.approved})
+    elif to_index == 0:
+        clear_event_teams_and_submissions(event_id, db)
 
     # Also log in ActivityLog
     log = models.ActivityLog(
@@ -383,3 +397,32 @@ def set_stage_direct(
         "current_stage": target_stage.name,
         "current_stage_index": to_index,
     }
+
+
+def clear_event_teams_and_submissions(event_id: str, db: Session):
+    """
+    Clears all teams, submissions, peer reviews, evaluation scores,
+    and resets participant team assignments and pending approvals for an event.
+    """
+    db.query(models.Participant).filter(
+        models.Participant.event_id == event_id
+    ).update({models.Participant.team_id: None})
+    
+    db.query(models.PeerReview).filter(
+        models.PeerReview.event_id == event_id
+    ).delete()
+    
+    db.query(models.EvaluationScore).filter(
+        models.EvaluationScore.event_id == event_id
+    ).delete()
+    
+    db.query(models.Team).filter(
+        models.Team.event_id == event_id
+    ).delete()
+    
+    db.query(models.Approval).filter(
+        models.Approval.event_id == event_id,
+        models.Approval.status == models.ApprovalStatus.pending
+    ).delete()
+    
+    db.flush()

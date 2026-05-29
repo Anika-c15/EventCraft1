@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, BookOpen, Sliders, RefreshCw, Link2, Copy, CheckCircle } from 'lucide-react'
+import { Plus, BookOpen, Sliders, RefreshCw, Link2, Copy, CheckCircle, Github, Youtube } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
@@ -27,7 +27,16 @@ export const Evaluations: React.FC = () => {
 
   const activeStage = dashboardStats?.current_stage?.toLowerCase() || ''
   const isClosed = activeStage.includes('result') || activeStage.includes('progression')
-  const isEvaluationPhase = !dashboardStats || activeStage.includes('eval') || activeStage.includes('result') || activeStage.includes('progression')
+  const isEvaluationPhase = !dashboardStats || 
+    activeStage.includes('eval') || 
+    activeStage.includes('result') || 
+    activeStage.includes('progression') || 
+    activeStage.includes('finale') || 
+    activeStage.includes('submission') || 
+    activeStage.includes('presentation') || 
+    activeStage.includes('pitch') || 
+    activeStage.includes('project') || 
+    dashboardStats.current_stage_index >= 2
 
   const [scores, setScores]           = useState<any[]>([])
   const [teams, setTeams]             = useState<any[]>([])
@@ -105,6 +114,7 @@ export const Evaluations: React.FC = () => {
   }
 
   const avg = ((form.innovation + form.execution + form.presentation + form.impact) / 4).toFixed(2)
+  const selectedTeam = teams.find((t) => t.id === form.teamId)
 
   const handleSubmit = async () => {
     if (!form.judgeName || !form.judgeEmail || !form.teamId || !eventId) return
@@ -238,7 +248,7 @@ export const Evaluations: React.FC = () => {
                         defaultValue=""
                       >
                         <option value="">Select team for guide...</option>
-                        {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        {teams.filter(t => t.submission_status === 'Submitted').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                       {loadingGuide && <p className="text-xs text-gray-400">Generating guide...</p>}
                       {guide && (
@@ -591,9 +601,38 @@ export const Evaluations: React.FC = () => {
             <select value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
               <option value="">Select team...</option>
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {teams.filter(t => t.submission_status === 'Submitted').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
+
+          {selectedTeam && (
+            <div className="bg-orange-50/40 border border-orange-100/50 rounded-xl p-4 mt-3 space-y-2">
+              <h4 className="font-bold text-sm text-gray-900">{selectedTeam.project_title || 'Untitled Project'}</h4>
+              <p className="text-xs text-gray-600 leading-relaxed max-h-32 overflow-y-auto whitespace-pre-wrap">
+                {selectedTeam.project_description || 'No project description provided.'}
+              </p>
+              <div className="flex gap-2 flex-wrap pt-1">
+                {(selectedTeam.github_url || selectedTeam.github_link) && (
+                  <a href={selectedTeam.github_url || selectedTeam.github_link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
+                    <Github size={13} /> GitHub Repository
+                  </a>
+                )}
+                {(selectedTeam.video_url || selectedTeam.demo_link) && (
+                  <a href={selectedTeam.video_url || selectedTeam.demo_link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 bg-white border border-red-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-50 transition-colors">
+                    <Youtube size={13} /> Video Demo
+                  </a>
+                )}
+                {selectedTeam.presentation_url && (
+                  <a href={selectedTeam.presentation_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-100 px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-50 transition-colors">
+                    <Link2 size={13} /> Presentation Slides
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-3">

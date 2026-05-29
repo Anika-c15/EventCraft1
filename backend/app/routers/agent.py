@@ -137,6 +137,9 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
 
     event.current_stage_index = 0
 
+    from .events import clear_event_teams_and_submissions
+    clear_event_teams_and_submissions(event_id, db)
+
     # 4. Auto-generate draft communications for each stage
     # Remove old agent-generated comms first
     db.query(models.Communication).filter(

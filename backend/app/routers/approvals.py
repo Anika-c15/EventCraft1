@@ -105,6 +105,16 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
                     else:
                         stage.status = models.StageStatus.pending
 
+                # Auto-approve proposed teams if advancing past Team Formation stage (index 1)
+                if to_index >= 2:
+                    db.query(models.Team).filter(
+                        models.Team.event_id == approval.event_id,
+                        models.Team.status == models.TeamStatus.proposed
+                    ).update({models.Team.status: models.TeamStatus.approved})
+                elif to_index == 0:
+                    from .events import clear_event_teams_and_submissions
+                    clear_event_teams_and_submissions(approval.event_id, db)
+
     elif approval.type == models.ApprovalType.team_formation:
         team_ids = payload.get("team_ids", [])
         for team_id in team_ids:

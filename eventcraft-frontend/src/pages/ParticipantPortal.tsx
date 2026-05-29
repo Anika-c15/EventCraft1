@@ -310,7 +310,7 @@ export const ParticipantPortal: React.FC = () => {
 
   const {
     participant, team, current_stage, current_stage_index, key_dates, event_name,
-    progression_eligible, scoring_phase_active,
+    progression_eligible, scoring_phase_active, submission_portal_active,
   } = data
 
   const stageLower = current_stage?.toLowerCase() || ''
@@ -890,6 +890,20 @@ export const ParticipantPortal: React.FC = () => {
                   <p className="text-xs text-gray-500 max-w-sm mx-auto">
                     You must be assigned to a team by the organizers before you can submit links.
                   </p>
+                </div>
+              ) : !submission_portal_active ? (
+                <div className="text-center py-16 px-4">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                    <Lock size={24} className="text-gray-300" />
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">Submission Portal Locked</h3>
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
+                    The project submission portal is currently locked. Submissions are only accepted during the hacking or presentation phases.
+                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-gray-400">
+                    <Clock size={12} />
+                    <span>Current stage: <strong className="text-gray-600">{current_stage || 'Participant Intake'}</strong></span>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">

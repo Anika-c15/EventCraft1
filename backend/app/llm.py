@@ -4,6 +4,7 @@ Groq LLM service — fast inference via llama-3.3-70b-versatile (free tier).
 import json
 import re
 from typing import List, Dict, Any, Optional
+from functools import lru_cache
 
 from groq import Groq
 
@@ -47,6 +48,37 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
         if "401" in err or "invalid_api_key" in err.lower():
             return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
         return f"[LLM Error: {err}]"
+
+
+@lru_cache(maxsize=128)
+def check_stage_allows_submission(stage_name: str, stage_description: str) -> bool:
+    """
+    Use Groq LLM to dynamically classify if a pipeline stage allows project submissions.
+    Falls back to keyword matching if LLM is not configured or fails.
+    """
+    client = _get_client()
+    if client is not None:
+        try:
+            prompt = f"""Analyze if the following event pipeline stage is a project submission, project presentation, hackathon finale, or project hacking/coding phase where teams are actively working on and submitting their projects.
+            
+            Stage Name: {stage_name}
+            Stage Description: {stage_description}
+            
+            Respond with EXACTLY 'true' or 'false' and nothing else."""
+            
+            system = "You are an AI classifier. Determine if the stage allows project submissions. Respond with only 'true' or 'false'."
+            res = _call(prompt, system=system).strip().lower()
+            if "true" in res:
+                return True
+            if "false" in res:
+                return False
+        except Exception as e:
+            print(f"⚠️ Groq stage classification error: {e}")
+
+    # Fallback to keyword heuristics
+    keywords = ("submit", "finale", "presentation", "eval", "hack", "project", "build", "pitch", "code", "work")
+    name_lower = stage_name.lower()
+    return any(kw in name_lower for kw in keywords)
 
 
 def _extract_json(text: str) -> Any:
