@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Bot,
   LogOut,
+  Bell,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 
@@ -26,6 +27,7 @@ const navItems = [
   { path: '/approvals', label: 'Approvals', icon: Shield },
   { path: '/formation-rules', label: 'Formation Rules', icon: Settings },
   { path: '/agent', label: 'AI Agent', icon: Bot },
+  { path: '/subscribers', label: 'Subscribers', icon: Bell },
 ]
 
 export const Sidebar: React.FC = () => {

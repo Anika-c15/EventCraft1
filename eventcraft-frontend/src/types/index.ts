@@ -77,3 +77,11 @@ export interface FormationRules {
   experienceLevelGrouping: 'mixed' | 'similar' | 'none'
   maxTeams: number
 }
+
+export interface Subscriber {
+  id: string
+  name: string
+  email: string
+  subscribedAt: string
+  notified: boolean
+}

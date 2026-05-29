@@ -14,6 +14,9 @@ import { FormationRules } from './pages/FormationRules'
 import { ParticipantPortal } from './pages/ParticipantPortal'
 import { JudgePortal } from './pages/JudgePortal'
 import { Agent } from './pages/Agent'
+import { Subscribe } from './pages/Subscribe'
+import { Subscribers } from './pages/Subscribers'
+import { CandidatePortal } from './pages/CandidatePortal'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAppContext()
@@ -42,6 +45,8 @@ const App: React.FC = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/portal/:id" element={<ParticipantPortal />} />
           <Route path="/judge/:eventId" element={<JudgePortal />} />
+          <Route path="/subscribe" element={<Subscribe />} />
+          <Route path="/candidate" element={<CandidatePortal />} />
 
           {/* Protected routes with sidebar */}
           <Route
@@ -60,6 +65,7 @@ const App: React.FC = () => {
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/formation-rules" element={<FormationRules />} />
             <Route path="/agent" element={<Agent />} />
+            <Route path="/subscribers" element={<Subscribers />} />
           </Route>
         </Routes>
       </BrowserRouter>
