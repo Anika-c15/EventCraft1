@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { FileUp, Loader2, CheckCircle, Sparkles, User, Mail, Building2, Code2, AlertCircle, RefreshCw } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
+import { participantsApi, eventsApi } from '../api/client'
 import type { ParticipantLevel } from '../types'
 
 interface ExtractedProfile {
@@ -10,40 +11,22 @@ interface ExtractedProfile {
 
 type PageState = 'upload' | 'extracting' | 'review' | 'submitted' | 'error'
 
-async function extractFromResume(text: string): Promise<ExtractedProfile | null> {
+async function extractFromResume(eventId: string, file: File): Promise<ExtractedProfile | null> {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
-        system: `You are an expert resume parser for a hackathon registration system.
-Extract structured information and return ONLY a valid JSON object. No markdown, no backticks.
-{
-  "name": "full name",
-  "email": "email address or empty string",
-  "institution": "university or college name or empty string",
-  "level": "one of exactly: Beginner, Intermediate, Advanced, Expert",
-  "skills": "comma-separated technical skills e.g. Python, React, ML",
-  "summary": "one sentence describing this candidate's strongest area"
-}
-For level: 0-1yr = Beginner, 1-2yr = Intermediate, 2-4yr = Advanced, 4+yr = Expert.`,
-        messages: [{ role: 'user', content: `Parse this resume:\n\n${text.slice(0, 4000)}` }]
-      })
-    })
-    if (!res.ok) throw new Error(`API ${res.status}`)
-    const data = await res.json()
-    const raw = data.content?.[0]?.text?.trim() ?? ''
-    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    const extracted = await participantsApi.parseResume(eventId, file)
+    if (!extracted) return null
     const validLevels: ParticipantLevel[] = ['Beginner', 'Intermediate', 'Advanced', 'Expert']
-    if (!validLevels.includes(parsed.level)) parsed.level = 'Intermediate'
-    return parsed as ExtractedProfile
-  } catch { return null }
+    if (!validLevels.includes(extracted.level)) extracted.level = 'Intermediate'
+    return extracted as ExtractedProfile
+  } catch (err) {
+    console.error("Error parsing resume:", err)
+    return null
+  }
 }
 
 export const CandidatePortal: React.FC = () => {
   const { addApproval } = useAppContext()
+  const [activeEventId, setActiveEventId] = useState<string>('')
   const [pageState, setPageState] = useState<PageState>('upload')
   const [profile, setProfile] = useState<ExtractedProfile>({
     name: '', email: '', institution: '', level: 'Intermediate', skills: '', summary: ''
@@ -51,6 +34,14 @@ export const CandidatePortal: React.FC = () => {
   const [fileName, setFileName] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [editMode, setEditMode] = useState(false)
+
+  useEffect(() => {
+    eventsApi.list().then(events => {
+      if (events.length > 0) {
+        setActiveEventId(events[0].id)
+      }
+    }).catch(err => console.error("Failed to load events:", err))
+  }, [])
 
   const reset = () => {
     setPageState('upload'); setFileName(''); setEditMode(false)
@@ -60,22 +51,41 @@ export const CandidatePortal: React.FC = () => {
   const handleFile = async (file: File) => {
     if (!file.name.match(/\.(pdf|txt|doc|docx)$/i)) { alert('Please upload a PDF, TXT, DOC or DOCX file'); return }
     setFileName(file.name); setPageState('extracting')
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const text = e.target?.result as string
-      if (!text || text.trim().length < 50) { setPageState('review'); return }
-      const extracted = await extractFromResume(text)
-      extracted ? (setProfile(extracted), setPageState('review')) : setPageState('error')
+    
+    let evId = activeEventId
+    if (!evId) {
+      try {
+        const events = await eventsApi.list()
+        if (events.length > 0) {
+          evId = events[0].id
+          setActiveEventId(evId)
+        }
+      } catch {}
     }
-    reader.onerror = () => setPageState('error')
-    reader.readAsText(file)
+
+    if (!evId) {
+      setPageState('error')
+      return
+    }
+
+    const extracted = await extractFromResume(evId, file)
+    extracted ? (setProfile(extracted), setPageState('review')) : setPageState('error')
   }
 
   const handleSubmit = () => {
     if (!profile.name || !profile.email) return
     addApproval({
-      type: 'Team Formation', status: 'pending',
-      description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution}. Skills: ${profile.skills}. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
+      type: 'Candidate Registration',
+      status: 'pending',
+      description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution || 'No institution'}. Skills: ${profile.skills || 'N/A'}. Level: ${profile.level}. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
+      payload: {
+        name: profile.name,
+        email: profile.email,
+        institution: profile.institution,
+        level: profile.level,
+        skills: profile.skills,
+        summary: profile.summary,
+      },
     })
     setPageState('submitted')
   }

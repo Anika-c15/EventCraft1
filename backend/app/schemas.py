@@ -259,6 +259,10 @@ class ApprovalCreate(BaseModel):
     payload: Optional[Any] = None
 
 
+class ResumeParseRequest(BaseModel):
+    text: str
+
+
 # ── Communication ──────────────────────────────────────────────────────────────
 
 class CommunicationCreate(BaseModel):

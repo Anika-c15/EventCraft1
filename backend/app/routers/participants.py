@@ -4,10 +4,14 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
+from pypdf import PdfReader
+from docx import Document
+
 from ..database import get_db
 from ..auth import require_committee, create_portal_token, decode_portal_token
 from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData, TeamSubmissionUpdate, TeamOut
 from .. import models
+from .. import llm
 
 router = APIRouter(prefix="/api/events/{event_id}/participants", tags=["participants"])
 
@@ -427,4 +431,63 @@ def update_team_submission(
     db.commit()
     db.refresh(team)
     return team
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    try:
+        pdf = PdfReader(io.BytesIO(file_bytes))
+        text = ""
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return text
+    except Exception as e:
+        print(f"Error extracting PDF: {e}")
+        return ""
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    try:
+        doc = Document(io.BytesIO(file_bytes))
+        text = ""
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+        return text
+    except Exception as e:
+        print(f"Error extracting DOCX: {e}")
+        return ""
+
+
+def extract_text_from_txt(file_bytes: bytes) -> str:
+    try:
+        return file_bytes.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+@router.post("/parse-resume")
+async def parse_resume(
+    event_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    _get_event(event_id, db)
+    filename = file.filename.lower()
+    file_bytes = await file.read()
+
+    text = ""
+    if filename.endswith(".pdf"):
+        text = extract_text_from_pdf(file_bytes)
+    elif filename.endswith(".docx"):
+        text = extract_text_from_docx(file_bytes)
+    elif filename.endswith(".txt"):
+        text = extract_text_from_txt(file_bytes)
+    elif filename.endswith(".doc"):
+        text = extract_text_from_txt(file_bytes)
+
+    if not text or len(text.strip()) < 10:
+        raise HTTPException(400, "Could not extract readable text from the uploaded file.")
+
+    return llm.extract_profile_from_resume(text)
 

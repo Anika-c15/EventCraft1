@@ -19,6 +19,7 @@ const typeVariant = (type: string) => {
     case 'Score Override': return 'warning'
     case 'Rule Change': return 'danger'
     case 'Communication': return 'success'
+    case 'Candidate Registration': return 'info'
     default: return 'default'
   }
 }

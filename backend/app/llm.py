@@ -237,6 +237,53 @@ Write a brief 2-sentence neutral explanation for the committee dashboard."""
     return _call(prompt)
 
 
+def extract_profile_from_resume(text: str) -> dict:
+    """Use Groq LLM to parse a candidate's resume and extract structured profile details."""
+    prompt = f"""You are an expert resume parser for a hackathon registration system.
+Extract structured information from the following resume text and return ONLY a valid JSON object. Do not include markdown fences, backticks, or any other introductory or concluding text.
+
+JSON Structure:
+{{
+  "name": "full name",
+  "email": "email address or empty string",
+  "institution": "university or college name or empty string",
+  "level": "one of exactly: Beginner, Intermediate, Advanced, Expert",
+  "skills": "comma-separated technical skills e.g. Python, React, ML",
+  "summary": "one sentence describing this candidate's strongest area"
+}}
+
+For level: 0-1yr experience = Beginner, 1-2yr = Intermediate, 2-4yr = Advanced, 4+yr = Expert.
+
+Resume Text:
+{text[:4000]}
+"""
+    system = "You are a JSON resume parser. You output only valid raw JSON."
+    response_text = _call(prompt, system=system).strip()
+    
+    # Extract JSON in case LLM wrapped it in markdown fences
+    parsed = _extract_json(response_text)
+    if isinstance(parsed, dict):
+        return parsed
+    
+    # Fallback parsing
+    try:
+        start = response_text.find('{')
+        end = response_text.rfind('}')
+        if start != -1 and end != -1:
+            return json.loads(response_text[start:end+1])
+    except Exception:
+        pass
+        
+    return {
+        "name": "",
+        "email": "",
+        "institution": "",
+        "level": "Intermediate",
+        "skills": "",
+        "summary": "Failed to parse resume text dynamically."
+    }
+
+
 # ── Dynamic Event Configuration Agent ─────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are EventCraft's intelligent event configuration assistant.

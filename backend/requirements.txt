@@ -15,3 +15,5 @@ celery
 redis
 sendgrid
 websockets
+pypdf
+python-docx

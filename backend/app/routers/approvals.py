@@ -140,3 +140,38 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
             team = db.query(models.Team).filter(models.Team.id == team_id).first()
             if team:
                 team.status = models.TeamStatus.approved
+
+    elif approval.type == models.ApprovalType.candidate_registration:
+        # Auto-add the candidate as a participant when the approval is approved
+        from ..auth import create_portal_token
+        name = payload.get("name", "")
+        email = payload.get("email", "")
+        institution = payload.get("institution", "") or None
+        level_str = payload.get("level", "Intermediate")
+        skills_raw = payload.get("skills", "")
+        skills = [s.strip() for s in skills_raw.split(",") if s.strip()] if skills_raw else []
+
+        try:
+            level = models.ParticipantLevel(level_str)
+        except ValueError:
+            level = models.ParticipantLevel.intermediate
+
+        if name and email:
+            existing = db.query(models.Participant).filter(
+                models.Participant.event_id == approval.event_id,
+                models.Participant.email == email,
+            ).first()
+            if not existing:
+                participant = models.Participant(
+                    event_id=approval.event_id,
+                    name=name,
+                    email=email,
+                    institution=institution,
+                    level=level,
+                    skills=skills,
+                    status=models.ParticipantStatus.active,
+                )
+                db.add(participant)
+                db.flush()
+                participant.portal_token = create_portal_token(participant.id)
+

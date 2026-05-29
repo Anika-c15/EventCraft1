@@ -49,6 +49,7 @@ class ApprovalType(str, enum.Enum):
     score_override = "Score Override"
     rule_change = "Rule Change"
     communication = "Communication"
+    candidate_registration = "Candidate Registration"
 
 
 class CommStatus(str, enum.Enum):

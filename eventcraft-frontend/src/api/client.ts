@@ -109,6 +109,19 @@ export const participantsApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }, true),
+  parseResume: async (eventId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${BASE_URL}/api/events/${eventId}/participants/parse-resume`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Resume parsing failed' }))
+      throw new Error(err.detail || 'Resume parsing failed')
+    }
+    return res.json()
+  },
 }
 
 export const teamsApi = {
