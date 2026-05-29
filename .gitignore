@@ -13,7 +13,6 @@ eventcraft-frontend/.env
 *.db
 *.sqlite
 *.sqlite3
-!backend/eventcraft.db
 
 # ── Python ────────────────────────────────────────────────────────────────────
 backend/venv/
@@ -44,7 +43,6 @@ desktop.ini
 ehthumbs.db
 
 # ── Editor ────────────────────────────────────────────────────────────────────
-.vscode/settings.json
 .idea/
 *.swp
 *.swo
