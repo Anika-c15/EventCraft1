@@ -176,6 +176,11 @@ export const evaluationsApi = {
 
 export const approvalsApi = {
   list: (eventId: string) => request<any[]>(`/api/events/${eventId}/approvals`),
+  create: (eventId: string, data: { type: string; description: string; payload?: any }) =>
+    request<any>(`/api/events/${eventId}/approvals`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   resolve: (eventId: string, approvalId: string, status: 'approved' | 'rejected') =>
     request<any>(`/api/events/${eventId}/approvals/${approvalId}/resolve`, {
       method: 'POST',

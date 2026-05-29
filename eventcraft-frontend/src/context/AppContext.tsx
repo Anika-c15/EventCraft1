@@ -24,6 +24,7 @@ interface AppContextType {
   approvals: any[]
   loadApprovals: () => Promise<void>
   resolveApproval: (id: string, status: 'approved' | 'rejected') => Promise<void>
+  addApproval: (approval: { type: string; description: string; status?: string; payload?: any }) => Promise<void>
 
   dashboardStats: any | null
   loadDashboard: () => Promise<void>
@@ -198,6 +199,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e: any) { setError(e.message); throw e }
   }
 
+  const addApproval = async (approval: { type: string; description: string; status?: string; payload?: any }) => {
+    let evId = eventId
+    if (!evId) {
+      try {
+        const events = await eventsApi.list()
+        if (events.length > 0) {
+          evId = events[0].id
+        }
+      } catch (e) {
+        console.error("Failed to fetch events:", e)
+      }
+    }
+    if (!evId) return
+    try {
+      await approvalsApi.create(evId, {
+        type: approval.type,
+        description: approval.description,
+        payload: approval.payload,
+      })
+      await loadApprovals()
+    } catch (e: any) {
+      setError(e.message || 'Failed to create approval')
+    }
+  }
+
   const loadDashboard = useCallback(async () => {
     if (!eventId) return
     try { setDashboardStats(await eventsApi.dashboard(eventId)) }
@@ -224,7 +250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       user, isAuthenticated: !!user, authChecked,
       login, logout,
       eventId, setEventId, eventName,
-      approvals, loadApprovals, resolveApproval,
+      approvals, loadApprovals, resolveApproval, addApproval,
       dashboardStats, loadDashboard,
       activityLog, loadActivityLog,
       wsConnected, lastWsMessage,

@@ -253,6 +253,12 @@ class ApprovalResolve(BaseModel):
     status: ApprovalStatus  # approved | rejected
 
 
+class ApprovalCreate(BaseModel):
+    type: ApprovalType
+    description: str
+    payload: Optional[Any] = None
+
+
 # ── Communication ──────────────────────────────────────────────────────────────
 
 class CommunicationCreate(BaseModel):

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import require_committee
-from ..schemas import ApprovalOut, ApprovalResolve
+from ..schemas import ApprovalOut, ApprovalResolve, ApprovalCreate
 from .. import models
 from ..ws import broadcast
 
@@ -24,6 +24,25 @@ def list_approvals(
         .order_by(models.Approval.created_at.desc())
         .all()
     )
+
+
+@router.post("", response_model=ApprovalOut)
+def create_approval(
+    event_id: str,
+    payload: ApprovalCreate,
+    db: Session = Depends(get_db),
+):
+    approval = models.Approval(
+        event_id=event_id,
+        type=payload.type,
+        status=models.ApprovalStatus.pending,
+        description=payload.description,
+        payload=payload.payload,
+    )
+    db.add(approval)
+    db.commit()
+    db.refresh(approval)
+    return approval
 
 
 @router.post("/{approval_id}/resolve")
