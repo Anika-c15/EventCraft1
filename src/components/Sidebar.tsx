@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Bell
 } from 'lucide-react'
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { path: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { path: '/approvals', label: 'Approvals', icon: Shield },
   { path: '/formation-rules', label: 'Formation Rules', icon: Settings },
+  { path: '/subscribers', label: 'Subscribers', icon: Bell },
 ]
 
 export const Sidebar: React.FC = () => {
