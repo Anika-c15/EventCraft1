@@ -100,17 +100,22 @@ export const Communications: React.FC = () => {
     }
   }
 
-  const handleSend = async (commId: string) => {
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+
+const handleSend = async (commId: string) => {
     if (!eventId) return
     setSending(commId)
     try {
       await communicationsApi.send(eventId, commId)
-      setTimeout(load, 1500) // reload after send completes
+      setSuccessMsg('Email sent successfully! ✅')
+      setTimeout(() => {
+        setSuccessMsg(null)
+        load()
+      }, 4000)
     } catch (e: any) {
-      alert(e.message)
-    } finally {
       setSending(null)
-    }
+      alert(e.message)
+    } 
   }
 
   const sentCount = comms.filter((c) => c.status === 'Sent').length
@@ -260,7 +265,19 @@ export const Communications: React.FC = () => {
             <Button variant="secondary" onClick={handleSaveDraft}>Save as Draft</Button>
           </div>
         </div>
-      </Modal>
+    </Modal>
+
+      {/* Success Toast */}
+      {successMsg && (
+        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-4 rounded-xl shadow-lg flex items-center gap-3">
+          <CheckCircle size={20} />
+          <span className="font-medium">{successMsg}</span>
+          <button onClick={() => { setSuccessMsg(null); load() }}
+            className="ml-2 text-white/80 hover:text-white font-bold">
+            OK
+          </button>
+        </div>
+      )}
     </div>
   )
 }
