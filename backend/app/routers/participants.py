@@ -160,7 +160,10 @@ async def import_csv(
             except ValueError:
                 level = models.ParticipantLevel.intermediate
 
+            import uuid
+            p_id = str(uuid.uuid4())
             p = models.Participant(
+                id=p_id,
                 event_id=event_id,
                 name=name,
                 email=email,
@@ -169,7 +172,7 @@ async def import_csv(
                 skills=skills,
                 status=models.ParticipantStatus.active,
             )
-            p.portal_token = create_portal_token(p.id)
+            p.portal_token = create_portal_token(p_id)
             db.add(p)
             imported += 1
 
