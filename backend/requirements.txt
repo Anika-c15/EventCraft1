@@ -17,3 +17,5 @@ sendgrid
 websockets
 pypdf
 python-docx
+psycopg2-binary
+
