@@ -309,7 +309,7 @@ export const ParticipantPortal: React.FC = () => {
   }
 
   const {
-    participant, team, current_stage, current_stage_index, key_dates, event_name,
+    participant, team, current_stage, key_dates, event_name,
     progression_eligible, scoring_phase_active, submission_portal_active,
     results_phase_active,
   } = data
