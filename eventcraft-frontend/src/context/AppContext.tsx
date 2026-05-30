@@ -43,6 +43,9 @@ interface AppContextType {
   addSubscriber: (name: string, email: string) => boolean
   removeSubscriber: (id: string) => void
   notifySubscribers: (eventName: string, description: string) => number
+
+  theme: 'light' | 'dark'
+  toggleTheme: () => void
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -51,6 +54,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser]               = useState<AuthUser | null>(null)
   const [authChecked, setAuthChecked] = useState(false)   // ← key fix
   const [eventId, setEventIdState]    = useState<string | null>(localStorage.getItem('ec_event_id'))
+  const [theme, setTheme]             = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('ec_theme')
+    return (saved as 'light' | 'dark') || 'light'
+  })
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+    localStorage.setItem('ec_theme', theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+  }
   const [eventName, setEventName]     = useState<string>('EventCraft Hackathon')
   const [approvals, setApprovals]     = useState<any[]>([])
   const [dashboardStats, setDashboardStats] = useState<any | null>(null)
@@ -218,7 +238,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         description: approval.description,
         payload: approval.payload,
       })
-      await loadApprovals()
+      if (!!user) {
+        await loadApprovals()
+      }
     } catch (e: any) {
       setError(e.message || 'Failed to create approval')
     }
@@ -256,6 +278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       wsConnected, lastWsMessage,
       loading, error, clearError: () => setError(null),
       subscribers, addSubscriber, removeSubscriber, notifySubscribers,
+      theme, toggleTheme,
     }}>
       {children}
     </AppContext.Provider>

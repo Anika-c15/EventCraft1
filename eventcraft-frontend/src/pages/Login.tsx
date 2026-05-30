@@ -9,7 +9,7 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('admin123')
   const [localError, setLocalError] = useState('')
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,7 +22,7 @@ export const Login: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background dark:bg-slate-950 flex items-center justify-center px-4 transition-colors duration-200">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8 justify-center">

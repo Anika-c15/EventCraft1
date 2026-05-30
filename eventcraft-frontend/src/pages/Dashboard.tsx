@@ -81,32 +81,32 @@ export const Dashboard: React.FC = () => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse" />
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-slate-400">
               Current Stage:{' '}
-              <span className="font-medium text-gray-700">{stats?.current_stage ?? '—'}</span>
+              <span className="font-medium text-gray-700 dark:text-slate-200">{stats?.current_stage ?? '—'}</span>
             </span>
           </div>
         </div>
-        <div className="text-sm text-gray-500">{today}</div>
+        <div className="text-sm text-gray-500 dark:text-slate-400">{today}</div>
       </div>
 
       {/* ── Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Participants */}
         <div
-          className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:border-blue-200 transition-colors"
+          className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 cursor-pointer hover:border-blue-200 dark:hover:border-blue-800 transition-colors"
           onClick={() => navigate('/participants')}
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Participants</p>
-              <p className="text-3xl font-bold text-gray-900">{stats?.total_participants ?? '—'}</p>
-              <p className="text-xs text-gray-400 mt-1">registered in roster</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Participants</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.total_participants ?? '—'}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">registered in roster</p>
             </div>
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-950/30 rounded-lg flex items-center justify-center">
               <UserCheck size={20} className="text-blue-500" />
             </div>
           </div>
@@ -114,18 +114,18 @@ export const Dashboard: React.FC = () => {
 
         {/* Teams */}
         <div
-          className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:border-purple-200 transition-colors"
+          className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 cursor-pointer hover:border-purple-200 dark:hover:border-purple-800 transition-colors"
           onClick={() => navigate('/teams')}
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Teams Formed</p>
-              <p className="text-3xl font-bold text-gray-900">{stats?.teams_formed ?? '—'}</p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Teams Formed</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.teams_formed ?? '—'}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
                 {stats?.teams_formed ? 'Formation pending' : 'Not yet formed'}
               </p>
             </div>
-            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-purple-50 dark:bg-purple-950/30 rounded-lg flex items-center justify-center">
               <Users size={20} className="text-purple-500" />
             </div>
           </div>
@@ -133,22 +133,22 @@ export const Dashboard: React.FC = () => {
 
         {/* Pending Approvals */}
         <div
-          className={`bg-white rounded-xl p-5 shadow-sm border cursor-pointer transition-colors ${
+          className={`bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border cursor-pointer transition-colors ${
             (stats?.pending_approvals ?? 0) > 0
-              ? 'border-orange-200 ring-1 ring-orange-100 hover:border-orange-300'
-              : 'border-gray-100 hover:border-gray-200'
+              ? 'border-orange-200 dark:border-orange-950 ring-1 ring-orange-100 dark:ring-orange-950/20 hover:border-orange-300 dark:hover:border-orange-850'
+              : 'border-gray-100 dark:border-slate-800 hover:border-gray-200 dark:hover:border-slate-700'
           }`}
           onClick={() => navigate('/approvals')}
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Pending Approvals</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Pending Approvals</p>
               <p className="text-3xl font-bold text-primary">{stats?.pending_approvals ?? '—'}</p>
               <p className="text-xs text-primary font-medium mt-1">
                 {(stats?.pending_approvals ?? 0) > 0 ? 'Action required' : 'All clear'}
               </p>
             </div>
-            <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-orange-50 dark:bg-orange-950/30 rounded-lg flex items-center justify-center">
               <ShieldAlert size={20} className="text-primary" />
             </div>
           </div>
@@ -156,16 +156,16 @@ export const Dashboard: React.FC = () => {
 
         {/* Anomaly Flags */}
         <div
-          className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 cursor-pointer hover:border-yellow-200 transition-colors"
+          className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 cursor-pointer hover:border-yellow-200 dark:hover:border-yellow-800 transition-colors"
           onClick={() => navigate('/evaluations')}
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Anomaly Flags</p>
-              <p className="text-3xl font-bold text-gray-900">{stats?.anomaly_flags ?? '—'}</p>
-              <p className="text-xs text-gray-400 mt-1">In evaluations</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Anomaly Flags</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.anomaly_flags ?? '—'}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">In evaluations</p>
             </div>
-            <div className="w-10 h-10 bg-yellow-50 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg flex items-center justify-center">
               <AlertTriangle size={20} className="text-yellow-500" />
             </div>
           </div>
@@ -185,7 +185,7 @@ export const Dashboard: React.FC = () => {
               )}
               <button
                 onClick={() => navigate('/approvals')}
-                className="text-xs text-primary hover:underline flex items-center gap-1"
+                className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
               >
                 View all <ArrowRight size={11} />
               </button>
@@ -195,20 +195,20 @@ export const Dashboard: React.FC = () => {
             {pendingApprovals.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
                 <CheckCircle size={28} className="text-green-400 mb-2" />
-                <p className="text-sm text-gray-400">No pending approvals</p>
+                <p className="text-sm text-gray-400 dark:text-slate-500">No pending approvals</p>
               </div>
             ) : (
               pendingApprovals.slice(0, 3).map((approval: any) => (
                 <div
                   key={approval.id}
-                  className="border border-gray-100 rounded-xl p-4 hover:border-orange-200 transition-colors"
+                  className="border border-gray-100 dark:border-slate-800 rounded-xl p-4 hover:border-orange-200 dark:hover:border-orange-900 transition-colors bg-white dark:bg-slate-900/50"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <Badge variant={typeVariant(approval.type) as any}>{approval.type}</Badge>
-                    <span className="text-xs text-gray-400">{formatDate(approval.created_at)}</span>
+                    <span className="text-xs text-gray-400 dark:text-slate-500">{formatDate(approval.created_at)}</span>
                   </div>
                   {/* Spec scenario message */}
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 line-clamp-3">
                     {approvalScenarioMessage(approval, stats)}
                   </p>
                   <div className="flex items-center gap-2">
@@ -227,7 +227,7 @@ export const Dashboard: React.FC = () => {
             {pendingApprovals.length > 3 && (
               <button
                 onClick={() => navigate('/approvals')}
-                className="w-full text-center text-xs text-primary hover:underline py-2"
+                className="w-full text-center text-xs text-primary hover:underline py-2 cursor-pointer bg-transparent border-none"
               >
                 +{pendingApprovals.length - 3} more — view all approvals
               </button>
@@ -239,13 +239,13 @@ export const Dashboard: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle>System Activity</CardTitle>
-            <button onClick={loadActivityLog} className="text-xs text-gray-400 hover:text-gray-600">
+            <button onClick={loadActivityLog} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 cursor-pointer bg-transparent border-none p-0">
               Refresh
             </button>
           </CardHeader>
           <div className="space-y-3 max-h-80 overflow-y-auto">
             {activityLog.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No activity yet</p>
+              <p className="text-sm text-gray-400 dark:text-slate-500 text-center py-6">No activity yet</p>
             ) : (
               activityLog.map((log: any) => (
                 <div key={log.id} className="flex items-start gap-3">
@@ -256,8 +256,8 @@ export const Dashboard: React.FC = () => {
                     : 'bg-blue-400'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700">{log.message}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatDate(log.created_at)}</p>
+                    <p className="text-sm text-gray-700 dark:text-slate-300">{log.message}</p>
+                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{formatDate(log.created_at)}</p>
                   </div>
                 </div>
               ))

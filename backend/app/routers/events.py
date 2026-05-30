@@ -93,9 +93,28 @@ def create_event(
 @router.get("", response_model=List[EventOut])
 def list_events(
     db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee),
 ):
     return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
+
+
+@router.get("/public/demo-portal")
+def get_public_demo_portal(
+    db: Session = Depends(get_db),
+):
+    event = db.query(models.Event).order_by(models.Event.created_at.desc()).first()
+    if not event:
+        raise HTTPException(404, "No events found")
+    p = db.query(models.Participant).filter(
+        models.Participant.event_id == event.id,
+        models.Participant.status == models.ParticipantStatus.active
+    ).first()
+    if not p:
+        p = db.query(models.Participant).filter(
+            models.Participant.event_id == event.id
+        ).first()
+    if not p:
+        raise HTTPException(404, "No participants found")
+    return {"token": p.portal_token, "event_id": event.id}
 
 
 @router.get("/{event_id}", response_model=EventOut)

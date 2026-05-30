@@ -23,8 +23,14 @@ async function request<T>(
 
   if (res.status === 401) {
     // Only redirect to login if we're not on a public portal page
-    const isPublicPage = window.location.pathname.startsWith('/portal/') ||
-                         window.location.pathname.startsWith('/judge/')
+    const pathname = window.location.pathname
+    const isPublicPage =
+      pathname === '/' ||
+      pathname === '/login' ||
+      pathname === '/subscribe' ||
+      pathname === '/candidate' ||
+      pathname.startsWith('/portal/') ||
+      pathname.startsWith('/judge/')
     if (!isPublicPage) {
       localStorage.removeItem('ec_token')
       localStorage.removeItem('ec_event_id')
@@ -59,6 +65,7 @@ export const authApi = {
 
 export const eventsApi = {
   list: () => request<any[]>('/api/events'),
+  getDemoPortal: () => request<{ token: string; event_id: string }>('/api/events/public/demo-portal', {}, true),
   create: (name: string, description?: string) =>
     request<any>('/api/events', { method: 'POST', body: JSON.stringify({ name, description }) }),
   get: (id: string) => request<any>(`/api/events/${id}`),

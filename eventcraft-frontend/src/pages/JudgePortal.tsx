@@ -9,10 +9,11 @@
  */
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink } from 'lucide-react'
+import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink, Sun, Moon } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
+import { useAppContext } from '../context/AppContext'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -24,6 +25,7 @@ const CRITERIA_DESCRIPTIONS: Record<string, string> = {
 }
 
 export const JudgePortal: React.FC = () => {
+  const { theme, toggleTheme } = useAppContext()
   const { eventId } = useParams<{ eventId: string }>()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') || ''
@@ -134,22 +136,31 @@ export const JudgePortal: React.FC = () => {
   const scoredCount = allTeams.filter((t: any) => t.already_scored || submitted.includes(t.id)).length
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background dark:bg-slate-950 transition-colors duration-200">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-6 py-4 transition-colors duration-200">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xs">EC</span>
             </div>
             <div>
-              <div className="text-sm font-bold text-gray-900">EventCraft</div>
-              <div className="text-[10px] text-gray-400 uppercase tracking-widest">Judge Portal</div>
+              <div className="text-sm font-bold text-gray-900 dark:text-white">EventCraft</div>
+              <div className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-bold">Judge Portal</div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Signed in as</p>
-            <p className="text-sm font-semibold text-gray-800">{portalData.judge_email}</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg border border-gray-100 dark:border-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm"
+              title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            >
+              {theme === 'light' ? <Moon size={15} /> : <Sun size={15} className="text-yellow-500" />}
+            </button>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Signed in as</p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">{portalData.judge_email}</p>
+            </div>
           </div>
         </div>
       </div>

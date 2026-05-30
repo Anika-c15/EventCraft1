@@ -4,6 +4,7 @@ import { Layout } from './components/Layout'
 import { AppProvider, useAppContext } from './context/AppContext'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
+import { LandingPage } from './pages/LandingPage'
 import { Participants } from './pages/Participants'
 import { Teams } from './pages/Teams'
 import { Evaluations } from './pages/Evaluations'
@@ -42,6 +43,7 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/portal/:id" element={<ParticipantPortal />} />
           <Route path="/judge/:eventId" element={<JudgePortal />} />
@@ -56,7 +58,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/participants" element={<Participants />} />
             <Route path="/teams" element={<Teams />} />
             <Route path="/evaluations" element={<Evaluations />} />

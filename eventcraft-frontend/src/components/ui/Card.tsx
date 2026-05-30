@@ -13,7 +13,7 @@ export const Card: React.FC<CardProps> = ({
 }) => {
   return (
     <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 ${padding ? 'p-5' : ''} ${className}`}
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 dark:bg-slate-900 dark:border-slate-800 ${padding ? 'p-5' : ''} ${className}`}
     >
       {children}
     </div>
@@ -46,7 +46,7 @@ export const CardTitle: React.FC<CardTitleProps> = ({
   className = '',
 }) => {
   return (
-    <h3 className={`text-base font-semibold text-gray-900 ${className}`}>
+    <h3 className={`text-base font-semibold text-gray-900 dark:text-white ${className}`}>
       {children}
     </h3>
   )

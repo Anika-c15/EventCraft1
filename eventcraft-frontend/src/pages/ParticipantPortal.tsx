@@ -4,11 +4,12 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder,
+  Loader2, Home, Folder, Sun, Moon,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { useAppContext } from '../context/AppContext'
 
 const levelVariant = (level: string) => {
   switch (level) {
@@ -158,6 +159,7 @@ const ShowroomCard: React.FC<ShowroomCardProps> = ({ team, eventId, token, onVot
 
 // ── Main Portal ────────────────────────────────────────────────────────────────
 export const ParticipantPortal: React.FC = () => {
+  const { theme, toggleTheme } = useAppContext()
   const { id: token } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const eventId = searchParams.get('event')
@@ -323,9 +325,9 @@ export const ParticipantPortal: React.FC = () => {
   const isClosed = isPhase3
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[#F9F8F6]">
+    <div className="h-screen flex overflow-hidden bg-[#F9F8F6] dark:bg-slate-955 dark:bg-slate-950 transition-colors duration-200">
       {/* sticky left-side navigation sidebar panel */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between p-4 flex-shrink-0">
+      <div className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col justify-between p-4 flex-shrink-0 transition-colors duration-200">
         <div className="space-y-6">
           {/* Brand Logo & Profile Card */}
           <div className="space-y-4">
@@ -335,25 +337,25 @@ export const ParticipantPortal: React.FC = () => {
                 <span className="text-white font-extrabold text-sm">EC</span>
               </div>
               <div>
-                <div className="text-xs font-black text-gray-900 tracking-wider">EventCraft</div>
-                <div className="text-[9px] text-gray-400 font-semibold uppercase tracking-widest">Participant Portal</div>
+                <div className="text-xs font-black text-gray-900 dark:text-white tracking-wider">EventCraft</div>
+                <div className="text-[9px] text-gray-400 dark:text-slate-500 font-semibold uppercase tracking-widest">Participant Portal</div>
               </div>
             </div>
 
             {/* Compact Micro-Profile Card */}
-            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div className="bg-gray-50 dark:bg-slate-950/40 rounded-xl p-3 border border-gray-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 bg-primary/10 text-primary font-bold rounded-lg flex items-center justify-center text-sm flex-shrink-0">
+                <div className="w-9 h-9 bg-primary/10 text-primary dark:text-primary-400 font-bold rounded-lg flex items-center justify-center text-sm flex-shrink-0">
                   {participant.name.charAt(0)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-xs text-gray-900 truncate">{participant.name}</div>
-                  <div className="text-[10px] text-gray-500 truncate">{participant.institution || 'No Institution'}</div>
+                  <div className="font-semibold text-xs text-gray-900 dark:text-white truncate">{participant.name}</div>
+                  <div className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{participant.institution || 'No Institution'}</div>
                 </div>
               </div>
-              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gray-200/60">
-                <span className="text-[9px] font-semibold text-gray-400 uppercase">Status</span>
-                <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200/50">
+              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gray-200/60 dark:border-slate-800/60">
+                <span className="text-[9px] font-semibold text-gray-400 dark:text-slate-500 uppercase">Status</span>
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20 px-2 py-0.5 rounded-full border border-green-200/50 dark:border-green-900/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Active
                 </span>
               </div>
@@ -367,8 +369,8 @@ export const ParticipantPortal: React.FC = () => {
               onClick={() => setActiveTab('dashboard')}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'dashboard'
-                  ? 'bg-primary/10 text-primary font-bold shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
               }`}
             >
               <Home size={14} />
@@ -383,8 +385,8 @@ export const ParticipantPortal: React.FC = () => {
                 isPhase1
                   ? 'opacity-50 cursor-not-allowed text-gray-400'
                   : activeTab === 'showroom'
-                  ? 'bg-primary/10 text-primary font-bold shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -399,8 +401,8 @@ export const ParticipantPortal: React.FC = () => {
               onClick={() => setActiveTab('submission')}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'submission'
-                  ? 'bg-primary/10 text-primary font-bold shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
               }`}
             >
               <Folder size={14} />
@@ -486,6 +488,24 @@ export const ParticipantPortal: React.FC = () => {
           )}
         </div>
 
+        {/* Theme Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 transition-all w-full cursor-pointer mt-auto border border-gray-100 hover:border-gray-250 dark:border-slate-800 rounded-lg py-2"
+          title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+        >
+          {theme === 'light' ? (
+            <>
+              <Moon size={14} className="text-gray-400 dark:text-slate-500" />
+              <span>Dark Mode</span>
+            </>
+          ) : (
+            <>
+              <Sun size={14} className="text-yellow-500" />
+              <span>Light Mode</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Main Panel Content Area Workspace */}
