@@ -1,10 +1,13 @@
 import io
 import csv
 from typing import List, Optional
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
+# pyrefly: ignore [missing-import]
 from pypdf import PdfReader
+# pyrefly: ignore [missing-import]
 from docx import Document
 
 from ..database import get_db
@@ -160,10 +163,7 @@ async def import_csv(
             except ValueError:
                 level = models.ParticipantLevel.intermediate
 
-            import uuid
-            p_id = str(uuid.uuid4())
             p = models.Participant(
-                id=p_id,
                 event_id=event_id,
                 name=name,
                 email=email,
@@ -172,7 +172,7 @@ async def import_csv(
                 skills=skills,
                 status=models.ParticipantStatus.active,
             )
-            p.portal_token = create_portal_token(p_id)
+            p.portal_token = create_portal_token(p.id)
             db.add(p)
             imported += 1
 

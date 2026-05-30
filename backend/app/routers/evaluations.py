@@ -7,6 +7,7 @@ Two access modes:
      URL: /api/events/{event_id}/evaluations/judge-portal?token=<jwt>
 """
 from typing import List, Optional
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel

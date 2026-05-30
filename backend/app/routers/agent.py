@@ -7,6 +7,7 @@ When the agent has enough info, it:
 4. Creates an activity log entry
 """
 from typing import List
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime

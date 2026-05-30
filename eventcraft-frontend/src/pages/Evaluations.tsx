@@ -8,7 +8,7 @@ import { evaluationsApi, teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 
 // Use window.location to derive API base — avoids ImportMeta.env issues
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const criteriaConfig = [
   { key: 'innovation',   label: 'Innovation',   description: 'Originality and creativity of the solution' },
