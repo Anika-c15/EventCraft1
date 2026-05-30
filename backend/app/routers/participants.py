@@ -368,10 +368,15 @@ def get_portal(
     for i, item in enumerate(leaderboard_entries):
         item["rank"] = i + 1
 
-    from ..llm import check_stage_allows_submission
+    from ..llm import check_stage_allows_submission, check_stage_is_results_phase
     submission_portal_active = False
+    results_phase_active = False
     if current_stage:
         submission_portal_active = check_stage_allows_submission(current_stage.name, current_stage.description or "")
+        results_phase_active = check_stage_is_results_phase(current_stage.name, current_stage.description or "")
+
+    # Only return the real leaderboard to participants if the results phase is active
+    final_leaderboard = leaderboard_entries if results_phase_active else []
 
     return PortalData(
         participant=participant,
@@ -383,8 +388,9 @@ def get_portal(
         progression_eligible=progression_eligible,
         scoring_phase_active=scoring_phase_active,
         submission_portal_active=submission_portal_active,
+        results_phase_active=results_phase_active,
         showroom_teams=showroom_teams,
-        leaderboard=leaderboard_entries,
+        leaderboard=final_leaderboard,
     )
 
 

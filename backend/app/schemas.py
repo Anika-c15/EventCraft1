@@ -367,6 +367,7 @@ class PortalData(BaseModel):
     progression_eligible: bool
     scoring_phase_active: bool = False   # True when showroom & peer voting unlock
     submission_portal_active: bool = False # True when team submission is open
+    results_phase_active: bool = False # True when event is in results/announce phase
     showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
     leaderboard: List[Dict[str, Any]] = []
 

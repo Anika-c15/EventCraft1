@@ -311,18 +311,16 @@ export const ParticipantPortal: React.FC = () => {
   const {
     participant, team, current_stage, current_stage_index, key_dates, event_name,
     progression_eligible, scoring_phase_active, submission_portal_active,
+    results_phase_active,
   } = data
 
-  const stageLower = current_stage?.toLowerCase() || ''
-  const isPhase3 = stageLower.includes('result') || stageLower.includes('progression') || stageLower.includes('final') || current_stage_index >= 3
-  const isPhase2 = !isPhase3 && (stageLower.includes('eval') || stageLower.includes('score') || stageLower.includes('judg') || stageLower.includes('peer') || current_stage_index === 2)
+  const isPhase3 = results_phase_active ?? false
+  const isPhase2 = !isPhase3 && (scoring_phase_active ?? false)
   const isPhase1 = !isPhase2 && !isPhase3
 
   const teammates = (team?.members || []).filter((m: any) => m.id !== participant.id)
   const votedCount = showroom.filter(t => t.my_vote !== null && t.my_vote !== undefined).length
-  const isClosed = current_stage
-    ? (current_stage.toLowerCase().includes('result') || current_stage.toLowerCase().includes('progression'))
-    : false
+  const isClosed = isPhase3
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#F9F8F6]">

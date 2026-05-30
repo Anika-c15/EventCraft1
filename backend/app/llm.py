@@ -81,6 +81,42 @@ def check_stage_allows_submission(stage_name: str, stage_description: str) -> bo
     return any(kw in name_lower for kw in keywords)
 
 
+@lru_cache(maxsize=128)
+def check_stage_is_results_phase(stage_name: str, stage_description: str) -> bool:
+    """
+    Use Groq LLM to dynamically classify if a pipeline stage is a results, announcement, rankings, or progression phase.
+    Falls back to keyword matching if LLM is not configured or fails.
+    """
+    client = _get_client()
+    if client is not None:
+        try:
+            prompt = f"""Analyze if the following event pipeline stage is a results announcement, rankings display, awards presentation, winner announcement, or progression/finale phase where final scores and rankings are made public to the participants.
+            
+            Stage Name: {stage_name}
+            Stage Description: {stage_description}
+            
+            Respond with EXACTLY 'true' or 'false' and nothing else."""
+            
+            system = "You are an AI classifier. Determine if the stage is a results/rankings phase. Respond with only 'true' or 'false'."
+            res = _call(prompt, system=system).strip().lower()
+            if "true" in res:
+                return True
+            if "false" in res:
+                return False
+        except Exception as e:
+            print(f"⚠️ Groq stage classification error: {e}")
+
+    # Fallback to keyword heuristics
+    keywords = ("result", "rank", "winner", "award", "announc", "progression", "placement", "leaderboard", "congrat")
+    name_lower = stage_name.lower()
+    desc_lower = stage_description.lower() if stage_description else ""
+    is_results = any(kw in name_lower for kw in keywords) or any(kw in desc_lower for kw in keywords)
+    if not is_results:
+        is_results = ("final" in name_lower and "finale" not in name_lower) or \
+                     ("final" in desc_lower and "finale" not in desc_lower)
+    return is_results
+
+
 def _extract_json(text: str) -> Any:
     """Extract JSON from LLM response that may contain markdown fences."""
     match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)

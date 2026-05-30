@@ -502,18 +502,24 @@ def get_bias_mitigation(
         ai_proposed = None
         if combined_public is not None:
             ai_proposed = round(0.70 * judge_avg + 0.30 * combined_public, 2)
+            team.ai_proposed_score = ai_proposed
 
             # Flag deviation and generate rationale if needed
             deviation = abs(judge_avg - combined_public)
-            if deviation > 2.0 and not team.bias_rationale:
-                rationale = llm.generate_bias_mitigation_rationale(
-                    team_name=team.name,
-                    judge_score=judge_avg,
-                    public_score=combined_public,
-                    deviation=deviation,
-                )
-                team.bias_rationale = rationale
-                team.ai_proposed_score = ai_proposed
+            if deviation > 2.0:
+                if not team.bias_rationale:
+                    rationale = llm.generate_bias_mitigation_rationale(
+                        team_name=team.name,
+                        judge_score=judge_avg,
+                        public_score=combined_public,
+                        deviation=deviation,
+                    )
+                    team.bias_rationale = rationale
+            else:
+                team.bias_rationale = None
+        else:
+            team.ai_proposed_score = None
+            team.bias_rationale = None
 
         db.commit()
         db.refresh(team)
