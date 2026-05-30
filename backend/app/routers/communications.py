@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from ..database import get_db
+from ..database import get_db, SessionLocal
 from ..auth import require_committee
 from ..schemas import CommunicationCreate, CommunicationOut, DraftCommunicationRequest
 from .. import models, llm
@@ -33,7 +33,6 @@ def draft_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    """Use LLM to draft a communication for a given stage."""
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -80,7 +79,6 @@ def create_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    """Manually create a communication draft."""
     comm = models.Communication(
         event_id=event_id,
         recipient=payload.recipient,
@@ -104,7 +102,6 @@ async def send_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    """Send a drafted communication to all relevant recipients."""
     comm = db.query(models.Communication).filter(
         models.Communication.id == comm_id,
         models.Communication.event_id == event_id,
@@ -112,9 +109,6 @@ async def send_communication(
     if not comm:
         raise HTTPException(404, "Communication not found")
 
-    event = db.query(models.Event).filter(models.Event.id == event_id).first()
-
-    # Determine recipients
     recipients = []
     recipient_lower = comm.recipient.lower()
 
@@ -128,7 +122,6 @@ async def send_communication(
             for p in participants
         ]
     elif "judge" in recipient_lower:
-        # Get unique judge emails from scores
         scores = db.query(models.EvaluationScore).filter(
             models.EvaluationScore.event_id == event_id
         ).all()
@@ -142,30 +135,38 @@ async def send_communication(
         recipients = [{"email": comm.recipient_email, "name": comm.recipient,
                        "vars": {"participant_name": comm.recipient}}]
     else:
-        # Single simulated send
         recipients = [{"email": "demo@eventcraft.com", "name": comm.recipient,
                        "vars": {"participant_name": comm.recipient}}]
 
     if not recipients:
         raise HTTPException(400, "No recipients found for this communication")
 
-    # Send in background
-    async def do_send():
-        results = await send_bulk_emails(recipients, comm.subject, comm.body)
-        comm.status = models.CommStatus.sent
-        comm.sent_at = datetime.utcnow()
-        db.commit()
+    subject = comm.subject
+    body = comm.body
 
-        log = models.ActivityLog(
-            event_id=event_id,
-            message=f"Communication '{comm.subject[:50]}' sent to {results['sent']} recipients",
-            log_type="success",
-        )
-        db.add(log)
-        db.commit()
+    async def do_send():
+        results = await send_bulk_emails(recipients, subject, body)
+        fresh_db = SessionLocal()
+        try:
+            fresh_comm = fresh_db.query(models.Communication).filter(
+                models.Communication.id == comm_id
+            ).first()
+            if fresh_comm:
+                fresh_comm.status = models.CommStatus.sent
+                fresh_comm.sent_at = datetime.utcnow()
+                fresh_db.add(models.ActivityLog(
+                    event_id=event_id,
+                    message=f"Communication '{subject[:50]}' sent to {results['sent']} recipients",
+                    log_type="success",
+                ))
+                fresh_db.commit()
+        except Exception as e:
+            fresh_db.rollback()
+            print(f"[do_send ERROR] {e}")
+        finally:
+            fresh_db.close()
 
     background_tasks.add_task(do_send)
-
     return {"message": f"Sending to {len(recipients)} recipients", "comm_id": comm_id}
 
 
@@ -197,10 +198,6 @@ async def send_portal_links(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    """
-    Send each participant their personal JWT portal link via email.
-    Reuses the existing portal-link draft if it exists, otherwise creates one.
-    """
     from ..config import settings
 
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
@@ -218,7 +215,6 @@ async def send_portal_links(
     if not participants:
         raise HTTPException(400, "No participants found")
 
-    # Build personalised recipients with their unique portal URL
     recipients = []
     for p in participants:
         if not p.portal_token:
@@ -234,28 +230,27 @@ async def send_portal_links(
             },
         })
 
-    subject = f"Your Personal Portal Link — {event.name}"
+    subject = f"Your Personal Portal Link - {event.name}"
     body_template = """Dear {participant_name},
 
 Welcome to {event_name}!
 
 You can access your personal participant portal using the link below.
-No account or password is required — just click the link:
+No account or password is required - just click the link:
 
 {portal_url}
 
 Your portal shows:
-• Your current stage in the event journey
-• Team details and teammates (once teams are formed)
-• Key event dates and milestones
-• Progression status
+- Your current stage in the event journey
+- Team details and teammates (once teams are formed)
+- Key event dates and milestones
+- Progression status
 
-This link is unique to you — please do not share it.
+This link is unique to you - please do not share it.
 
 Best regards,
 EventCraft Committee"""
 
-    # Reuse existing portal-link draft instead of creating a duplicate
     existing_comm = db.query(models.Communication).filter(
         models.Communication.event_id == event_id,
         models.Communication.subject.like("%Personal Portal Link%"),
@@ -277,21 +272,31 @@ EventCraft Committee"""
         db.commit()
         db.refresh(comm)
 
+    comm_id = comm.id
+
     async def do_send():
         results = await send_bulk_emails(recipients, subject, body_template)
-        comm.status = models.CommStatus.sent
-        comm.sent_at = datetime.utcnow()
-        db.commit()
-
-        db.add(models.ActivityLog(
-            event_id=event_id,
-            message=f"Portal links sent to {results['sent']} participants ({results['failed']} failed)",
-            log_type="success" if results["failed"] == 0 else "warning",
-        ))
-        db.commit()
+        fresh_db = SessionLocal()
+        try:
+            fresh_comm = fresh_db.query(models.Communication).filter(
+                models.Communication.id == comm_id
+            ).first()
+            if fresh_comm:
+                fresh_comm.status = models.CommStatus.sent
+                fresh_comm.sent_at = datetime.utcnow()
+                fresh_db.add(models.ActivityLog(
+                    event_id=event_id,
+                    message=f"Portal links sent to {results['sent']} participants ({results['failed']} failed)",
+                    log_type="success" if results["failed"] == 0 else "warning",
+                ))
+                fresh_db.commit()
+        except Exception as e:
+            fresh_db.rollback()
+            print(f"[do_send portal ERROR] {e}")
+        finally:
+            fresh_db.close()
 
     background_tasks.add_task(do_send)
-
     return {
         "message": f"Sending portal links to {len(recipients)} participants",
         "recipients": len(recipients),
