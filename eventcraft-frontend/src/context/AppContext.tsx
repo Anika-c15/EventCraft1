@@ -54,9 +54,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser]               = useState<AuthUser | null>(null)
   const [authChecked, setAuthChecked] = useState(false)   // ← key fix
   const [eventId, setEventIdState]    = useState<string | null>(localStorage.getItem('ec_event_id'))
-  const [theme, setTheme]             = useState<'light' | 'dark'>(() => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('ec_theme')
-    return (saved as 'light' | 'dark') || 'light'
+    if (saved) return saved as 'light' | 'dark'
+    const hour = new Date().getHours()
+    return hour >= 18 || hour < 6 ? 'dark' : 'light'
   })
 
   useEffect(() => {
@@ -67,6 +69,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     localStorage.setItem('ec_theme', theme)
   }, [theme])
+
+  // Auto dark mode based on time (6 PM - 6 AM)
+  useEffect(() => {
+    const checkTime = () => {
+      const hour = new Date().getHours()
+      const shouldBeDark = hour >= 18 || hour < 6
+      setTheme(shouldBeDark ? 'dark' : 'light')
+    }
+    const interval = setInterval(checkTime, 60000) // check every minute
+    return () => clearInterval(interval)
+  }, [])
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
