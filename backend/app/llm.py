@@ -6,6 +6,7 @@ import re
 from typing import List, Dict, Any, Optional
 from functools import lru_cache
 
+# pyrefly: ignore [missing-import]
 from groq import Groq
 
 from .config import settings
@@ -59,7 +60,9 @@ def check_stage_allows_submission(stage_name: str, stage_description: str) -> bo
     client = _get_client()
     if client is not None:
         try:
-            prompt = f"""Analyze if the following event pipeline stage is a project submission, project presentation, hackathon finale, or project hacking/coding phase where teams are actively working on and submitting their projects.
+            prompt = f"""Analyze if the following event pipeline stage occurs after team formation and allows teams to submit or present their project.
+            Any stage after the team formation phase (such as hacking, prototyping, development, peer review, presentation, or expert evaluation/judging) should allow teams to submit their project links and details. Only one finalized submission is allowed per team.
+            Stages like participant intake, registration, or team formation itself do NOT allow project submissions, and the final results/announcement phase also does NOT.
             
             Stage Name: {stage_name}
             Stage Description: {stage_description}
