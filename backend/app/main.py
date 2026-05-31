@@ -9,7 +9,7 @@ from .auth import hash_password, create_portal_token
 from .routers import auth, events, participants, teams, evaluations, approvals, communications, agent
 from .routers import peer_review
 from .routers.websocket import router as ws_router
-
+from .routers import qa
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -297,6 +297,7 @@ app.include_router(agent.router)
 app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 
+app.include_router(qa.router, tags=["qa"])
 
 @app.get("/")
 def root():

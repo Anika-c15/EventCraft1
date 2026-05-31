@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
@@ -10,6 +11,7 @@ import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAppContext } from '../context/AppContext'
+import { QAChat } from '../components/QAChat'
 
 const levelVariant = (level: string) => {
   switch (level) {
@@ -681,13 +683,25 @@ export const ParticipantPortal: React.FC = () => {
                         <Clock size={28} className="text-gray-300 mx-auto mb-2" />
                         <p className="text-sm text-gray-500">Team assignment pending</p>
                         <p className="text-xs text-gray-400 mt-1">You'll be notified once teams are formed and approved</p>
-                      </div>
+                    </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Q&A Chat */}
+            {team && eventId && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <QAChat
+                  eventId={eventId}
+                  teamId={team.id}
+                  senderName={participant.name}
+                  senderRole="team"
+                />
+              </div>
+            )}
+              
             {/* Lower Dashboard Row */}
             {isPhase3 && team && team.final_score !== null && team.final_score !== undefined ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">

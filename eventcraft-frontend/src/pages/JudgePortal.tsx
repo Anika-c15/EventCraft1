@@ -7,6 +7,7 @@
  * - Submit scores for each team
  * - See which teams they've already scored
  */
+import { QAChat } from '../components/QAChat'
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink, Sun, Moon } from 'lucide-react'
@@ -14,6 +15,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useAppContext } from '../context/AppContext'
+
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -263,7 +265,19 @@ export const JudgePortal: React.FC = () => {
                         ) : null}
                       </div>
                     </div>
+
+                    {/* Q&A Chat */}
+                    <div className="mt-3">
+                      <QAChat
+                        eventId={eventId!}
+                        teamId={team.id}
+                        senderName={portalData.judge_email}
+                        senderRole="judge"
+                      />
+                    </div>
                   </div>
+
+                 
 
                   {!isScored && (
                     <Button variant="primary" size="sm" onClick={() => openScoring(team)} className="flex-shrink-0">

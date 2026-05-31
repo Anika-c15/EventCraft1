@@ -272,3 +272,14 @@ class PeerReview(Base):
                            foreign_keys=[to_team_id])
     from_team = relationship("Team", foreign_keys=[from_team_id])
 
+class QAMessage(Base):
+    __tablename__ = "qa_messages"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    team_id = Column(String, ForeignKey("teams.id"), nullable=False)
+    sender_name = Column(String, nullable=False)
+    sender_role = Column(String, nullable=False)  # "judge" | "team" | "committee"
+    message = Column(Text, nullable=False)
+    parent_id = Column(String, ForeignKey("qa_messages.id"), nullable=True)  # for replies
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
