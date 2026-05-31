@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AppProvider, useAppContext } from './context/AppContext'
 
-const Login = React.lazy(() => import('./pages/Login').then(m => ({ default: m.Login })))
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })))
 const Participants = React.lazy(() => import('./pages/Participants').then(m => ({ default: m.Participants })))
@@ -54,7 +53,7 @@ const App: React.FC = () => {
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/portal/:id" element={<ParticipantPortal />} />
             <Route path="/judge/:eventId" element={<JudgePortal />} />
             <Route path="/subscribe" element={<Subscribe />} />
