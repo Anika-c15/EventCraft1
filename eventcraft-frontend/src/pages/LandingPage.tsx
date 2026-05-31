@@ -6,7 +6,6 @@ import {
   Zap,
   Users,
   Cpu,
-  Lock,
   Sparkles,
   Link as LinkIcon,
   AlertCircle,
@@ -22,14 +21,52 @@ export const LandingPage: React.FC = () => {
   const context = useAppContext()
   const theme = context?.theme || 'light'
   const toggleTheme = context?.toggleTheme || (() => {})
+  const { login } = useAppContext()
 
   const [portalInput, setPortalInput] = useState('')
   const [portalError, setPortalError] = useState('')
   const [showEmailPopup, setShowEmailPopup] = useState(false)
 
-  const handleScrollToPortal = () => {
-    document.getElementById('portal-access')?.scrollIntoView({ behavior: 'smooth' })
+  // Admin Login / Register state
+  const [adminTab, setAdminTab] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [orgName, setOrgName] = useState('')
+  const [formError, setFormError] = useState('')
+
+  
+
+ const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setFormError('')
+  if (!email || !password) { setFormError('Please fill in all fields.'); return }
+  try {
+    await login(email, password)
+    navigate('/dashboard')
+  } catch (err: any) {
+    setFormError(err.message || 'Login failed')
   }
+}
+const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setFormError('')
+  if (!email || !password || !orgName) { setFormError('Please fill in all fields.'); return }
+  if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
+  try {
+    const res = await fetch('http://localhost:8000/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: orgName, org_name: orgName }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setFormError(data.detail || 'Registration failed'); return }
+    await login(email, password)
+    navigate('/dashboard')
+  } catch (err: any) {
+    setFormError(err.message || 'Registration failed')
+  }
+}
 
   const handlePortalAccess = (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,10 +79,8 @@ export const LandingPage: React.FC = () => {
     }
 
     try {
-      // 1. Try parsing as full URL
       let urlString = trimmed
       if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-        // If it looks like a path or domain without protocol, add dummy prefix to parse it
         if (trimmed.includes('/') || trimmed.includes('.')) {
           urlString = 'https://' + trimmed
         }
@@ -53,8 +88,7 @@ export const LandingPage: React.FC = () => {
 
       if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
         const url = new URL(urlString)
-        
-        // Case A: Participant portal `/portal/:token?event=eventId`
+
         if (url.pathname.includes('/portal/')) {
           const parts = url.pathname.split('/portal/')
           const token = parts[1]
@@ -64,8 +98,7 @@ export const LandingPage: React.FC = () => {
             return
           }
         }
-        
-        // Case B: Judge portal `/judge/:eventId?token=jwt`
+
         if (url.pathname.includes('/judge/')) {
           const parts = url.pathname.split('/judge/')
           const eventId = parts[1]
@@ -76,11 +109,8 @@ export const LandingPage: React.FC = () => {
           }
         }
       }
-    } catch (err) {
-      // URL parsing failed, fall back to regex/string matches
-    }
+    } catch (err) {}
 
-    // 2. String/regex matching fallback for relative paths or dirty pastes
     if (trimmed.includes('/portal/')) {
       const portalMatch = trimmed.match(/portal\/([^/?\s]+)(?:\?|&)?event=([^&\s]+)/)
       if (portalMatch && portalMatch[1] && portalMatch[2]) {
@@ -95,13 +125,11 @@ export const LandingPage: React.FC = () => {
       }
     }
 
-    // 3. Fallback: Check if it's a JWT token directly (cannot redirect without event ID)
     if (trimmed.startsWith('eyJ') && trimmed.includes('.')) {
       setPortalError('This looks like a raw Judge Token. Please paste the full Judge URL from your email so we can identify the event.')
       return
     }
 
-    // 4. Default error
     setPortalError(
       'Could not parse link. Please paste the full Portal URL sent to your email (e.g., https://eventcraft.com/portal/abc?event=123).'
     )
@@ -109,17 +137,16 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen font-sans selection:bg-orange-500 selection:text-white relative overflow-hidden transition-colors duration-300 ${
-      theme === 'light' 
-        ? 'bg-white text-slate-800' 
+      theme === 'light'
+        ? 'bg-white text-slate-800'
         : 'bg-gradient-to-br from-slate-955 via-slate-900 to-slate-955 text-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950'
     }`}>
-      
+
       {/* Background Fluid Waves & Grid */}
       {theme === 'light' ? (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-          {/* Base Mesh Gradient */}
           <div className="absolute inset-0 bg-white" />
-          <div 
+          <div
             className="absolute inset-0 opacity-90"
             style={{
               backgroundImage: `
@@ -132,10 +159,7 @@ export const LandingPage: React.FC = () => {
               `
             }}
           />
-          {/* Glowing fluid gradient shape */}
           <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[60%] rounded-full bg-gradient-to-br from-orange-200/20 via-amber-100/20 to-red-100/10 blur-[130px]" />
-          
-          {/* Organic Fluid Wave SVG (matching Eventor CONF structure in shades of orange) */}
           <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.35] mix-blend-multiply pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-1)" />
             <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-2)" opacity="0.6" />
@@ -153,12 +177,11 @@ export const LandingPage: React.FC = () => {
               </linearGradient>
             </defs>
           </svg>
-          
           <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
         </div>
       ) : (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-          <div 
+          <div
             className="absolute inset-0 opacity-40"
             style={{
               backgroundImage: `
@@ -173,7 +196,6 @@ export const LandingPage: React.FC = () => {
           />
           <div className="absolute top-[-20%] right-[-10%] w-[70%] h-[60%] rounded-full bg-gradient-to-br from-orange-500/15 via-amber-500/10 to-transparent blur-[140px]" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[50%] rounded-full bg-gradient-to-tr from-red-500/10 via-orange-500/15 to-transparent blur-[120px]" />
-          
           <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.12] mix-blend-screen pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-dark-1)" />
             <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-dark-2)" opacity="0.6" />
@@ -191,20 +213,19 @@ export const LandingPage: React.FC = () => {
               </linearGradient>
             </defs>
           </svg>
-
           <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:16px_16px]" />
         </div>
       )}
 
-      {/* Giant Watermark background */}
+      {/* Giant Watermark */}
       <div className="select-none pointer-events-none absolute text-[120px] sm:text-[180px] lg:text-[240px] font-black tracking-widest leading-none left-6 top-32 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500 opacity-[0.03] dark:opacity-[0.015]">
         CONF 2026
       </div>
 
       {/* Floating Header */}
       <header className={`sticky top-0 z-40 w-full backdrop-blur-md transition-colors ${
-        theme === 'light' 
-          ? 'bg-white/75 border-b border-orange-100/60' 
+        theme === 'light'
+          ? 'bg-white/75 border-b border-orange-100/60'
           : 'bg-slate-950/75 border-b border-slate-900'
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -217,7 +238,7 @@ export const LandingPage: React.FC = () => {
               <div className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Orchestration System</div>
             </div>
           </div>
-          
+
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
             <a href="#features" className="hover:text-orange-500 transition-colors">Features</a>
             <a href="#stats" className="hover:text-orange-500 transition-colors">Milestones</a>
@@ -228,23 +249,13 @@ export const LandingPage: React.FC = () => {
             <button
               onClick={toggleTheme}
               className={`p-2 rounded-xl border transition-all cursor-pointer shadow-sm ${
-                theme === 'light' 
-                  ? 'border-orange-100 bg-orange-50/50 text-orange-600 hover:bg-orange-100/50' 
+                theme === 'light'
+                  ? 'border-orange-100 bg-orange-50/50 text-orange-600 hover:bg-orange-100/50'
                   : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
               }`}
               title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
             >
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} className="text-yellow-500" />}
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer shadow-sm ${
-                theme === 'light' 
-                  ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100' 
-                  : 'border-slate-800 bg-slate-900 hover:bg-slate-800 hover:border-slate-700 text-white hover:shadow-orange-500/5'
-              }`}
-            >
-              Committee Console <ArrowRight size={14} />
             </button>
           </div>
         </div>
@@ -253,28 +264,29 @@ export const LandingPage: React.FC = () => {
       {/* Main Hero & Access Section */}
       <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-          
+
           {/* Left Column: Hero Text */}
           <div className="lg:col-span-7 space-y-8 text-left">
             <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${
-              theme === 'light' 
-                ? 'border-orange-200 bg-orange-50/60 text-orange-600' 
+              theme === 'light'
+                ? 'border-orange-200 bg-orange-50/60 text-orange-600'
                 : 'border-orange-500/20 bg-orange-500/5 text-orange-400'
             }`}>
               <Sparkles size={12} /> Live Event Engine Active
             </div>
-            
+
             <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
               Intelligent, AI-Powered <br />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 via-red-500 to-amber-500">
                 Event Orchestration
               </span>
             </h1>
-            
+
             <p className={`text-base sm:text-lg max-w-xl leading-relaxed ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
               EventCraft automates participant roster intake, matches diverse teams using advanced grouping rules, generates automated assessment guides, and calculates consensus rankings—all in one seamless flow.
             </p>
-                       <div className="flex flex-wrap gap-4 pt-2">
+
+            <div className="flex flex-wrap gap-4 pt-2">
               <button
                 onClick={() => navigate('/candidate')}
                 className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/20 hover:shadow-orange-500/35 transition-all duration-150 cursor-pointer flex items-center gap-2 hover:-translate-y-0.5"
@@ -284,8 +296,8 @@ export const LandingPage: React.FC = () => {
               <button
                 onClick={() => setShowEmailPopup(true)}
                 className={`px-6 py-3 border rounded-xl font-semibold text-sm transition-all duration-150 flex items-center gap-2 cursor-pointer ${
-                  theme === 'light' 
-                    ? 'border-orange-200 bg-orange-50/40 text-orange-700 hover:bg-orange-100/40' 
+                  theme === 'light'
+                    ? 'border-orange-200 bg-orange-50/40 text-orange-700 hover:bg-orange-100/40'
                     : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-900 hover:text-white'
                 }`}
               >
@@ -310,12 +322,11 @@ export const LandingPage: React.FC = () => {
                 <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Real-time Websockets</p>
               </div>
             </div>
-
           </div>
-          
-          {/* Right Column: Portal Access & Login Box */}
+
+          {/* Right Column: Admin Login / Register Card */}
           <div id="portal-access" className="lg:col-span-5 relative space-y-6">
-                       {/* Floating mockup cards in background (for premium UI depth) */}
+            {/* Floating mockup cards */}
             <div className="absolute -top-12 -left-12 w-48 p-4 rounded-2xl border backdrop-blur-md shadow-lg rotate-[-6deg] hidden sm:block pointer-events-none transition-all duration-300 hover:rotate-0 hover:scale-105 z-0 select-none overflow-hidden bg-white/70 dark:bg-slate-900/70 border-orange-100/60 dark:border-slate-800">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -334,86 +345,187 @@ export const LandingPage: React.FC = () => {
                 <span className="text-[9px] font-extrabold uppercase tracking-widest">AI Matchmaker</span>
               </div>
               <div className="flex -space-x-1.5 overflow-hidden">
-                <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-orange-100 flex items-center justify-center text-[8px] font-bold text-orange-600">RS</div>
-                <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600">AS</div>
-                <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-purple-100 flex items-center justify-center text-[8px] font-bold text-purple-600">VN</div>
+                <div className=" h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-orange-100 flex items-center justify-center text-[8px] font-bold text-orange-600">RS</div>
+                <div className="h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-blue-100 flex items-center justify-center text-[8px] font-bold text-blue-600">AS</div>
+                <div className="h-5 w-5 rounded-full ring-2 ring-white dark:ring-slate-900 bg-purple-100 flex items-center justify-center text-[8px] font-bold text-purple-600">VN</div>
               </div>
             </div>
 
-            {/* Glowing ring around the card */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-red-650 rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />
-            
-            {/* The Main Access Portal Card */}
-            <div className={`relative backdrop-blur-xl border rounded-3xl p-6 sm:p-8 space-y-6 transition-all duration-300 shadow-xl ${
-              theme === 'light' 
-                ? 'bg-white/90 border-orange-100/80 shadow-orange-500/5' 
+            {/* Glowing ring */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />
+
+            {/* Admin Login / Register Card */}
+            <div className={`relative backdrop-blur-xl border rounded-3xl p-6 sm:p-8 space-y-5 transition-all duration-300 shadow-xl ${
+              theme === 'light'
+                ? 'bg-white/90 border-orange-100/80 shadow-orange-500/5'
                 : 'bg-slate-900/85 border-slate-800/80 shadow-black/20'
             }`}>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-2 rounded-xl ${theme === 'light' ? 'bg-orange-50 text-orange-500 border border-orange-100' : 'bg-orange-500/10 text-orange-400'}`}>
-                    <Lock size={18} />
-                  </div>
-                  <h2 className={`text-lg font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Secure Portal Access</h2>
+              {/* Header */}
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${theme === 'light' ? 'bg-orange-50 text-orange-500 border border-orange-100' : 'bg-orange-500/10 text-orange-400'}`}>
+                  <Shield size={18} />
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Your portal access is passwordless and secure. Please click the unique link sent to your registered email to access your dashboard.
-                </p>
+                <h2 className={`text-lg font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Committee Access</h2>
               </div>
 
-              {/* Form Input for Token Paste */}
-              <form onSubmit={handlePortalAccess} className="space-y-4">
-                <div className="space-y-2">
-                  <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Paste Portal URL or Token
-                  </label>
-                  <div className="relative">
+              {/* Tab Switcher */}
+              <div className={`flex rounded-xl p-1 ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-800'}`}>
+                <button
+                  onClick={() => { setAdminTab('login'); setFormError('') }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    adminTab === 'login'
+                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-sm'
+                      : theme === 'light' ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => { setAdminTab('register'); setFormError('') }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                    adminTab === 'register'
+                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-sm'
+                      : theme === 'light' ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Register
+                </button>
+              </div>
+
+              {/* Login Form */}
+              {adminTab === 'login' && (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
                     <input
-                      type="text"
-                      value={portalInput}
-                      onChange={(e) => setPortalInput(e.target.value)}
-                      placeholder="https://eventcraft.com/portal/token?event=id"
-                      className={`w-full border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all font-mono ${
-                        theme === 'light' 
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white' 
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin@organisation.com"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
                           : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
                       }`}
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">
-                      <LinkIcon size={14} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                      }`}
+                    />
+                  </div>
+                  {formError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-500">
+                      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                      <span>{formError}</span>
                     </div>
-                  </div>
-                </div>
-
-                {portalError && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-550 dark:text-red-400 leading-relaxed">
-                    <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-red-500" />
-                    <span>{portalError}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-555 hover:from-orange-600 hover:to-red-655 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
-                >
-                  Enter Portal <ArrowRight size={14} />
-                </button>
-              </form>
-
-              <div className={`pt-4 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
-                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-orange-200/55'}`}>
-                  Are you a Committee Organizer?{' '}
+                  )}
                   <button
-                    onClick={() => navigate('/login')}
-                    className="text-orange-500 hover:text-orange-655 dark:text-orange-400 dark:hover:text-orange-300 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0 inline-flex items-center gap-0.5"
+                    type="submit"
+                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
                   >
-                    Login here
+                    Login to Console <ArrowRight size={14} />
+                  </button>
+                </form>
+              )}
+
+              {/* Register Form */}
+              {adminTab === 'register' && (
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Organisation Name</label>
+                    <input
+                      type="text"
+                      value={orgName}
+                      onChange={(e) => setOrgName(e.target.value)}
+                      placeholder="e.g. IIT Bombay Techfest"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="admin@organisation.com"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                      }`}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
+                        theme === 'light'
+                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                      }`}
+                    />
+                  </div>
+                  {formError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-500">
+                      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                  >
+                    Create Account <ArrowRight size={14} />
+                  </button>
+                </form>
+              )}
+
+              {/* Participant access link */}
+              <div className={`pt-2 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
+                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Are you a participant?{' '}
+                  <button
+                    onClick={() => setShowEmailPopup(true)}
+                    className="text-orange-500 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
+                  >
+                    Access your portal
                   </button>
                 </p>
               </div>
             </div>
           </div>
-
         </div>
 
         {/* Features Section */}
@@ -422,8 +534,8 @@ export const LandingPage: React.FC = () => {
         }`}>
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-              theme === 'light' 
-                ? 'bg-orange-50 text-orange-600 border border-orange-100/55' 
+              theme === 'light'
+                ? 'bg-orange-50 text-orange-600 border border-orange-100/55'
                 : 'bg-orange-500/10 text-orange-300 border border-orange-500/25'
             }`}>
               <Sparkles size={11} /> Feature Suite
@@ -437,14 +549,12 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            {/* Feature 1 */}
             <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light' 
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5' 
+              theme === 'light'
+                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5'
                 : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
             }`}>
-              <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-555 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-200">
+              <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-200">
                 <Users size={20} />
               </div>
               <h3 className={`font-bold text-base ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Algorithmic Matchmaking</h3>
@@ -453,10 +563,9 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Feature 2 */}
             <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light' 
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5' 
+              theme === 'light'
+                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5'
                 : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
             }`}>
               <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors duration-200">
@@ -468,10 +577,9 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Feature 3 */}
             <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light' 
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-pink-200 hover:shadow-lg hover:shadow-pink-500/5' 
+              theme === 'light'
+                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-pink-200 hover:shadow-lg hover:shadow-pink-500/5'
                 : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
             }`}>
               <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-500 group-hover:bg-pink-500 group-hover:text-white transition-colors duration-200">
@@ -483,13 +591,12 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Feature 4 */}
             <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light' 
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-500/5' 
+              theme === 'light'
+                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-500/5'
                 : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
             }`}>
-              <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-555 group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-200">
+              <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-200">
                 <Zap size={20} />
               </div>
               <h3 className={`font-bold text-base ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>WebSockets Integration</h3>
@@ -497,10 +604,8 @@ export const LandingPage: React.FC = () => {
                 Watch judge submissions, consensus shifts, and leaderboard updates happen in real time without refreshing your page.
               </p>
             </div>
-
           </div>
         </section>
-
       </main>
 
       {/* Footer */}
@@ -512,7 +617,7 @@ export const LandingPage: React.FC = () => {
         </p>
       </footer>
 
-      {/* Check Registered Email Modal Popup */}
+      {/* Check Registered Email Modal */}
       <Modal
         isOpen={showEmailPopup}
         onClose={() => setShowEmailPopup(false)}
@@ -531,11 +636,48 @@ export const LandingPage: React.FC = () => {
               Please check your inbox (and spam folder) and click the link to automatically log in to your portal.
             </p>
           </div>
+
+          {/* Portal URL paste form inside modal */}
+          <form onSubmit={handlePortalAccess} className="w-full space-y-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={portalInput}
+                onChange={(e) => setPortalInput(e.target.value)}
+                placeholder="https://eventcraft.com/portal/token?event=id"
+                className={`w-full border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all font-mono ${
+                  theme === 'light'
+                    ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                    : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <LinkIcon size={14} />
+              </div>
+            </div>
+            {portalError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-500">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{portalError}</span>
+              </div>
+            )}
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md hover:-translate-y-0.5 flex items-center justify-center gap-2"
+            >
+              Enter Portal <ArrowRight size={14} />
+            </button>
+          </form>
+
           <button
             onClick={() => setShowEmailPopup(false)}
-            className="w-full mt-2 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-650 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md hover:-translate-y-0.5"
+            className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+              theme === 'light'
+                ? 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+            }`}
           >
-            Got it, thanks!
+            Close
           </button>
         </div>
       </Modal>

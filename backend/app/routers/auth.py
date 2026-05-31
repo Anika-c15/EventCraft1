@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..auth import verify_password, create_access_token, get_current_user
-from ..schemas import LoginRequest, TokenResponse
+from ..auth import verify_password, create_access_token, get_current_user, hash_password
+from ..schemas import LoginRequest, TokenResponse, RegisterRequest
 from .. import models
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -55,6 +55,28 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
         role=user.role.value,
     )
 
+@router.post("/register", response_model=TokenResponse)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    existing = db.query(models.User).filter(models.User.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = models.User(
+        email=payload.email,
+        name=payload.name,
+        hashed_password=hash_password(payload.password),
+        role=models.UserRole.committee,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token({"sub": user.id})
+    return TokenResponse(
+        access_token=token,
+        user_id=user.id,
+        name=user.name,
+        role=user.role.value,
+    )
 
 @router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):

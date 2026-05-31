@@ -155,14 +155,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem('ec_token')
-    localStorage.removeItem('ec_event_id')
-    setUser(null)
-    setEventIdState(null)
-    setApprovals([])
-    setDashboardStats(null)
-  }
+const logout = () => {
+  localStorage.removeItem('ec_token')
+  localStorage.removeItem('ec_event_id')
+  setUser(null)
+  setEventIdState(null)
+  setApprovals([])
+  setDashboardStats(null)
+  window.location.href = '/'
+}
 
   const setEventId = (id: string) => {
     setEventIdState(id)
