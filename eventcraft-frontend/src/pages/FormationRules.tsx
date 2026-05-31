@@ -66,17 +66,7 @@ const RangeSlider: React.FC<{
   )
 }
 
-const Avatar: React.FC<{ initials: string; color: string; level: string }> = ({ initials, color, level }) => (
-  <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800 rounded-xl px-3 py-2">
-    <div className={`w-7 h-7 rounded-lg ${color} flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0`}>
-      {initials}
-    </div>
-    <div className="min-w-0">
-      <div className="text-[10px] font-semibold text-gray-700 dark:text-gray-300 truncate">{initials}</div>
-      <div className="text-[9px] text-gray-400">{level}</div>
-    </div>
-  </div>
-)
+
 
 export const FormationRules: React.FC = () => {
   const { eventId } = useAppContext()
