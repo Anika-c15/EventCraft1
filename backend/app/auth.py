@@ -55,24 +55,29 @@ def decode_portal_token(token: str) -> Optional[str]:
         return None
 
 
-def create_judge_token(judge_email: str, event_id: str) -> str:
+def create_judge_token(judge_email: str, event_id: str, invite_id: str) -> str:
     """Signed JWT for judge link-based access. Expires in 7 days."""
     data = {
         "sub": judge_email,
         "type": "judge",
         "event_id": event_id,
+        "invite_id": invite_id,
         "exp": datetime.utcnow() + timedelta(days=7),
     }
     return jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def decode_judge_token(token: str) -> Optional[dict]:
-    """Returns {"email": str, "event_id": str} or None."""
+    """Returns {"email": str, "event_id": str, "invite_id": str} or None."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         if payload.get("type") != "judge":
             return None
-        return {"email": payload.get("sub"), "event_id": payload.get("event_id")}
+        return {
+            "email": payload.get("sub"),
+            "event_id": payload.get("event_id"),
+            "invite_id": payload.get("invite_id"),
+        }
     except JWTError:
         return None
 

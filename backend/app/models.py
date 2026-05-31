@@ -108,6 +108,8 @@ class Event(Base):
     communications = relationship("Communication", back_populates="event", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="event", cascade="all, delete-orphan")
     agent_messages = relationship("AgentMessage", back_populates="event", cascade="all, delete-orphan")
+    judge_invitations = relationship("JudgeInvitation", back_populates="event", cascade="all, delete-orphan")
+
 
 
 class PipelineStage(Base):
@@ -283,3 +285,15 @@ class QAMessage(Base):
     message = Column(Text, nullable=False)
     parent_id = Column(String, ForeignKey("qa_messages.id"), nullable=True)  # for replies
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class JudgeInvitation(Base):
+    __tablename__ = "judge_invitations"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    judge_name = Column(String, nullable=False)
+    judge_email = Column(String, nullable=False)
+    is_revoked = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    event = relationship("Event", back_populates="judge_invitations")

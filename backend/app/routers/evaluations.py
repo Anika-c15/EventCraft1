@@ -280,8 +280,18 @@ async def invite_judge(
     if active_stage and active_stage.name.lower() in ("results", "progression"):
         raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
 
-    # Generate token and portal URL
-    token = create_judge_token(payload.judge_email, event_id)
+    # Create stateful judge invitation record
+    invitation = models.JudgeInvitation(
+        event_id=event_id,
+        judge_name=payload.judge_name,
+        judge_email=payload.judge_email,
+        is_revoked=False
+    )
+    db.add(invitation)
+    db.commit()
+
+    # Generate token and portal URL using invitation ID
+    token = create_judge_token(payload.judge_email, event_id, invitation.id)
     portal_url = f"{settings.FRONTEND_URL}/judge/{event_id}?token={token}"
 
     # Send the email
@@ -337,6 +347,17 @@ def get_judge_portal(
     judge_data = decode_judge_token(token)
     if not judge_data or judge_data["event_id"] != event_id:
         raise HTTPException(401, "Invalid or expired judge link")
+
+    invite_id = judge_data.get("invite_id")
+    if not invite_id:
+        raise HTTPException(401, "Invalid or expired judge link")
+
+    invitation = db.query(models.JudgeInvitation).filter(
+        models.JudgeInvitation.id == invite_id,
+        models.JudgeInvitation.event_id == event_id
+    ).first()
+    if not invitation or invitation.is_revoked:
+        raise HTTPException(401, "This judge invitation link has been revoked or is invalid")
 
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
@@ -404,10 +425,76 @@ async def judge_submit_score(
     if not judge_data or judge_data["event_id"] != event_id:
         raise HTTPException(401, "Invalid or expired judge link")
 
+    invite_id = judge_data.get("invite_id")
+    if not invite_id:
+        raise HTTPException(401, "Invalid or expired judge link")
+
+    invitation = db.query(models.JudgeInvitation).filter(
+        models.JudgeInvitation.id == invite_id,
+        models.JudgeInvitation.event_id == event_id
+    ).first()
+    if not invitation or invitation.is_revoked:
+        raise HTTPException(401, "This judge invitation link has been revoked or is invalid")
+
     # Enforce judge email from token (can't spoof)
     payload.judge_email = judge_data["email"]
 
     return _save_score(event_id, payload, db, background_tasks)
+
+
+from datetime import datetime
+
+class JudgeInvitationOut(BaseModel):
+    id: str
+    event_id: str
+    judge_name: str
+    judge_email: str
+    is_revoked: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/judge-invitations", response_model=List[JudgeInvitationOut])
+def list_judge_invitations(
+    event_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    """List all judge invitations generated for this event."""
+    return db.query(models.JudgeInvitation).filter(
+        models.JudgeInvitation.event_id == event_id
+    ).order_by(models.JudgeInvitation.created_at.desc()).all()
+
+
+@router.post("/judge-invitations/{invite_id}/revoke")
+def revoke_judge_invitation(
+    event_id: str,
+    invite_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    """Revoke a specific judge invitation, deactivating their link immediately."""
+    invitation = db.query(models.JudgeInvitation).filter(
+        models.JudgeInvitation.id == invite_id,
+        models.JudgeInvitation.event_id == event_id
+    ).first()
+    if not invitation:
+        raise HTTPException(404, "Judge invitation not found")
+
+    invitation.is_revoked = True
+    db.commit()
+
+    # Log the activity
+    db.add(models.ActivityLog(
+        event_id=event_id,
+        message=f"Judge invitation for {invitation.judge_name} ({invitation.judge_email}) was revoked",
+        log_type="warning",
+    ))
+    db.commit()
+
+    return {"message": "Judge invitation successfully revoked", "invite_id": invite_id}
 
 
 # ── AI Bias Mitigation & Public Consensus Endpoints ────────────────────────────

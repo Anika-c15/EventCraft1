@@ -52,6 +52,31 @@ export const Evaluations: React.FC = () => {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteResult, setInviteResult] = useState<any>(null)
   const [copied, setCopied]           = useState(false)
+  const [invitations, setInvitations] = useState<any[]>([])
+  const [loadingInvites, setLoadingInvites] = useState(false)
+
+  const loadInvitations = async () => {
+    if (!eventId) return
+    setLoadingInvites(true)
+    try {
+      const data = await evaluationsApi.listInvitations(eventId)
+      setInvitations(data)
+    } catch (e) {
+      console.error('Error fetching invitations:', e)
+    } finally {
+      setLoadingInvites(false)
+    }
+  }
+
+  const handleRevokeInvitation = async (inviteId: string) => {
+    if (!eventId) return
+    try {
+      await evaluationsApi.revokeInvitation(eventId, inviteId)
+      await loadInvitations()
+    } catch (e: any) {
+      alert(e.message || 'Error revoking invitation')
+    }
+  }
 
   // AI Bias Mitigation & Public Consensus State
   const [mitigations, setMitigations] = useState<any[]>([])
@@ -102,6 +127,7 @@ export const Evaluations: React.FC = () => {
       teamsApi.list(eventId).then(setTeams).catch(() => setTeams([]))
       loadBiasMitigation()
       loadDashboard()
+      loadInvitations()
     }
   }, [eventId])
 
@@ -160,6 +186,7 @@ export const Evaluations: React.FC = () => {
       })
       if (!res.ok) throw new Error('Failed to generate invite')
       setInviteResult(await res.json())
+      await loadInvitations()
     } catch (e: any) { alert(e.message) }
   }
 
@@ -573,6 +600,44 @@ export const Evaluations: React.FC = () => {
               </div>
             </>
           )}
+
+          {/* Active Invitations List */}
+          <div className="border-t border-gray-100 pt-4 mt-2 dark:border-slate-800">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              Active Invitations ({invitations.filter(i => !i.is_revoked).length})
+            </h4>
+            {loadingInvites ? (
+              <p className="text-xs text-gray-400">Loading invitations...</p>
+            ) : invitations.length === 0 ? (
+              <p className="text-xs text-gray-400">No active invitations generated yet.</p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                {invitations.map((invite) => (
+                  <div key={invite.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100 dark:bg-slate-900/50 dark:border-slate-800">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-gray-900 dark:text-slate-100 truncate">{invite.judge_name}</p>
+                        {invite.is_revoked && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400 font-medium">
+                            Revoked
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{invite.judge_email}</p>
+                    </div>
+                    {!invite.is_revoked && (
+                      <button
+                        onClick={() => handleRevokeInvitation(invite.id)}
+                        className="text-[10px] bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded font-medium transition-colors"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
 

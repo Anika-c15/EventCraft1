@@ -190,6 +190,12 @@ export const evaluationsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  listInvitations: (eventId: string) =>
+    request<any[]>(`/api/events/${eventId}/evaluations/judge-invitations`),
+  revokeInvitation: (eventId: string, inviteId: string) =>
+    request<any>(`/api/events/${eventId}/evaluations/judge-invitations/${inviteId}/revoke`, {
+      method: 'POST',
+    }),
 }
 
 // ── Approvals ──────────────────────────────────────────────────────────────────
