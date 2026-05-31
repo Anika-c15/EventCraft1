@@ -18,6 +18,7 @@ const JudgePortal = React.lazy(() => import('./pages/JudgePortal').then(m => ({ 
 const Agent = React.lazy(() => import('./pages/Agent').then(m => ({ default: m.Agent })))
 const Subscribe = React.lazy(() => import('./pages/Subscribe').then(m => ({ default: m.Subscribe })))
 const Subscribers = React.lazy(() => import('./pages/Subscribers').then(m => ({ default: m.Subscribers })))
+const Unsubscribe = React.lazy(() => import('./pages/Unsubscribe').then(m => ({ default: m.Unsubscribe })))
 const CandidatePortal = React.lazy(() => import('./pages/CandidatePortal').then(m => ({ default: m.CandidatePortal })))
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,6 +58,7 @@ const App: React.FC = () => {
             <Route path="/portal/:id" element={<ParticipantPortal />} />
             <Route path="/judge/:eventId" element={<JudgePortal />} />
             <Route path="/subscribe" element={<Subscribe />} />
+            <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/candidate" element={<CandidatePortal />} />
 
             {/* Protected routes with sidebar */}
