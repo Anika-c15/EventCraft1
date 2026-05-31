@@ -12,8 +12,10 @@ import {
   AlertCircle,
   Sun,
   Moon,
+  Mail,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
+import { Modal } from '../components/ui/Modal'
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate()
@@ -23,6 +25,7 @@ export const LandingPage: React.FC = () => {
 
   const [portalInput, setPortalInput] = useState('')
   const [portalError, setPortalError] = useState('')
+  const [showEmailPopup, setShowEmailPopup] = useState(false)
 
   const handleScrollToPortal = () => {
     document.getElementById('portal-access')?.scrollIntoView({ behavior: 'smooth' })
@@ -279,7 +282,7 @@ export const LandingPage: React.FC = () => {
                 Register Now <ArrowRight size={16} />
               </button>
               <button
-                onClick={handleScrollToPortal}
+                onClick={() => setShowEmailPopup(true)}
                 className={`px-6 py-3 border rounded-xl font-semibold text-sm transition-all duration-150 flex items-center gap-2 cursor-pointer ${
                   theme === 'light' 
                     ? 'border-orange-200 bg-orange-50/40 text-orange-700 hover:bg-orange-100/40' 
@@ -508,6 +511,34 @@ export const LandingPage: React.FC = () => {
           &copy; {new Date().getFullYear()} EventCraft Orchestration System. All rights reserved.
         </p>
       </footer>
+
+      {/* Check Registered Email Modal Popup */}
+      <Modal
+        isOpen={showEmailPopup}
+        onClose={() => setShowEmailPopup(false)}
+        title="Check Your Registered Email"
+        maxWidth="max-w-md"
+      >
+        <div className="flex flex-col items-center text-center p-4 space-y-4">
+          <div className="w-16 h-16 bg-orange-50 dark:bg-orange-950/40 rounded-full flex items-center justify-center border border-orange-100 dark:border-orange-900 text-primary animate-bounce">
+            <Mail size={28} />
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-650 dark:text-slate-300 leading-relaxed font-medium">
+              We have sent a secure, passwordless link to your registered email address.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+              Please check your inbox (and spam folder) and click the link to automatically log in to your portal.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowEmailPopup(false)}
+            className="w-full mt-2 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-650 text-white rounded-xl text-sm font-semibold transition-all cursor-pointer shadow-md hover:-translate-y-0.5"
+          >
+            Got it, thanks!
+          </button>
+        </div>
+      </Modal>
 
     </div>
   )

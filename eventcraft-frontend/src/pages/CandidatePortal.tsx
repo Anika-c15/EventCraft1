@@ -3,6 +3,7 @@ import { FileUp, Loader2, CheckCircle, Sparkles, User, Mail, Building2, Code2, A
 import { useAppContext } from '../context/AppContext'
 import { participantsApi, eventsApi } from '../api/client'
 import type { ParticipantLevel } from '../types'
+import { Modal } from '../components/ui/Modal'
 
 interface ExtractedProfile {
   name: string; email: string; institution: string
@@ -27,6 +28,7 @@ async function extractFromResume(eventId: string, file: File): Promise<Extracted
 export const CandidatePortal: React.FC = () => {
   const { addApproval } = useAppContext()
   const [activeEventId, setActiveEventId] = useState<string>('')
+  const [activeEvent, setActiveEvent] = useState<any>(null)
   const [pageState, setPageState] = useState<PageState>('upload')
   const [profile, setProfile] = useState<ExtractedProfile>({
     name: '', email: '', institution: '', level: 'Intermediate', skills: '', summary: ''
@@ -35,10 +37,16 @@ export const CandidatePortal: React.FC = () => {
   const [dragOver, setDragOver] = useState(false)
   const [editMode, setEditMode] = useState(false)
 
+  // Verification state
+  const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [verifyInput, setVerifyInput] = useState('')
+  const [verifyError, setVerifyError] = useState('')
+
   useEffect(() => {
     eventsApi.list().then(events => {
       if (events.length > 0) {
         setActiveEventId(events[0].id)
+        setActiveEvent(events[0])
       }
     }).catch(err => console.error("Failed to load events:", err))
   }, [])
@@ -53,12 +61,15 @@ export const CandidatePortal: React.FC = () => {
     setFileName(file.name); setPageState('extracting')
     
     let evId = activeEventId
+    let evObj = activeEvent
     if (!evId) {
       try {
         const events = await eventsApi.list()
         if (events.length > 0) {
           evId = events[0].id
+          evObj = events[0]
           setActiveEventId(evId)
+          setActiveEvent(evObj)
         }
       } catch {}
     }
@@ -88,6 +99,25 @@ export const CandidatePortal: React.FC = () => {
       },
     })
     setPageState('submitted')
+  }
+
+  const handleVerifyAndSubmit = () => {
+    setVerifyError('')
+    if (!activeEvent) {
+      // Fallback if events failed to load
+      handleSubmit()
+      setShowVerifyModal(false)
+      return
+    }
+
+    if (verifyInput.trim().toLowerCase() !== activeEvent.name.trim().toLowerCase()) {
+      setVerifyError('The event name does not match. Please verify the event name you are registering for.')
+      return
+    }
+
+    handleSubmit()
+    setShowVerifyModal(false)
+    setVerifyInput('')
   }
 
   const levelColors: Record<ParticipantLevel, string> = {
@@ -242,7 +272,7 @@ export const CandidatePortal: React.FC = () => {
                     <RefreshCw size={11} /> Upload New
                   </button>
                 </div>
-                <button onClick={handleSubmit} disabled={!profile.name || !profile.email}
+                <button onClick={() => { setVerifyError(''); setVerifyInput(''); setShowVerifyModal(true); }} disabled={!profile.name || !profile.email}
                   className="flex items-center gap-2 bg-primary text-white rounded-lg px-5 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   Submit Registration →
                 </button>
@@ -276,6 +306,49 @@ export const CandidatePortal: React.FC = () => {
         )}
 
       </div>
+
+      {/* Event Name Verification Modal */}
+      <Modal
+        isOpen={showVerifyModal}
+        onClose={() => setShowVerifyModal(false)}
+        title="Verify Event Name"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-655 dark:text-slate-300 leading-relaxed">
+            Please enter the name of the event you are registering for to verify your submission:
+          </p>
+          <input
+            type="text"
+            value={verifyInput}
+            onChange={e => { setVerifyInput(e.target.value); setVerifyError(''); }}
+            placeholder="e.g. EventCraft"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+          />
+          {verifyError && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50 rounded-lg px-3 py-2 text-xs text-red-655 dark:text-red-400 flex items-start gap-1.5 leading-relaxed">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>{verifyError}</span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowVerifyModal(false)}
+              className="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-1.5"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleVerifyAndSubmit}
+              disabled={!verifyInput.trim()}
+              className="bg-primary text-white rounded-lg px-4 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              Verify &amp; Submit
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   )
 }
