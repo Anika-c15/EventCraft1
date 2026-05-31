@@ -43,7 +43,6 @@ async def _send_via_sendgrid(
         message.add_content(Content("text/plain", body))
         message.add_content(Content("text/html", html_body))
 
-        # Run blocking SDK call in thread pool
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: sg.send(message))
 
@@ -124,10 +123,6 @@ async def send_email(
     body: str,
     to_name: Optional[str] = None,
 ) -> bool:
-    """
-    Send a single email. Automatically picks the best available transport.
-    Priority: SendGrid > SMTP > Console
-    """
     if settings.SENDGRID_API_KEY:
         return await _send_via_sendgrid(to_email, subject, body, to_name)
     elif settings.SMTP_USER and settings.SMTP_PASSWORD:
@@ -141,12 +136,6 @@ async def send_bulk_emails(
     subject: str,
     body_template: str,
 ) -> dict:
-    """
-    Send personalised emails to multiple recipients concurrently.
-
-    recipients: [{"email": "...", "name": "...", "vars": {"participant_name": "..."}}]
-    body_template: string with {participant_name} placeholders
-    """
     results = {"sent": 0, "failed": 0, "details": []}
 
     async def _send_one(r: dict):
@@ -175,10 +164,45 @@ async def send_bulk_emails(
     return results
 
 
+async def send_portal_link_email(
+    name: str,
+    email: str,
+    event_name: str,
+    token: str,
+    event_id: str,
+    role: str = "participant"
+) -> bool:
+    portal_map = {
+        "participant": f"{settings.FRONTEND_URL}/portal",
+        "judge": f"{settings.FRONTEND_URL}/judge",
+        "committee": f"{settings.FRONTEND_URL}/dashboard"
+    }
+    link = f"{portal_map.get(role, settings.FRONTEND_URL)}/{token}?event={event_id}"
+
+    body = (
+        f"Hi {name},\n\n"
+        f"Welcome to {event_name}!\n\n"
+        f"You have been successfully registered as a {role.capitalize()}.\n"
+        f"Access your portal using the link below:\n\n"
+        f"{link}\n\n"
+        f"This link is valid for 48 hours.\n"
+        f"No login or password required.\n\n"
+        f"If you did not register, please ignore this email.\n\n"
+        f"Regards,\n"
+        f"EventCraft Team"
+    )
+
+    return await send_email(
+        to_email=email,
+        subject=f"Welcome to {event_name} — Your Portal Access",
+        body=body,
+        to_name=name
+    )
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _to_html(plain_text: str) -> str:
-    """Convert plain text email body to simple branded HTML."""
     body_html = plain_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     body_html = body_html.replace("\n", "<br>")
     return f"""<!DOCTYPE html>
@@ -188,7 +212,6 @@ def _to_html(plain_text: str) -> str:
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding:32px 16px">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
-        <!-- Header -->
         <tr>
           <td style="background:#E8450A;padding:20px 28px;border-radius:12px 12px 0 0">
             <span style="color:white;font-size:20px;font-weight:700;letter-spacing:-0.5px">
@@ -200,7 +223,6 @@ def _to_html(plain_text: str) -> str:
             </span>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="background:white;padding:28px;border:1px solid #e5e7eb;
                      border-top:none;border-radius:0 0 12px 12px;
@@ -208,10 +230,8 @@ def _to_html(plain_text: str) -> str:
             {body_html}
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
-          <td style="padding:16px 0;text-align:center;
-                     font-size:12px;color:#9ca3af">
+          <td style="padding:16px 0;text-align:center;font-size:12px;color:#9ca3af">
             EventCraft Intelligent Event Orchestration System
           </td>
         </tr>

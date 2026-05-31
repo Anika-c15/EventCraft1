@@ -45,13 +45,15 @@ def list_participants(
 
 
 @router.post("", response_model=ParticipantOut)
-def add_participant(
+async def add_participant(
     event_id: str,
     payload: ParticipantCreate,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    _get_event(event_id, db)
+    from ..email_service import send_portal_link_email
+
+    event = _get_event(event_id, db)
 
     existing = (
         db.query(models.Participant)
@@ -75,7 +77,7 @@ def add_participant(
         metadata_json=payload.metadata_json,
     )
     db.add(participant)
-    db.flush()  # assigns participant.id before generating token
+    db.flush()
     participant.portal_token = create_portal_token(participant.id)
 
     db.add(models.ActivityLog(
@@ -85,6 +87,17 @@ def add_participant(
     ))
     db.commit()
     db.refresh(participant)
+
+    # send portal link email
+    await send_portal_link_email(
+        name=participant.name,
+        email=participant.email,
+        event_name=event.name,
+        token=participant.portal_token,
+        event_id=participant.event_id,
+        role="participant"
+    )
+
     return participant
 
 
