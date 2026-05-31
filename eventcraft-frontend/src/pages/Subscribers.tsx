@@ -8,6 +8,7 @@ export const Subscribers: React.FC = () => {
   const [eventName, setEventName] = useState('')
   const [description, setDescription] = useState('')
   const [notified, setNotified] = useState<number | null>(null)
+  const [notifyFailed, setNotifyFailed] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [notifying, setNotifying] = useState(false)
 
@@ -38,13 +39,16 @@ export const Subscribers: React.FC = () => {
     setNotifying(true)
     try {
       const res = await subscribersApi.notifyAll(eventName, description)
-      setNotified(res.notified)
+      const sent = (res as any).sent ?? res.notified
+      const failed = (res as any).failed ?? 0
+      setNotified(sent)
+      setNotifyFailed(failed)
       // Refresh list so statuses update
       await loadSubscribers()
       setEventName('')
       setDescription('')
       setShowForm(false)
-      setTimeout(() => setNotified(null), 4000)
+      setTimeout(() => { setNotified(null); setNotifyFailed(0) }, 5000)
     } catch (e) {
       console.error('Failed to notify subscribers', e)
     } finally {
@@ -86,7 +90,9 @@ export const Subscribers: React.FC = () => {
         <div className="mb-4 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
           <CheckCircle size={16} className="text-green-500" />
           <p className="text-sm font-medium text-green-700">
-            {notified > 0 ? `${notified} subscribers have been notified!` : 'All subscribers are already notified.'}
+            {notified > 0
+              ? `Emails sent to ${notified} subscriber${notified > 1 ? 's' : ''}${notifyFailed > 0 ? ` · ${notifyFailed} failed` : ''}`
+              : 'All subscribers are already notified.'}
           </p>
         </div>
       )}

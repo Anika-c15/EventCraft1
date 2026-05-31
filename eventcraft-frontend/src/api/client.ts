@@ -288,10 +288,10 @@ export const subscribersApi = {
     }, true),
 
   /** Public — no auth needed */
-  unsubscribe: (email: string) =>
+  unsubscribe: (email: string, reason?: string) =>
     request<{ message: string }>('/api/subscribers/unsubscribe', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, reason: reason || '' }),
     }, true),
 
   /** Committee — requires auth */

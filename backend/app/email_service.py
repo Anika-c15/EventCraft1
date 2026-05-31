@@ -19,6 +19,7 @@ async def _send_via_sendgrid(
     subject: str,
     body: str,
     to_name: Optional[str] = None,
+    html_body: Optional[str] = None,
 ) -> bool:
     try:
         import sendgrid
@@ -33,15 +34,18 @@ async def _send_via_sendgrid(
         )
         to_addr = To(email=to_email, name=to_name or to_email)
 
-        html_body = _to_html(body)
+        # If html_body provided use it directly, otherwise convert plain text
+        final_html = html_body if html_body else _to_html(body)
+        # Plain text: strip HTML tags if body looks like HTML
+        plain = body if not body.strip().startswith("<") else "Please view this email in an HTML-capable email client."
 
         message = Mail(
             from_email=from_email,
             to_emails=to_addr,
             subject=subject,
         )
-        message.add_content(Content("text/plain", body))
-        message.add_content(Content("text/html", html_body))
+        message.add_content(Content("text/plain", plain))
+        message.add_content(Content("text/html", final_html))
 
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: sg.send(message))
@@ -50,11 +54,13 @@ async def _send_via_sendgrid(
             logger.info(f"[SendGrid] Sent to {to_email}: {subject}")
             return True
         else:
-            logger.error(f"[SendGrid] Failed ({response.status_code}) to {to_email}")
+            logger.error(f"[SendGrid] Failed ({response.status_code}) to {to_email}: {response.body}")
+            print(f"[SendGrid] FAILED status={response.status_code} body={response.body}")
             return False
 
     except Exception as e:
         logger.error(f"[SendGrid] Error sending to {to_email}: {e}")
+        print(f"[SendGrid] EXCEPTION sending to {to_email}: {e}")
         return False
 
 
@@ -65,6 +71,7 @@ async def _send_via_smtp(
     subject: str,
     body: str,
     to_name: Optional[str] = None,
+    html_body: Optional[str] = None,
 ) -> bool:
     try:
         import aiosmtplib
@@ -73,11 +80,16 @@ async def _send_via_smtp(
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.EMAIL_FROM
+        msg["From"] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM}>"
         msg["To"] = f"{to_name} <{to_email}>" if to_name else to_email
 
-        msg.attach(MIMEText(body, "plain"))
-        msg.attach(MIMEText(_to_html(body), "html"))
+        # Plain text
+        plain = body if not body.strip().startswith("<") else "Please view this email in an HTML-capable email client."
+        # HTML
+        final_html = html_body if html_body else _to_html(body)
+
+        msg.attach(MIMEText(plain, "plain"))
+        msg.attach(MIMEText(final_html, "html"))
 
         await aiosmtplib.send(
             msg,
@@ -88,10 +100,12 @@ async def _send_via_smtp(
             start_tls=True,
         )
         logger.info(f"[SMTP] Sent to {to_email}: {subject}")
+        print(f"[SMTP] ✅ Sent to {to_email}: {subject}")
         return True
 
     except Exception as e:
         logger.error(f"[SMTP] Error sending to {to_email}: {e}")
+        print(f"[SMTP] ❌ Error sending to {to_email}: {e}")
         return False
 
 
@@ -122,11 +136,12 @@ async def send_email(
     subject: str,
     body: str,
     to_name: Optional[str] = None,
+    html_body: Optional[str] = None,
 ) -> bool:
     if settings.SENDGRID_API_KEY:
-        return await _send_via_sendgrid(to_email, subject, body, to_name)
+        return await _send_via_sendgrid(to_email, subject, body, to_name, html_body)
     elif settings.SMTP_USER and settings.SMTP_PASSWORD:
-        return await _send_via_smtp(to_email, subject, body, to_name)
+        return await _send_via_smtp(to_email, subject, body, to_name, html_body)
     else:
         return await _send_console(to_email, subject, body, to_name)
 

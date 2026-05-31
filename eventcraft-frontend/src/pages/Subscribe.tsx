@@ -14,6 +14,8 @@ export const Subscribe: React.FC = () => {
   const [unsubLoading, setUnsubLoading] = useState(false)
   const [unsubDone, setUnsubDone] = useState(false)
   const [unsubError, setUnsubError] = useState('')
+  const [showUnsubForm, setShowUnsubForm] = useState(false)
+  const [unsubReason, setUnsubReason] = useState('')
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,7 +36,7 @@ export const Subscribe: React.FC = () => {
     setUnsubLoading(true)
     setUnsubError('')
     try {
-      await subscribersApi.unsubscribe(email.trim())
+      await subscribersApi.unsubscribe(email.trim(), unsubReason.trim())
       setUnsubDone(true)
     } catch (err: any) {
       setUnsubError(err.message || 'Failed to unsubscribe.')
@@ -42,7 +44,6 @@ export const Subscribe: React.FC = () => {
       setUnsubLoading(false)
     }
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 transition-colors duration-200">
       <div className="w-full max-w-md">
@@ -70,17 +71,48 @@ export const Subscribe: React.FC = () => {
                 <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
                   <BellOff size={11} /> You've been unsubscribed.
                 </p>
+              ) : showUnsubForm ? (
+                <div className="text-left space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 flex items-center gap-1">
+                    <BellOff size={12} /> Unsubscribe from future events
+                  </p>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Reason <span className="text-gray-300">(optional)</span></label>
+                    <input
+                      type="text"
+                      value={unsubReason}
+                      onChange={e => setUnsubReason(e.target.value)}
+                      placeholder="e.g. Not interested anymore"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    />
+                  </div>
+                  {unsubError && <p className="text-xs text-red-500">{unsubError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowUnsubForm(false)}
+                      className="flex-1 text-xs text-gray-400 hover:text-gray-600 py-2 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleUnsubscribe}
+                      disabled={unsubLoading}
+                      className="flex-1 text-xs bg-gray-800 dark:bg-slate-700 text-white py-2 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                    >
+                      <BellOff size={11} />
+                      {unsubLoading ? 'Processing…' : 'Unsubscribe'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <>
                   <button
-                    onClick={handleUnsubscribe}
-                    disabled={unsubLoading}
-                    className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 mx-auto disabled:opacity-50"
+                    onClick={() => setShowUnsubForm(true)}
+                    className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 mx-auto"
                   >
                     <BellOff size={11} />
-                    {unsubLoading ? 'Unsubscribing…' : 'Unsubscribe from future events'}
+                    Unsubscribe from future events
                   </button>
-                  {unsubError && <p className="text-xs text-red-500 mt-1">{unsubError}</p>}
                 </>
               )}
             </div>
