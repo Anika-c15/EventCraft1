@@ -18,4 +18,4 @@ websockets
 pypdf
 python-docx
 psycopg2-binary
-
+bcrypt

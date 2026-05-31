@@ -76,17 +76,25 @@ def _seed_db():
     db = SessionLocal()
     try:
         # ── Admin user ──────────────────────────────────────────────────────
-        admin = db.query(models.User).filter(models.User.email == settings.ADMIN_EMAIL).first()
+        admin_email = settings.ADMIN_EMAIL or "admin@eventcraft.com"
+        admin_password = settings.ADMIN_PASSWORD
+        
+        if not admin_password:
+            import secrets
+            admin_password = secrets.token_urlsafe(12)
+            print(f"⚠️  ADMIN_PASSWORD not set. Generated secure temporary password: {admin_password}")
+            
+        admin = db.query(models.User).filter(models.User.email == admin_email).first()
         if not admin:
             admin = models.User(
-                email=settings.ADMIN_EMAIL,
-                hashed_password=hash_password(settings.ADMIN_PASSWORD),
+                email=admin_email,
+                hashed_password=hash_password(admin_password),
                 name="Admin",
                 role=models.UserRole.admin,
             )
             db.add(admin)
             db.flush()
-            print(f"✅ Admin created: {settings.ADMIN_EMAIL} / {settings.ADMIN_PASSWORD}")
+            print(f"✅ Admin created: {admin_email} / {admin_password}")
 
         # ── Demo event (only if no events exist) ────────────────────────────
         if db.query(models.Event).count() == 0:

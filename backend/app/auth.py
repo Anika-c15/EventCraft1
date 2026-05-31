@@ -10,7 +10,7 @@ from .config import settings
 from .database import get_db
 from . import models
 
-pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt", "sha256_crypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 

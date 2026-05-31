@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./eventcraft.db"
     FRONTEND_URL: str = "http://localhost:5173"
 
-    ADMIN_EMAIL: str = "admin@eventcraft.com"
-    ADMIN_PASSWORD: str = "admin123"
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
 
     ANOMALY_THRESHOLD: float = 2.5
 
