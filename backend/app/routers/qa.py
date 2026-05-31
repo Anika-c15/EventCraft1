@@ -137,3 +137,16 @@ def delete_message(
     db.delete(msg)
     db.commit()
     return {"message": "Deleted"}
+
+@router.delete("/{team_id}/clear")
+async def clear_messages(
+    event_id: str,
+    team_id: str,
+    db: Session = Depends(get_db),
+):
+    db.query(models.QAMessage).filter(
+        models.QAMessage.event_id == event_id,
+        models.QAMessage.team_id == team_id,
+    ).delete()
+    db.commit()
+    return {"message": "Chat cleared"}

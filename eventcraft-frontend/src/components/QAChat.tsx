@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Send, MessageCircle, X, Bell, Lock } from 'lucide-react'
+import { Send, MessageCircle, X, Bell, Trash2 } from 'lucide-react'
 
 interface QAMessage {
   id: string
@@ -16,13 +16,14 @@ interface Props {
   senderName: string
   senderRole: 'judge' | 'team' | 'committee'
   onNewMessage?: (msg: QAMessage) => void
-  disabled?: boolean
 }
 
-export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage, disabled = false }) => {
+export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage }) => {
   const [messages, setMessages] = useState<QAMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(0)
 
@@ -30,8 +31,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
     try {
       const res = await fetch(`http://localhost:8000/api/events/${eventId}/qa/${teamId}`)
       const data = await res.json()
-      
-      // detect new messages from others
+
       if (data.length > prevCountRef.current) {
         const newMsgs = data.slice(prevCountRef.current)
         newMsgs.forEach((msg: QAMessage) => {
@@ -75,6 +75,20 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
     setSending(false)
   }
 
+ const handleClear = async () => {
+  setClearing(true)
+  try {
+    await fetch(
+      `http://localhost:8000/api/events/${eventId}/qa/${teamId}/clear`,
+      { method: 'DELETE' }
+    )
+    setMessages([])
+    prevCountRef.current = 0
+    setShowConfirm(false)
+  } catch {}
+  setClearing(false)
+}
+
   const roleColor = (role: string) => {
     switch (role) {
       case 'judge': return 'bg-purple-100 text-purple-700'
@@ -90,13 +104,54 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
     })
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col h-96">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col h-96 relative">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
         <MessageCircle size={16} className="text-primary" />
         <h3 className="font-semibold text-gray-900 text-sm">Live Q&A</h3>
+        <span className="text-xs text-gray-400 ml-1">({messages.length} messages)</span>
         <span className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+
+        {/* Clear button */}
+        {messages.length > 0 && (
+          <button
+            onClick={() => setShowConfirm(true)}
+            className="ml-2 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
+            title="Clear chat"
+          >
+            <Trash2 size={12} />
+            Clear
+          </button>
+        )}
       </div>
+
+      {/* Confirm Clear Popup */}
+      {showConfirm && (
+        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-xl z-10 flex items-center justify-center">
+          <div className="text-center px-6">
+            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Trash2 size={20} className="text-red-500" />
+            </div>
+            <p className="text-sm font-semibold text-gray-900 mb-1">Clear all messages?</p>
+            <p className="text-xs text-gray-500 mb-4">This cannot be undone.</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClear}
+                disabled={clearing}
+                className="px-4 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-60"
+              >
+                {clearing ? 'Clearing...' : 'Clear Chat'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
@@ -128,32 +183,22 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
       </div>
 
       {/* Input */}
-    {/* Input */}
-{disabled ? (
-  <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2 bg-gray-50 rounded-b-xl">
-    <Lock size={14} className="text-gray-400 flex-shrink-0" />
-    <p className="text-xs text-gray-400 font-medium">
-      Chat will be available after your project is submitted.
-    </p>
-  </div>
-) : (
-  <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
-    <input
-      value={input}
-      onChange={(e) => setInput(e.target.value)}
-      onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-      placeholder="Type a message..."
-      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-    />
-    <button
-      onClick={handleSend}
-      disabled={sending || !input.trim()}
-      className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
-    >
-      <Send size={14} />
-    </button>
-  </div>
-)}
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Type a message..."
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <button
+          onClick={handleSend}
+          disabled={sending || !input.trim()}
+          className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+        >
+          <Send size={14} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -195,7 +240,6 @@ export const QANotificationPopup: React.FC<NotificationProps> = ({ message, onCl
   return (
     <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-top-2 duration-300">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 max-w-sm w-full">
-        {/* Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Bell size={14} className="text-primary animate-bounce" />
@@ -209,22 +253,13 @@ export const QANotificationPopup: React.FC<NotificationProps> = ({ message, onCl
           </button>
         </div>
 
-        {/* Sender */}
         <p className="text-xs font-semibold text-gray-700 mb-1">{message.sender_name}</p>
 
-        {/* Message */}
         <div className="bg-gray-50 rounded-xl px-3 py-2 text-sm text-gray-800 border border-gray-100">
           {message.message}
         </div>
 
-        {/* Progress bar auto-dismiss */}
-        <div className="mt-3 h-1 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-1 bg-primary rounded-full animate-[shrink_6s_linear_forwards]"
-            style={{ animation: 'width 6s linear forwards', width: '100%' }}
-          />
-        </div>
-
-        <p className="text-[10px] text-gray-400 mt-1 text-right">
+        <p className="text-[10px] text-gray-400 mt-2 text-right">
           Scroll down to reply in Live Q&A
         </p>
       </div>
