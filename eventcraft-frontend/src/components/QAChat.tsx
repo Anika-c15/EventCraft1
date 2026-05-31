@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Send, MessageCircle, X, Bell } from 'lucide-react'
+import { Send, MessageCircle, X, Bell, Lock } from 'lucide-react'
 
 interface QAMessage {
   id: string
@@ -16,9 +16,10 @@ interface Props {
   senderName: string
   senderRole: 'judge' | 'team' | 'committee'
   onNewMessage?: (msg: QAMessage) => void
+  disabled?: boolean
 }
 
-export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage }) => {
+export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage, disabled = false }) => {
   const [messages, setMessages] = useState<QAMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -127,22 +128,32 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a message..."
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !input.trim()}
-          className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Send size={14} />
-        </button>
-      </div>
+    {/* Input */}
+{disabled ? (
+  <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2 bg-gray-50 rounded-b-xl">
+    <Lock size={14} className="text-gray-400 flex-shrink-0" />
+    <p className="text-xs text-gray-400 font-medium">
+      Chat will be available after your project is submitted.
+    </p>
+  </div>
+) : (
+  <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
+    <input
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+      placeholder="Type a message..."
+      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+    />
+    <button
+      onClick={handleSend}
+      disabled={sending || !input.trim()}
+      className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
+    >
+      <Send size={14} />
+    </button>
+  </div>
+)}
     </div>
   )
 }

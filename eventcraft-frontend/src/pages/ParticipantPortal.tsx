@@ -185,7 +185,7 @@ export const ParticipantPortal: React.FC = () => {
   const [submissionError, setSubmissionError] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [qaNotification, setQaNotification] = useState<any>(null)
-  
+
   const loadPortal = useCallback(() => {
     if (!token || !eventId) {
       setError('Invalid portal link — missing event or token.')
@@ -691,8 +691,8 @@ export const ParticipantPortal: React.FC = () => {
               </div>
             </div>
 
-            {/* Q&A Chat */}
-            {team && eventId && (
+         {/* Q&A Chat */}
+{team && eventId && (
   <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
     <QAChat
       eventId={eventId}
@@ -700,6 +700,7 @@ export const ParticipantPortal: React.FC = () => {
       senderName={participant.name}
       senderRole="team"
       onNewMessage={(msg) => setQaNotification(msg)}
+      disabled={team.submission_status !== 'Submitted'}
     />
   </div>
 )}
@@ -925,7 +926,7 @@ export const ParticipantPortal: React.FC = () => {
                     You must be assigned to a team by the organizers before you can submit links.
                   </p>
                 </div>
-              ) : !submission_portal_active ? (
+              ) : !submission_portal_active && team.submission_status !== 'Submitted'  ? (
                 <div className="text-center py-16 px-4">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                     <Lock size={24} className="text-gray-300" />
@@ -1051,36 +1052,41 @@ export const ParticipantPortal: React.FC = () => {
                       </p>
                     )}
 
-                    {isClosed ? (
-                      <div className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
-                        <Lock size={16} className="text-gray-400 flex-shrink-0" />
-                        <span>Submissions are closed because the event has advanced to the Results phase.</span>
-                      </div>
-                    ) : team.submission_status !== "Submitted" ? (
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          id="save-draft-button"
-                          onClick={handleSaveDraft}
-                          disabled={submissionSaving}
-                          className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
-                        >
-                          Save Draft
-                        </button>
-                        <button
-                          id="lock-submission-button"
-                          onClick={() => setShowConfirmModal(true)}
-                          disabled={submissionSaving}
-                          className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-60"
-                        >
-                          Final Submit
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
-                        <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
-                        <span>🎉 Submission Complete! Your project has been securely locked.</span>
-                      </div>
-                    )}
+                  {!submission_portal_active && team.submission_status === 'Submitted' ? (
+  <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+    <CheckCircle size={16} className="text-blue-600 flex-shrink-0" />
+    <span>Your submission is locked and currently under review. No further changes can be made.</span>
+  </div>
+) : isClosed ? (
+  <div className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+    <Lock size={16} className="text-gray-400 flex-shrink-0" />
+    <span>Submissions are closed because the event has advanced to the Results phase.</span>
+  </div>
+) : team.submission_status !== "Submitted" ? (
+  <div className="flex gap-3 pt-2">
+    <button
+      id="save-draft-button"
+      onClick={handleSaveDraft}
+      disabled={submissionSaving}
+      className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+    >
+      Save Draft
+    </button>
+    <button
+      id="lock-submission-button"
+      onClick={() => setShowConfirmModal(true)}
+      disabled={submissionSaving}
+      className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-60"
+    >
+      Final Submit
+    </button>
+  </div>
+) : (
+  <div className="bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+    <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
+    <span>🎉 Submission Complete! Your project has been securely locked.</span>
+  </div>
+)}
                   </div>
 
                   {/* Info Card */}
