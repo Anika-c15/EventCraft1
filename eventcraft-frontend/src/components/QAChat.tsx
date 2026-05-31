@@ -16,9 +16,10 @@ interface Props {
   senderName: string
   senderRole: 'judge' | 'team' | 'committee'
   onNewMessage?: (msg: QAMessage) => void
+  disabled?: boolean
 }
 
-export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage }) => {
+export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage, disabled }) => {
   const [messages, setMessages] = useState<QAMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -113,7 +114,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
         <span className="ml-auto w-2 h-2 rounded-full bg-green-400 animate-pulse" />
 
         {/* Clear button */}
-        {messages.length > 0 && (
+        {messages.length > 0 && !disabled && (
           <button
             onClick={() => setShowConfirm(true)}
             className="ml-2 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
@@ -187,13 +188,14 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a message..."
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          onKeyDown={(e) => e.key === 'Enter' && !disabled && handleSend()}
+          placeholder={disabled ? "Chat is locked until project is submitted..." : "Type a message..."}
+          disabled={disabled}
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-gray-400"
         />
         <button
           onClick={handleSend}
-          disabled={sending || !input.trim()}
+          disabled={disabled || sending || !input.trim()}
           className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50"
         >
           <Send size={14} />
