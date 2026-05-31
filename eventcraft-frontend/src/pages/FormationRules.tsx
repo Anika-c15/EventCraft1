@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Save, Settings, CheckCircle, Users, Building, Layers, Zap, ChevronRight } from 'lucide-react'
-import { eventsApi } from '../api/client'
+import { eventsApi, teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import type { FormationRules as FormationRulesType } from '../types'
 
@@ -66,7 +66,11 @@ const RangeSlider: React.FC<{
   )
 }
 
-
+const AVATAR_COLORS = [
+  'bg-orange-500', 'bg-blue-500', 'bg-purple-500',
+  'bg-green-500', 'bg-pink-500', 'bg-teal-500',
+  'bg-yellow-500', 'bg-red-500', 'bg-indigo-500',
+]
 
 export const FormationRules: React.FC = () => {
   const { eventId } = useAppContext()
@@ -82,6 +86,13 @@ export const FormationRules: React.FC = () => {
   })
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [realTeams, setRealTeams] = useState<any[]>([])
+
+  useEffect(() => {
+    if (eventId) {
+      teamsApi.list(eventId).then(setRealTeams).catch(() => {})
+    }
+  }, [eventId])
 
   useEffect(() => {
     if (eventId) {
@@ -128,19 +139,38 @@ export const FormationRules: React.FC = () => {
 
   const estimatedTeams = Math.min(Math.floor(12 / rules.teamSize), rules.maxTeams)
 
-  // Generate mock team preview
   const mockParticipants = [
-    { initials: 'RS', color: 'bg-orange-500', level: 'Advanced', inst: 'IIT-D' },
-    { initials: 'AS', color: 'bg-blue-500', level: 'Intermediate', inst: 'IIT-B' },
-    { initials: 'VN', color: 'bg-purple-500', level: 'Beginner', inst: 'BITS' },
-    { initials: 'PK', color: 'bg-green-500', level: 'Expert', inst: 'IISc' },
-    { initials: 'MR', color: 'bg-pink-500', level: 'Intermediate', inst: 'IIT-M' },
-    { initials: 'AT', color: 'bg-teal-500', level: 'Advanced', inst: 'NIT' },
+    { initials: 'RS', color: 'bg-orange-500' },
+    { initials: 'AS', color: 'bg-blue-500' },
+    { initials: 'VN', color: 'bg-purple-500' },
+    { initials: 'PK', color: 'bg-green-500' },
+    { initials: 'MR', color: 'bg-pink-500' },
+    { initials: 'AT', color: 'bg-teal-500' },
   ]
 
-  const previewTeams = Array.from({ length: Math.min(estimatedTeams, 3) }, (_, i) =>
+  const mockPreviewTeams = Array.from({ length: Math.min(estimatedTeams, 3) }, (_, i) =>
     mockParticipants.slice(i * Math.min(rules.teamSize, 2), i * Math.min(rules.teamSize, 2) + Math.min(rules.teamSize, 2))
   )
+
+  const hasRealTeams = realTeams.length > 0
+
+  const displayTeams = hasRealTeams
+    ? realTeams.slice(0, 3).map((t) => ({
+        name: t.name,
+        members: (t.members || []).slice(0, rules.teamSize).map((m: any, idx: number) => ({
+          initials: m.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?',
+          color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+          fullName: m.name || '',
+        })),
+        total: (t.members || []).length,
+      }))
+    : mockPreviewTeams.map((members, i) => ({
+        name: `Team ${i + 1}`,
+        members,
+        total: members.length,
+      }))
+
+  const teamsCount = hasRealTeams ? realTeams.length : estimatedTeams
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 -m-6 p-6">
@@ -172,10 +202,9 @@ export const FormationRules: React.FC = () => {
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Left — Settings (2/3 width) */}
+        {/* Left — Settings */}
         <div className="xl:col-span-2 space-y-4">
 
-          {/* General */}
           <SectionCard icon={<Settings size={13} />} title="General">
             <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Event Name</label>
             <input
@@ -186,7 +215,6 @@ export const FormationRules: React.FC = () => {
             />
           </SectionCard>
 
-          {/* Team Size */}
           <SectionCard icon={<Users size={13} />} title="Team Size">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400">Members per team</p>
@@ -208,7 +236,6 @@ export const FormationRules: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Institution */}
           <SectionCard icon={<Building size={13} />} title="Institution Constraints" accent="from-blue-500 to-indigo-500">
             <div className="divide-y divide-gray-50 dark:divide-slate-800">
               <Toggle
@@ -235,7 +262,6 @@ export const FormationRules: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Skill & Experience */}
           <SectionCard icon={<Layers size={13} />} title="Skill & Experience" accent="from-purple-500 to-pink-500">
             <Toggle
               checked={rules.skillBalance}
@@ -270,7 +296,6 @@ export const FormationRules: React.FC = () => {
             </div>
           </SectionCard>
 
-          {/* Max Teams */}
           <SectionCard icon={<Zap size={13} />} title="Team Cap" accent="from-teal-500 to-green-500">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400">Maximum teams to form</p>
@@ -285,20 +310,31 @@ export const FormationRules: React.FC = () => {
           </SectionCard>
         </div>
 
-        {/* Right — Live Preview (1/3 width) */}
+        {/* Right — Preview */}
         <div className="space-y-4">
-          {/* Preview card */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm sticky top-6">
             <div className="px-5 py-4 border-b border-gray-50 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-500/5 dark:to-red-500/5">
-              <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Live Preview</p>
-              <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">How teams will form</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                    {hasRealTeams ? 'Formed Teams' : 'Live Preview'}
+                  </p>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">
+                    {hasRealTeams ? 'Current team composition' : 'How teams will form'}
+                  </p>
+                </div>
+                {hasRealTeams && (
+                  <span className="text-[9px] bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 px-2 py-1 rounded-full font-bold uppercase tracking-wider">
+                    Live
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Big stat */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-4 text-white text-center shadow-md shadow-orange-500/20">
-                  <div className="text-3xl font-black">{estimatedTeams}</div>
+                  <div className="text-3xl font-black">{teamsCount}</div>
                   <div className="text-[10px] font-semibold opacity-80 mt-0.5">TEAMS</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-4 text-center">
@@ -307,31 +343,40 @@ export const FormationRules: React.FC = () => {
                 </div>
               </div>
 
-              {/* Sample teams */}
               <div>
-                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Sample Teams</p>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                  {hasRealTeams ? `Showing 3 of ${realTeams.length} teams` : 'Sample Teams'}
+                </p>
                 <div className="space-y-2">
-                  {previewTeams.map((team, i) => (
+                  {displayTeams.map((team, i) => (
                     <div key={i} className="bg-gray-50 dark:bg-slate-800 rounded-xl p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">Team {i + 1}</span>
-                        <span className="text-[9px] bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-full font-semibold">
-                          {team.length}/{rules.teamSize}
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate max-w-[120px]">{team.name}</span>
+                        <span className="text-[9px] bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">
+                          {team.total}/{rules.teamSize}
                         </span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
-                        {team.map((p, j) => (
-                          <div key={j} className={`w-7 h-7 rounded-lg ${p.color} flex items-center justify-center text-white text-[9px] font-bold`} title={`${p.initials} · ${p.level}`}>
-                            {p.initials}
+                        {team.members.map((m: any, j: number) => (
+                          <div
+                            key={j}
+                            className={`w-7 h-7 rounded-lg ${m.color} flex items-center justify-center text-white text-[9px] font-bold`}
+                            title={m.fullName || m.initials}
+                          >
+                            {m.initials}
                           </div>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
+                {!hasRealTeams && (
+                  <p className="text-[9px] text-gray-400 dark:text-gray-600 mt-2 text-center">
+                    Form teams to see real data here
+                  </p>
+                )}
               </div>
 
-              {/* Rules summary */}
               <div className="border-t border-gray-50 dark:border-slate-800 pt-4 space-y-2">
                 <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Active Rules</p>
                 {[
@@ -354,7 +399,6 @@ export const FormationRules: React.FC = () => {
             </div>
           </div>
 
-          {/* AI info box */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 text-white">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
