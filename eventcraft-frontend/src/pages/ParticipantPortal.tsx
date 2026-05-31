@@ -11,7 +11,7 @@ import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAppContext } from '../context/AppContext'
-import { QAChat } from '../components/QAChat'
+import { QAChat, QANotificationPopup } from '../components/QAChat'
 
 const levelVariant = (level: string) => {
   switch (level) {
@@ -53,7 +53,7 @@ const ShowroomCard: React.FC<ShowroomCardProps> = ({ team, eventId, token, onVot
   }
 
   const sliderPct = (sliderVal / 10) * 100
-
+  
   return (
     <div className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${submitted ? 'border-green-200' : 'border-gray-100'}`}>
       {/* Header */}
@@ -184,7 +184,8 @@ export const ParticipantPortal: React.FC = () => {
   const [submissionSuccess, setSubmissionSuccess] = useState('')
   const [submissionError, setSubmissionError] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-
+  const [qaNotification, setQaNotification] = useState<any>(null)
+  
   const loadPortal = useCallback(() => {
     if (!token || !eventId) {
       setError('Invalid portal link — missing event or token.')
@@ -692,15 +693,16 @@ export const ParticipantPortal: React.FC = () => {
 
             {/* Q&A Chat */}
             {team && eventId && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                <QAChat
-                  eventId={eventId}
-                  teamId={team.id}
-                  senderName={participant.name}
-                  senderRole="team"
-                />
-              </div>
-            )}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+    <QAChat
+      eventId={eventId}
+      teamId={team.id}
+      senderName={participant.name}
+      senderRole="team"
+      onNewMessage={(msg) => setQaNotification(msg)}
+    />
+  </div>
+)}
               
             {/* Lower Dashboard Row */}
             {isPhase3 && team && team.final_score !== null && team.final_score !== undefined ? (
@@ -1160,6 +1162,11 @@ export const ParticipantPortal: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Q&A Notification Popup */}
+<QANotificationPopup
+  message={qaNotification}
+  onClose={() => setQaNotification(null)}
+/>
     </div>
   )
 }

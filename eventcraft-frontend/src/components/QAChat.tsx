@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Send, MessageCircle } from 'lucide-react'
+import { Send, MessageCircle, X, Bell } from 'lucide-react'
 
 interface QAMessage {
   id: string
@@ -15,25 +15,37 @@ interface Props {
   teamId: string
   senderName: string
   senderRole: 'judge' | 'team' | 'committee'
+  onNewMessage?: (msg: QAMessage) => void
 }
 
-export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole }) => {
+export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRole, onNewMessage }) => {
   const [messages, setMessages] = useState<QAMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const prevCountRef = useRef(0)
 
   const load = async () => {
     try {
       const res = await fetch(`http://localhost:8000/api/events/${eventId}/qa/${teamId}`)
       const data = await res.json()
+      
+      // detect new messages from others
+      if (data.length > prevCountRef.current) {
+        const newMsgs = data.slice(prevCountRef.current)
+        newMsgs.forEach((msg: QAMessage) => {
+          if (msg.sender_role !== senderRole && onNewMessage) {
+            onNewMessage(msg)
+          }
+        })
+      }
+      prevCountRef.current = data.length
       setMessages(data)
     } catch {}
   }
 
   useEffect(() => {
     load()
-    // poll every 5 seconds for new messages
     const interval = setInterval(load, 5000)
     return () => clearInterval(interval)
   }, [eventId, teamId])
@@ -130,6 +142,80 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
         >
           <Send size={14} />
         </button>
+      </div>
+    </div>
+  )
+}
+
+
+// ── Notification Popup Component ───────────────────────────────────────────────
+
+interface NotificationProps {
+  message: QAMessage | null
+  onClose: () => void
+}
+
+export const QANotificationPopup: React.FC<NotificationProps> = ({ message, onClose }) => {
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(onClose, 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [message])
+
+  if (!message) return null
+
+  const roleColor = (role: string) => {
+    switch (role) {
+      case 'judge': return 'bg-purple-600'
+      case 'committee': return 'bg-orange-500'
+      default: return 'bg-gray-700'
+    }
+  }
+
+  const roleLabel = (role: string) => {
+    switch (role) {
+      case 'judge': return '⚖️ Judge'
+      case 'committee': return '🛡️ Committee'
+      default: return role
+    }
+  }
+
+  return (
+    <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-top-2 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 max-w-sm w-full">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Bell size={14} className="text-primary animate-bounce" />
+            <span className="text-xs font-bold text-gray-900">New Message</span>
+            <span className={`text-xs text-white px-2 py-0.5 rounded-full font-semibold ${roleColor(message.sender_role)}`}>
+              {roleLabel(message.sender_role)}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Sender */}
+        <p className="text-xs font-semibold text-gray-700 mb-1">{message.sender_name}</p>
+
+        {/* Message */}
+        <div className="bg-gray-50 rounded-xl px-3 py-2 text-sm text-gray-800 border border-gray-100">
+          {message.message}
+        </div>
+
+        {/* Progress bar auto-dismiss */}
+        <div className="mt-3 h-1 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1 bg-primary rounded-full animate-[shrink_6s_linear_forwards]"
+            style={{ animation: 'width 6s linear forwards', width: '100%' }}
+          />
+        </div>
+
+        <p className="text-[10px] text-gray-400 mt-1 text-right">
+          Scroll down to reply in Live Q&A
+        </p>
       </div>
     </div>
   )
