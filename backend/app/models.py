@@ -297,3 +297,13 @@ class JudgeInvitation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event", back_populates="judge_invitations")
+
+
+class Subscriber(Base):
+    __tablename__ = "subscribers"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    notified = Column(Boolean, default=False)
+    subscribed_at = Column(DateTime(timezone=True), server_default=func.now())

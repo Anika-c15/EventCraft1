@@ -10,6 +10,7 @@ from .routers import auth, events, participants, teams, evaluations, approvals, 
 from .routers import peer_review
 from .routers.websocket import router as ws_router
 from .routers import qa
+from .routers import subscribers as subscribers_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +63,19 @@ def _migrate_db():
                 )
             """))
             print("🚀 Migrated: created peer_reviews table")
+
+        # ── subscribers table ───────────────────────────────────────────────
+        if "subscribers" not in existing_tables:
+            db.execute(text("""
+                CREATE TABLE subscribers (
+                    id            TEXT PRIMARY KEY,
+                    name          TEXT NOT NULL,
+                    email         TEXT NOT NULL UNIQUE,
+                    notified      BOOLEAN DEFAULT 0,
+                    subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            print("🚀 Migrated: created subscribers table")
 
         db.commit()
     except Exception as e:
@@ -306,6 +320,7 @@ app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 
 app.include_router(qa.router, tags=["qa"])
+app.include_router(subscribers_router.router)
 
 @app.get("/")
 def root():

@@ -374,3 +374,26 @@ class PortalData(BaseModel):
 
 class StageSetPayload(BaseModel):
     stage_name: str
+
+
+# ── Subscribers ────────────────────────────────────────────────────────────────
+
+class SubscriberCreate(BaseModel):
+    name: str
+    email: str
+
+
+class SubscriberOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    notified: bool
+    subscribed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NotifySubscribersRequest(BaseModel):
+    event_name: str
+    description: Optional[str] = None

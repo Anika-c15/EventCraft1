@@ -277,3 +277,33 @@ export const peerReviewApi = {
     ),
 }
 
+// ── Subscribers ────────────────────────────────────────────────────────────────
+
+export const subscribersApi = {
+  /** Public — no auth needed */
+  subscribe: (name: string, email: string) =>
+    request<any>('/api/subscribers', {
+      method: 'POST',
+      body: JSON.stringify({ name, email }),
+    }, true),
+
+  /** Public — no auth needed */
+  unsubscribe: (email: string) =>
+    request<{ message: string }>('/api/subscribers/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }, true),
+
+  /** Committee — requires auth */
+  list: () => request<any[]>('/api/subscribers'),
+
+  remove: (id: string) =>
+    request<void>(`/api/subscribers/${id}`, { method: 'DELETE' }),
+
+  notifyAll: (eventName: string, description?: string) =>
+    request<{ notified: number }>('/api/subscribers/notify', {
+      method: 'POST',
+      body: JSON.stringify({ event_name: eventName, description }),
+    }),
+}
+

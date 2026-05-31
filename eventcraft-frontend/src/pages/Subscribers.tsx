@@ -1,22 +1,55 @@
-import React, { useState } from 'react'
-import { Bell, Trash2, Send, Users, CheckCircle, ExternalLink } from 'lucide-react'
-import { useAppContext } from '../context/AppContext'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Bell, Trash2, Send, Users, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { subscribersApi } from '../api/client'
 
 export const Subscribers: React.FC = () => {
-  const { subscribers, removeSubscriber, notifySubscribers } = useAppContext()
+  const [subscribers, setSubscribers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [eventName, setEventName] = useState('')
   const [description, setDescription] = useState('')
   const [notified, setNotified] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [notifying, setNotifying] = useState(false)
 
-  const handleNotify = () => {
+  const loadSubscribers = useCallback(async () => {
+    try {
+      const data = await subscribersApi.list()
+      setSubscribers(data)
+    } catch (e) {
+      console.error('Failed to load subscribers', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadSubscribers() }, [loadSubscribers])
+
+  const handleRemove = async (id: string) => {
+    try {
+      await subscribersApi.remove(id)
+      setSubscribers(prev => prev.filter(s => s.id !== id))
+    } catch (e) {
+      console.error('Failed to remove subscriber', e)
+    }
+  }
+
+  const handleNotify = async () => {
     if (!eventName.trim()) return
-    const count = notifySubscribers(eventName, description)
-    setNotified(count)
-    setEventName('')
-    setDescription('')
-    setShowForm(false)
-    setTimeout(() => setNotified(null), 4000)
+    setNotifying(true)
+    try {
+      const res = await subscribersApi.notifyAll(eventName, description)
+      setNotified(res.notified)
+      // Refresh list so statuses update
+      await loadSubscribers()
+      setEventName('')
+      setDescription('')
+      setShowForm(false)
+      setTimeout(() => setNotified(null), 4000)
+    } catch (e) {
+      console.error('Failed to notify subscribers', e)
+    } finally {
+      setNotifying(false)
+    }
   }
 
   const unnotified = subscribers.filter(s => !s.notified).length
@@ -87,10 +120,10 @@ export const Subscribers: React.FC = () => {
               <button onClick={() => setShowForm(false)} className="text-sm text-gray-500 px-3 py-2 hover:text-gray-700">Cancel</button>
               <button
                 onClick={handleNotify}
-                disabled={!eventName.trim()}
+                disabled={!eventName.trim() || notifying}
                 className="flex items-center gap-2 bg-primary text-white rounded-lg px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                <Send size={14} />
+                {notifying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 Send to {subscribers.length} Subscribers
               </button>
             </div>
@@ -98,8 +131,14 @@ export const Subscribers: React.FC = () => {
         </div>
       )}
 
-      {/* Empty state */}
-      {subscribers.length === 0 ? (
+      {/* Loading */}
+      {loading ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 flex items-center justify-center gap-2 text-gray-400">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-sm">Loading subscribers…</span>
+        </div>
+      ) : subscribers.length === 0 ? (
+        /* Empty state */
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 text-center">
           <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Users size={20} className="text-gray-400" />
@@ -127,14 +166,14 @@ export const Subscribers: React.FC = () => {
                 <tr key={s.id} className="hover:bg-gray-50/50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{s.email}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{new Date(s.subscribedAt).toLocaleDateString('en-IN')}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400">{new Date(s.subscribed_at).toLocaleDateString('en-IN')}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.notified ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                       {s.notified ? '✓ Notified' : '⏳ Pending'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => removeSubscriber(s.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded" title="Remove">
+                    <button onClick={() => handleRemove(s.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded" title="Remove">
                       <Trash2 size={14} />
                     </button>
                   </td>

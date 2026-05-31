@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { authApi, eventsApi, approvalsApi, communicationsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { Subscriber } from '../types'
 
 interface AuthUser {
   id: string
@@ -38,11 +37,6 @@ interface AppContextType {
   loading: boolean
   error: string | null
   clearError: () => void
-
-  subscribers: Subscriber[]
-  addSubscriber: (name: string, email: string) => boolean
-  removeSubscriber: (id: string) => void
-  notifySubscribers: (eventName: string, description: string) => number
 
   theme: 'light' | 'dark'
   toggleTheme: () => void
@@ -90,47 +84,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activityLog, setActivityLog] = useState<any[]>([])
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState<string | null>(null)
-
-  const STORAGE_KEY = 'eventcraft_subscribers'
-  const [subscribers, setSubscribers] = useState<Subscriber[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscribers))
-  }, [subscribers])
-
-  const addSubscriber = (name: string, email: string): boolean => {
-    if (subscribers.some((s) => s.email.toLowerCase() === email.toLowerCase())) {
-      return false
-    }
-    const newSub: Subscriber = {
-      id: `sub_${Date.now()}`,
-      name,
-      email,
-      subscribedAt: new Date().toISOString(),
-      notified: false,
-    }
-    setSubscribers((prev) => [...prev, newSub])
-    return true
-  }
-
-  const removeSubscriber = (id: string) => {
-    setSubscribers((prev) => prev.filter((s) => s.id !== id))
-  }
-
-  const notifySubscribers = (_eventName: string, _description: string): number => {
-    const unnotified = subscribers.filter((s) => !s.notified)
-    setSubscribers((prev) =>
-      prev.map((s) => ({ ...s, notified: true }))
-    )
-    return unnotified.length
-  }
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const handleWsMessage = useCallback((msg: any) => {
@@ -290,7 +243,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activityLog, loadActivityLog,
       wsConnected, lastWsMessage,
       loading, error, clearError: () => setError(null),
-      subscribers, addSubscriber, removeSubscriber, notifySubscribers,
       theme, toggleTheme,
     }}>
       {children}

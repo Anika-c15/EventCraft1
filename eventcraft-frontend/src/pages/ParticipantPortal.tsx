@@ -5,7 +5,7 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder, Sun, Moon,
+  Loader2, Home, Folder, Sun, Moon, Bell,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
@@ -816,6 +816,25 @@ export const ParticipantPortal: React.FC = () => {
                 </div>
               </div>
             )}
+            {/* Subscribe for Future Events Banner */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-900 dark:to-slate-950 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/50 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Bell size={20} className="text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Stay Notified for Future Events</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Subscribe to get notified when new events are announced — no spam, just updates.</p>
+                </div>
+              </div>
+              <Link
+                to="/subscribe"
+                className="flex-shrink-0 flex items-center gap-2 bg-primary hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm"
+              >
+                <Bell size={13} />
+                Subscribe for Future Events
+              </Link>
+            </div>
           </div>
         )}
 
