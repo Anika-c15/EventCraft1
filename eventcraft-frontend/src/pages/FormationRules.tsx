@@ -1,8 +1,5 @@
-
 import React, { useState, useEffect } from 'react'
-import { Save, Settings, Info, CheckCircle, Users, Building, Layers } from 'lucide-react'
-import { Button } from '../components/ui/Button'
-import { Card, CardHeader, CardTitle } from '../components/ui/Card'
+import { Save, Settings, CheckCircle, Users, Building, Layers, Zap, ChevronRight } from 'lucide-react'
 import { eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import type { FormationRules as FormationRulesType } from '../types'
@@ -13,25 +10,71 @@ const Toggle: React.FC<{
   label: string
   description: string
 }> = ({ checked, onChange, label, description }) => (
-  <div className="flex items-center justify-between py-3">
-    <div>
-      <p className="text-sm font-medium text-gray-800">{label}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+  <div className="flex items-center justify-between py-3.5 group">
+    <div className="flex-1 pr-4">
+      <p className={`text-sm font-semibold transition-colors ${checked ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{label}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 leading-relaxed">{description}</p>
     </div>
     <button
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 flex-shrink-0 ml-4 ${
-        checked ? 'bg-primary' : 'bg-gray-200'
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none flex-shrink-0 ${
+        checked
+          ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-md shadow-orange-500/30'
+          : 'bg-gray-200 dark:bg-slate-700'
       }`}
       role="switch"
       aria-checked={checked}
     >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-all duration-300 ${checked ? 'translate-x-6 scale-95' : 'translate-x-1'}`} />
     </button>
+  </div>
+)
+
+const SectionCard: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode; accent?: string }> = ({
+  icon, title, children, accent = 'from-orange-500 to-red-500'
+}) => (
+  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+    <div className="px-5 py-4 border-b border-gray-50 dark:border-slate-800 flex items-center gap-3">
+      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${accent} flex items-center justify-center text-white shadow-sm`}>
+        {icon}
+      </div>
+      <h3 className="text-sm font-bold text-gray-800 dark:text-white tracking-tight">{title}</h3>
+    </div>
+    <div className="px-5 py-4">{children}</div>
+  </div>
+)
+
+const RangeSlider: React.FC<{
+  min: number; max: number; value: number; onChange: (v: number) => void; step?: number
+}> = ({ min, max, value, onChange, step = 1 }) => {
+  const pct = ((value - min) / (max - min)) * 100
+  return (
+    <div className="relative pt-1">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="w-full h-1.5 rounded-full appearance-none cursor-pointer focus:outline-none"
+        style={{
+          background: `linear-gradient(to right, #f97316 0%, #ef4444 ${pct}%, #e5e7eb ${pct}%, #e5e7eb 100%)`,
+        }}
+      />
+    </div>
+  )
+}
+
+const Avatar: React.FC<{ initials: string; color: string; level: string }> = ({ initials, color, level }) => (
+  <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-800 rounded-xl px-3 py-2">
+    <div className={`w-7 h-7 rounded-lg ${color} flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0`}>
+      {initials}
+    </div>
+    <div className="min-w-0">
+      <div className="text-[10px] font-semibold text-gray-700 dark:text-gray-300 truncate">{initials}</div>
+      <div className="text-[9px] text-gray-400">{level}</div>
+    </div>
   </div>
 )
 
@@ -93,315 +136,246 @@ export const FormationRules: React.FC = () => {
     }
   }
 
-  const estimatedTeams = Math.floor(12 / rules.teamSize)
+  const estimatedTeams = Math.min(Math.floor(12 / rules.teamSize), rules.maxTeams)
+
+  // Generate mock team preview
+  const mockParticipants = [
+    { initials: 'RS', color: 'bg-orange-500', level: 'Advanced', inst: 'IIT-D' },
+    { initials: 'AS', color: 'bg-blue-500', level: 'Intermediate', inst: 'IIT-B' },
+    { initials: 'VN', color: 'bg-purple-500', level: 'Beginner', inst: 'BITS' },
+    { initials: 'PK', color: 'bg-green-500', level: 'Expert', inst: 'IISc' },
+    { initials: 'MR', color: 'bg-pink-500', level: 'Intermediate', inst: 'IIT-M' },
+    { initials: 'AT', color: 'bg-teal-500', level: 'Advanced', inst: 'NIT' },
+  ]
+
+  const previewTeams = Array.from({ length: Math.min(estimatedTeams, 3) }, (_, i) =>
+    mockParticipants.slice(i * Math.min(rules.teamSize, 2), i * Math.min(rules.teamSize, 2) + Math.min(rules.teamSize, 2))
+  )
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 -m-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Formation Rules</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Configure how participants are distributed into teams. Rules apply on the next "Form
-            Teams" run.
+          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500 mb-1.5">
+            <span>Dashboard</span>
+            <ChevronRight size={12} />
+            <span className="text-orange-500 font-medium">Formation Rules</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Formation Rules</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Configure how participants are distributed into teams.
           </p>
         </div>
-        <Button variant="primary" onClick={handleSave} disabled={loading}>
-          {saved ? (
-            <>
-              <CheckCircle size={15} />
-              Saved
-            </>
-          ) : (
-            <>
-              <Save size={15} />
-              {loading ? 'Saving...' : 'Save Rules'}
-            </>
-          )}
-        </Button>
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-md cursor-pointer ${
+            saved
+              ? 'bg-green-500 text-white shadow-green-500/30'
+              : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-orange-500/30 hover:-translate-y-0.5'
+          }`}
+        >
+          {saved ? <><CheckCircle size={15} /> Saved!</> : <><Save size={15} /> {loading ? 'Saving…' : 'Save Rules'}</>}
+        </button>
       </div>
 
-      <div className="mt-6 space-y-5 max-w-2xl">
-        {/* General */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Settings size={16} className="text-gray-500" />
-              <CardTitle>General</CardTitle>
-            </div>
-          </CardHeader>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Event Name</label>
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Left — Settings (2/3 width) */}
+        <div className="xl:col-span-2 space-y-4">
+
+          {/* General */}
+          <SectionCard icon={<Settings size={13} />} title="General">
+            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Event Name</label>
             <input
               type="text"
               value={rules.eventName}
               onChange={(e) => setRules({ ...rules, eventName: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
-          </div>
-        </Card>
+          </SectionCard>
 
-        {/* Team Size */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Users size={16} className="text-gray-500" />
-              <CardTitle>Team Size</CardTitle>
+          {/* Team Size */}
+          <SectionCard icon={<Users size={13} />} title="Team Size">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Members per team</p>
+              <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">{rules.teamSize}</span>
             </div>
-          </CardHeader>
-          <div>
-            <p className="text-xs text-gray-500 mb-4">How many participants per team</p>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min={2}
-                max={6}
-                step={1}
-                value={rules.teamSize}
-                onChange={(e) => setRules({ ...rules, teamSize: parseInt(e.target.value) })}
-                className="flex-1"
-                style={{
-                  background: `linear-gradient(to right, #E8450A ${((rules.teamSize - 2) / 4) * 100}%, #e5e7eb ${((rules.teamSize - 2) / 4) * 100}%)`,
-                }}
-              />
-              <span className="text-2xl font-bold text-primary w-8 text-right">
-                {rules.teamSize}
-              </span>
-            </div>
-            <div className="flex justify-between text-xs text-gray-400 mt-1 px-0.5">
+            <RangeSlider min={2} max={6} value={rules.teamSize} onChange={(v) => setRules({ ...rules, teamSize: v })} />
+            <div className="flex justify-between text-[10px] font-bold mt-2 px-0.5">
               {[2, 3, 4, 5, 6].map((n) => (
-                <span key={n} className={rules.teamSize === n ? 'text-primary font-bold' : ''}>
-                  {n}
-                </span>
+                <span key={n} className={rules.teamSize === n ? 'text-orange-500' : 'text-gray-300 dark:text-slate-600'}>{n}</span>
               ))}
             </div>
-
-            {/* Allow incomplete teams toggle */}
-            <div className="mt-4 border border-gray-100 rounded-lg px-4">
+            <div className="mt-3 border-t border-gray-50 dark:border-slate-800">
               <Toggle
                 checked={rules.allowIncompleteTeams}
                 onChange={(v) => setRules({ ...rules, allowIncompleteTeams: v })}
                 label="Allow incomplete teams"
-                description="If participants don't divide evenly, allow teams smaller than target size"
+                description="If participants don't divide evenly, allow smaller teams"
               />
             </div>
-          </div>
-        </Card>
+          </SectionCard>
 
-        {/* Institution Constraints */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Building size={16} className="text-gray-500" />
-              <CardTitle>Institution Constraints</CardTitle>
-            </div>
-          </CardHeader>
-          <div className="divide-y divide-gray-50">
-            <Toggle
-              checked={rules.institutionDiversity}
-              onChange={(v) => setRules({ ...rules, institutionDiversity: v })}
-              label="Institution Diversity"
-              description="Avoid placing multiple participants from the same institution in one team"
-            />
-            {rules.institutionDiversity && (
-              <div className="py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Max per Institution</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Maximum participants from the same institution per team
-                    </p>
+          {/* Institution */}
+          <SectionCard icon={<Building size={13} />} title="Institution Constraints" accent="from-blue-500 to-indigo-500">
+            <div className="divide-y divide-gray-50 dark:divide-slate-800">
+              <Toggle
+                checked={rules.institutionDiversity}
+                onChange={(v) => setRules({ ...rules, institutionDiversity: v })}
+                label="Institution Diversity"
+                description="Avoid multiple participants from the same institution in one team"
+              />
+              {rules.institutionDiversity && (
+                <div className="pt-4 pb-1">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">Max per Institution</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Per team cap</p>
+                    </div>
+                    <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500">{rules.maxPerInstitution}</span>
                   </div>
-                  <span className="text-xl font-bold text-primary w-8 text-right">
-                    {rules.maxPerInstitution}
-                  </span>
+                  <RangeSlider
+                    min={1} max={rules.teamSize} value={rules.maxPerInstitution}
+                    onChange={(v) => setRules({ ...rules, maxPerInstitution: v })}
+                  />
                 </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={rules.teamSize}
-                  step={1}
-                  value={rules.maxPerInstitution}
-                  onChange={(e) =>
-                    setRules({ ...rules, maxPerInstitution: parseInt(e.target.value) })
-                  }
-                  className="w-full"
-                  style={{
-                    background: `linear-gradient(to right, #E8450A ${((rules.maxPerInstitution - 1) / (rules.teamSize - 1)) * 100}%, #e5e7eb ${((rules.maxPerInstitution - 1) / (rules.teamSize - 1)) * 100}%)`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Skill & Experience */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Layers size={16} className="text-gray-500" />
-              <CardTitle>Skill &amp; Experience Balancing</CardTitle>
+              )}
             </div>
-          </CardHeader>
-          <div className="divide-y divide-gray-50">
+          </SectionCard>
+
+          {/* Skill & Experience */}
+          <SectionCard icon={<Layers size={13} />} title="Skill & Experience" accent="from-purple-500 to-pink-500">
             <Toggle
               checked={rules.skillBalance}
               onChange={(v) => setRules({ ...rules, skillBalance: v })}
               label="Skill Balance"
-              description="Distribute complementary skills across teams to maximize coverage"
+              description="Distribute complementary skills across teams"
             />
-            <div className="pt-3 pb-1">
-              <p className="text-sm font-medium text-gray-800 mb-3">Experience Level Grouping</p>
-              <div className="space-y-2">
+            <div className="border-t border-gray-50 dark:border-slate-800 pt-4 pb-1">
+              <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Experience Grouping</p>
+              <div className="grid grid-cols-3 gap-2">
                 {[
-                  {
-                    value: 'mixed',
-                    label: 'Mixed Levels',
-                    description: 'Combine beginners with experts for mentorship dynamics',
-                  },
-                  {
-                    value: 'similar',
-                    label: 'Similar Levels',
-                    description: 'Group participants of comparable experience together',
-                  },
-                  {
-                    value: 'none',
-                    label: 'No Grouping',
-                    description: 'Ignore experience level when forming teams',
-                  },
-                ].map((option) => (
-                  <label
-                    key={option.value}
-                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                      rules.experienceLevelGrouping === option.value
-                        ? 'border-primary bg-orange-50'
-                        : 'border-gray-100 hover:border-gray-200'
+                  { value: 'mixed', label: 'Mixed', emoji: '🔀' },
+                  { value: 'similar', label: 'Similar', emoji: '≈' },
+                  { value: 'none', label: 'None', emoji: '○' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setRules({ ...rules, experienceLevelGrouping: opt.value as any })}
+                    className={`py-3 px-2 rounded-xl border-2 text-center transition-all duration-200 cursor-pointer ${
+                      rules.experienceLevelGrouping === opt.value
+                        ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10'
+                        : 'border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="experienceGrouping"
-                      value={option.value}
-                      checked={rules.experienceLevelGrouping === option.value}
-                      onChange={() =>
-                        setRules({
-                          ...rules,
-                          experienceLevelGrouping:
-                            option.value as FormationRulesType['experienceLevelGrouping'],
-                        })
-                      }
-                      className="mt-0.5 accent-primary"
-                    />
-                    <div>
-                      <p
-                        className={`text-sm font-medium ${
-                          rules.experienceLevelGrouping === option.value
-                            ? 'text-primary'
-                            : 'text-gray-800'
-                        }`}
-                      >
-                        {option.label}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">{option.description}</p>
+                    <div className="text-lg mb-1">{opt.emoji}</div>
+                    <div className={`text-xs font-bold ${rules.experienceLevelGrouping === opt.value ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {opt.label}
                     </div>
-                  </label>
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
-        </Card>
+          </SectionCard>
 
-        {/* Max Teams */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Team Cap</CardTitle>
-          </CardHeader>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <p className="text-sm font-medium text-gray-800">Maximum Teams</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Hard cap on total number of teams formed
-                </p>
-              </div>
-              <span className="text-2xl font-bold text-primary">{rules.maxTeams}</span>
+          {/* Max Teams */}
+          <SectionCard icon={<Zap size={13} />} title="Team Cap" accent="from-teal-500 to-green-500">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400">Maximum teams to form</p>
+              <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-green-500">{rules.maxTeams}</span>
             </div>
-            <input
-              type="range"
-              min={2}
-              max={20}
-              step={1}
-              value={rules.maxTeams}
-              onChange={(e) => setRules({ ...rules, maxTeams: parseInt(e.target.value) })}
-              className="w-full"
-              style={{
-                background: `linear-gradient(to right, #E8450A ${((rules.maxTeams - 2) / 18) * 100}%, #e5e7eb ${((rules.maxTeams - 2) / 18) * 100}%)`,
-              }}
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>2</span>
-              <span>10</span>
-              <span>20</span>
+            <RangeSlider min={2} max={20} value={rules.maxTeams} onChange={(v) => setRules({ ...rules, maxTeams: v })} />
+            <div className="flex justify-between text-[10px] font-bold mt-2">
+              <span className="text-gray-300 dark:text-slate-600">2</span>
+              <span className="text-gray-300 dark:text-slate-600">10</span>
+              <span className="text-gray-300 dark:text-slate-600">20</span>
             </div>
-          </div>
-        </Card>
-
-        {/* Summary + Info */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-              Configuration Summary
-            </p>
-            <div className="space-y-2">
-              {[
-                ['Event', rules.eventName],
-                ['Team Size', `${rules.teamSize} members`],
-                ['Max Teams', String(rules.maxTeams)],
-                ['Skill Balance', rules.skillBalance ? 'Enabled' : 'Disabled'],
-                ['Institution Diversity', rules.institutionDiversity ? 'Enabled' : 'Disabled'],
-                ['Level Grouping', rules.experienceLevelGrouping],
-                ['Est. Teams (12 participants)', String(estimatedTeams)],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="font-semibold text-gray-900 capitalize">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <div className="flex items-start gap-2">
-              <Info size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-blue-800 mb-1">
-                  How AI Formation Works
-                </p>
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  The AI analyzes participant profiles, skill declarations, and institutional
-                  affiliations to form balanced teams. It uses a constraint-satisfaction algorithm
-                  that respects your configured rules while maximizing team complementarity scores.
-                  Each team gets an LLM-generated rationale for committee review.
-                </p>
-              </div>
-            </div>
-          </div>
+          </SectionCard>
         </div>
 
-        <div className="flex justify-end pb-6">
-          <Button variant="primary" onClick={handleSave} className="px-8" disabled={loading}>
-            {saved ? (
-              <>
-                <CheckCircle size={15} />
-                Rules Saved!
-              </>
-            ) : (
-              <>
-                <Save size={15} />
-                {loading ? 'Saving...' : 'Save Rules'}
-              </>
-            )}
-          </Button>
+        {/* Right — Live Preview (1/3 width) */}
+        <div className="space-y-4">
+          {/* Preview card */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm sticky top-6">
+            <div className="px-5 py-4 border-b border-gray-50 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-500/5 dark:to-red-500/5">
+              <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Live Preview</p>
+              <p className="text-sm font-bold text-gray-800 dark:text-white mt-0.5">How teams will form</p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Big stat */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-4 text-white text-center shadow-md shadow-orange-500/20">
+                  <div className="text-3xl font-black">{estimatedTeams}</div>
+                  <div className="text-[10px] font-semibold opacity-80 mt-0.5">TEAMS</div>
+                </div>
+                <div className="bg-gray-50 dark:bg-slate-800 rounded-xl p-4 text-center">
+                  <div className="text-3xl font-black text-gray-800 dark:text-white">{rules.teamSize}</div>
+                  <div className="text-[10px] font-semibold text-gray-400 mt-0.5">PER TEAM</div>
+                </div>
+              </div>
+
+              {/* Sample teams */}
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Sample Teams</p>
+                <div className="space-y-2">
+                  {previewTeams.map((team, i) => (
+                    <div key={i} className="bg-gray-50 dark:bg-slate-800 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">Team {i + 1}</span>
+                        <span className="text-[9px] bg-orange-100 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-full font-semibold">
+                          {team.length}/{rules.teamSize}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {team.map((p, j) => (
+                          <div key={j} className={`w-7 h-7 rounded-lg ${p.color} flex items-center justify-center text-white text-[9px] font-bold`} title={`${p.initials} · ${p.level}`}>
+                            {p.initials}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rules summary */}
+              <div className="border-t border-gray-50 dark:border-slate-800 pt-4 space-y-2">
+                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Active Rules</p>
+                {[
+                  { label: 'Skill Balance', active: rules.skillBalance },
+                  { label: 'Institution Diversity', active: rules.institutionDiversity },
+                  { label: 'Incomplete Teams OK', active: rules.allowIncompleteTeams },
+                ].map((r) => (
+                  <div key={r.label} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">{r.label}</span>
+                    <span className={`font-bold ${r.active ? 'text-green-500' : 'text-gray-300 dark:text-slate-600'}`}>
+                      {r.active ? '✓ On' : '— Off'}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-gray-500 dark:text-gray-400">Grouping</span>
+                  <span className="font-bold text-orange-500 capitalize">{rules.experienceLevelGrouping}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* AI info box */}
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 text-white">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                <Zap size={11} />
+              </div>
+              <p className="text-xs font-bold">AI Formation Engine</p>
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Uses constraint-satisfaction to respect your rules while maximising team complementarity. Each team gets an LLM-generated rationale for review.
+            </p>
+          </div>
         </div>
       </div>
     </div>
