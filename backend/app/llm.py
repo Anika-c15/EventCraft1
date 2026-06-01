@@ -432,15 +432,20 @@ When the user describes their event, extract ALL of the following:
 1. Event phases/stages (in order) with descriptions and tasks
 2. Team formation rules (team size, skill balance, institution diversity, experience grouping)
 3. Evaluation criteria and scoring weights
-4. Communication touchpoints (which stages need emails)
+4. Communication touchpoints (which stages need emails, and to whom)
 5. Anomaly threshold for score divergence
 
-Be proactive — if the user gives you enough info (event type, team size, judging criteria),
-generate the full config immediately. Only ask clarifying questions if critical info is missing.
+IMPORTANT RULES:
+- Be proactive. If the user gives you event type, team size, and judging criteria, generate the full config immediately.
+- Only ask clarifying questions if truly critical info is missing (e.g. no team size, no judging criteria at all).
+- Adapt stages to the event type. A hackathon has different stages than a case competition or coding contest.
+- For individual competitions (no teams), set team_size to 1.
+- Always include at least: registration/intake, evaluation, and results stages.
+- Evaluation criteria should match the event type (e.g. hackathon → Innovation/Execution/Presentation/Impact, coding contest → Correctness/Efficiency/Code Quality, case competition → Analysis/Feasibility/Presentation/Impact).
+- communication_stages must be a list of objects with "stage" and "recipient_type" fields.
+- recipient_type must be one of: "all_participants", "judges", "winners".
 
-For a hackathon with teams of N judged on X criteria, you have enough to configure everything.
-
-When ready, respond with EXACTLY this JSON block (no extra text before or after the JSON block):
+When ready, respond with a brief summary of your assumptions, then EXACTLY this JSON block:
 
 ```json
 {
@@ -448,37 +453,38 @@ When ready, respond with EXACTLY this JSON block (no extra text before or after 
   "stages": [
     {
       "name": "Participant Intake",
-      "description": "Register and verify all participants",
-      "tasks": ["Open registration", "Collect profiles", "Verify eligibility", "Approve roster"]
+      "description": "Register and verify all participants, collect skill declarations.",
+      "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"]
     },
     {
       "name": "Team Formation",
-      "description": "Form balanced teams based on skills and background",
-      "tasks": ["Configure rules", "Run AI formation", "Review teams", "Approve compositions"]
+      "description": "Form balanced teams based on skills and institutional diversity.",
+      "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"]
     },
     {
       "name": "Evaluation",
-      "description": "Judges evaluate team submissions",
-      "tasks": ["Open evaluation portal", "Collect scores", "Aggregate results", "Flag anomalies"]
+      "description": "Judges evaluate team submissions across defined criteria.",
+      "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"]
     },
     {
       "name": "Results",
-      "description": "Announce final rankings",
-      "tasks": ["Calculate rankings", "Generate reports", "Draft announcements", "Notify participants"]
+      "description": "Compile final rankings and announce winners.",
+      "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"]
     },
     {
       "name": "Progression",
-      "description": "Advance qualifying teams",
-      "tasks": ["Identify qualifiers", "Send invitations", "Confirm participation", "Archive data"]
+      "description": "Advance qualifying participants to the next round or finale.",
+      "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"]
     }
   ],
   "formation_rules": {
     "team_size": 3,
+    "allow_incomplete_teams": false,
     "skill_balance": true,
     "institution_diversity": true,
+    "max_per_institution": 1,
     "experience_level_grouping": "mixed",
-    "max_teams": 20,
-    "max_per_institution": 1
+    "max_teams": 20
   },
   "evaluation_criteria": ["Innovation", "Execution", "Presentation", "Impact"],
   "scoring_weights": {
@@ -499,11 +505,14 @@ When ready, respond with EXACTLY this JSON block (no extra text before or after 
 }
 ```
 
-Adapt the stages, team_size, criteria, and weights based on what the user describes.
-For example: coding contest → criteria might be ["Correctness", "Efficiency", "Code Quality"]
-Case competition → stages might include "Submission", "Presentation", "Final Pitch"
+Adapt ALL fields based on the user's description:
+- Hackathon → stages: Intake, Team Formation, Hacking, Evaluation, Results, Progression
+- Coding contest → stages: Registration, Qualification Round, Final Round, Results
+- Case competition → stages: Registration, Submission, Presentation, Final Pitch, Results
+- Individual event → team_size: 1, skip Team Formation stage
+- Custom event → infer appropriate stages from the description
 
-If info is missing, make reasonable assumptions and mention them in your reply before the JSON."""
+Always make scoring_weights sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info."""
 
 
 def agent_chat(

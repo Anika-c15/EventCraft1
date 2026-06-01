@@ -97,9 +97,10 @@ export const Agent: React.FC = () => {
   }
 
   const starterPrompts = [
-    'I want to run a 2-day hackathon with 60 participants, teams of 4, judged on innovation and execution.',
-    'Set up a case competition with 3 rounds: submission, presentation, and final pitch.',
-    'Configure a coding contest with individual participants, automated scoring, and 3 elimination rounds.',
+    'Run a 2-day AI/ML hackathon with 60 participants, teams of 3, judged on Innovation, Execution, Presentation and Impact.',
+    'Set up a case competition with 4 rounds: submission, presentation, final pitch, and results. Teams of 2, judged on Analysis, Feasibility and Presentation.',
+    'Configure a coding contest with individual participants, 2 elimination rounds, judged on Correctness, Efficiency and Code Quality.',
+    'Design a product design sprint: 48 hours, teams of 4, judged on User Research, Design Quality, Feasibility and Pitch.',
   ]
 
   return (
@@ -180,7 +181,11 @@ export const Agent: React.FC = () => {
                     <Mail size={11} /> Draft Emails
                   </p>
                   <p className="text-xs text-gray-600">
-                    Auto-generated for {pipelineConfig.communication_stages?.length ?? 0} stages
+                    Auto-generated for{' '}
+                    {Array.isArray(pipelineConfig.communication_stages)
+                      ? pipelineConfig.communication_stages.length
+                      : 0}{' '}
+                    stage-recipient pairs
                   </p>
                 </div>
               </div>
