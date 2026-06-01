@@ -55,6 +55,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return hour >= 18 || hour < 6 ? 'dark' : 'light'
   })
 
+  // Track if user has manually overridden the theme
+  const [themeManuallySet, setThemeManuallySet] = useState<boolean>(
+    () => !!localStorage.getItem('ec_theme_manual')
+  )
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark')
@@ -64,19 +69,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('ec_theme', theme)
   }, [theme])
 
-  // Auto dark mode based on time (6 PM - 6 AM)
+  // Auto dark mode based on time (6 PM - 6 AM) — only if user hasn't manually set it
   useEffect(() => {
     const checkTime = () => {
+      if (themeManuallySet) return  // respect manual override
       const hour = new Date().getHours()
       const shouldBeDark = hour >= 18 || hour < 6
       setTheme(shouldBeDark ? 'dark' : 'light')
     }
-    const interval = setInterval(checkTime, 60000) // check every minute
+    const interval = setInterval(checkTime, 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [themeManuallySet])
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+    setTheme((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light'
+      return next
+    })
+    // Mark as manually set so auto-switch stops overriding
+    setThemeManuallySet(true)
+    localStorage.setItem('ec_theme_manual', '1')
   }
   const [eventName, setEventName]     = useState<string>('EventCraft Hackathon')
   const [approvals, setApprovals]     = useState<any[]>([])
