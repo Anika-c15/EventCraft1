@@ -3,6 +3,7 @@ import { Upload, Plus, ExternalLink, Trash2, Search, X, Send, Copy, Check } from
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
+import { TableSkeleton } from '../components/ui/Skeleton'
 import { participantsApi, communicationsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import type { ParticipantLevel, ParticipantStatus } from '../types'
@@ -214,15 +215,20 @@ export const Participants: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
-                    Loading...
-                  </td>
-                </tr>
+                <TableSkeleton rows={6} cols={6} />
               ) : participants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
-                    No participants found
+                  <td colSpan={6} className="px-4 py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Search size={36} className="text-gray-200 dark:text-slate-700" />
+                      <p className="text-sm font-medium text-gray-400 dark:text-slate-500">No participants found</p>
+                      <button
+                        onClick={() => setShowAddModal(true)}
+                        className="text-xs text-primary font-semibold hover:underline"
+                      >
+                        + Add your first participant
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
