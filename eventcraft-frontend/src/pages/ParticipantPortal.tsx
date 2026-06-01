@@ -1238,14 +1238,14 @@ export const ParticipantPortal: React.FC = () => {
 
                     {/* Warning Card */}
                     {team.submission_status !== "Submitted" && (
-                      <div className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 text-orange-950">
-                        <h4 className="font-bold text-[10px] text-orange-800 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/50 rounded-xl p-4 text-orange-950 dark:text-orange-200">
+                        <h4 className="font-bold text-xs text-orange-800 dark:text-orange-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                           ⚠️ Important Notice
                         </h4>
-                        <p className="text-[10px] leading-relaxed opacity-90">
+                        <p className="text-xs leading-relaxed opacity-90">
                           Submitting confirms these details as your final hackathon project. Once submitted:
                         </p>
-                        <ul className="list-disc pl-4 text-[9px] space-y-1 mt-2 font-medium opacity-80">
+                        <ul className="list-disc pl-4 text-[11px] space-y-1 mt-2 font-medium opacity-80">
                           <li>Organizers and judges will use these details for evaluation.</li>
                           <li>You cannot modify them, even if you make changes in your GitHub repo.</li>
                           <li>Your project will be shared in the peer voting gallery.</li>
