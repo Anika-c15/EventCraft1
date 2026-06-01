@@ -44,7 +44,7 @@ const confirmLogout = () => {
     <aside
       className={`bg-white border-r border-gray-100 dark:bg-slate-900 dark:border-slate-800 flex flex-col transition-all duration-300 ${
         collapsed ? 'w-16' : 'w-60'
-      } min-h-screen flex-shrink-0`}
+      } h-screen sticky top-0 flex-shrink-0`}
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100 dark:border-slate-800">
