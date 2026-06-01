@@ -173,7 +173,7 @@ export const FormationRules: React.FC = () => {
   const teamsCount = hasRealTeams ? realTeams.length : estimatedTeams
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 -m-6 p-6">
+    <div className="min-h-screen bg-background dark:bg-slate-950 -m-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
