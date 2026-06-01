@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw, Users, ArrowRight, CheckCircle } from 'lucide-react'
+import { Sparkles, RefreshCw, ArrowRight, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -41,16 +41,6 @@ export const Teams: React.FC = () => {
       console.error(e)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadLeaderboard = async () => {
-    if (!eventId) return
-    try {
-      const data = await teamsApi.leaderboard(eventId)
-      setLeaderboard(data)
-    } catch {
-      setLeaderboard([])
     }
   }
 
