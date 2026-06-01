@@ -188,6 +188,19 @@ def get_leaderboard(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    return _build_leaderboard(event_id, db)
+
+
+@router.get("/leaderboard/public")
+def get_public_leaderboard(
+    event_id: str,
+    db: Session = Depends(get_db),
+):
+    """Public endpoint — no auth required. Used by the live leaderboard page."""
+    return _build_leaderboard(event_id, db)
+
+
+def _build_leaderboard(event_id: str, db: Session):
     teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
     result = []
 
@@ -213,7 +226,7 @@ def get_leaderboard(
             "team_name": team.name,
             "status": team.status.value,
             "member_count": len(team.members),
-            "score": avg_score,
+            "score": team.final_score if team.final_score is not None else avg_score,
             "score_breakdown": score_breakdown,
             "has_anomaly": any(s.is_anomaly for s in scores),
             "rank": team.rank,

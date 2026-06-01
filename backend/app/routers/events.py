@@ -117,6 +117,17 @@ def get_public_demo_portal(
     return {"token": p.portal_token, "event_id": event.id}
 
 
+@router.get("/public/active-event")
+def get_public_active_event(db: Session = Depends(get_db)):
+    """Public — returns the most recent active event id and name."""
+    event = db.query(models.Event).filter(models.Event.is_active == True).order_by(models.Event.created_at.desc()).first()
+    if not event:
+        event = db.query(models.Event).order_by(models.Event.created_at.desc()).first()
+    if not event:
+        raise HTTPException(404, "No events found")
+    return {"event_id": event.id, "event_name": event.name}
+
+
 @router.get("/{event_id}", response_model=EventOut)
 def get_event(
     event_id: str,

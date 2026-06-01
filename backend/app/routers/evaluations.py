@@ -669,5 +669,11 @@ async def lock_composite_score(
         "team_name": team.name,
         "final_score": payload.final_score,
     })
+    background_tasks.add_task(broadcast, event_id, {
+        "type": "leaderboard_update",
+        "team_id": team_id,
+        "team_name": team.name,
+        "final_score": payload.final_score,
+    })
 
     return {"message": "Score successfully locked", "final_score": team.final_score}
