@@ -12,6 +12,10 @@ import {
   Sun,
   Moon,
   Mail,
+  Lock,
+  Building,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
@@ -35,6 +39,8 @@ export const LandingPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [orgName, setOrgName] = useState('')
   const [formError, setFormError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   
 
@@ -218,10 +224,7 @@ const handleRegister = async (e: React.FormEvent) => {
         </div>
       )}
 
-      {/* Giant Watermark */}
-      <div className="select-none pointer-events-none absolute text-[120px] sm:text-[180px] lg:text-[240px] font-black tracking-widest leading-none left-6 top-32 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500 opacity-[0.03] dark:opacity-[0.015]">
-        CONF 2026
-      </div>
+
 
       {/* Floating Header */}
       <header className={`sticky top-0 z-40 w-full backdrop-blur-md transition-colors ${
@@ -353,168 +356,236 @@ const handleRegister = async (e: React.FormEvent) => {
             </div>
 
             {/* Glowing ring */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />
-
-            {/* Admin Login / Register Card */}
-            <div className={`relative backdrop-blur-xl border rounded-3xl p-6 sm:p-8 space-y-5 transition-all duration-300 shadow-xl ${
-              theme === 'light'
-                ? 'bg-white/90 border-orange-100/80 shadow-orange-500/5'
-                : 'bg-slate-900/85 border-slate-800/80 shadow-black/20'
-            }`}>
-              {/* Header */}
-              <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-xl ${theme === 'light' ? 'bg-orange-50 text-orange-500 border border-orange-100' : 'bg-orange-500/10 text-orange-400'}`}>
-                  <Shield size={18} />
+            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />            {/* Admin Login / Register Card */}
+            <div className="relative group/card">
+              {/* Outer soft glowing background ring */}
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 group-hover/card:opacity-30 transition duration-500 pointer-events-none" />
+              
+              <div className={`relative backdrop-blur-2xl border rounded-3xl p-6 sm:p-8 space-y-6 transition-all duration-300 shadow-2xl ${
+                theme === 'light'
+                  ? 'bg-white/80 border-orange-100/90 shadow-orange-500/5'
+                  : 'bg-slate-900/80 border-slate-800/80 shadow-black/30'
+              }`}>
+                {/* Header */}
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-2xl flex items-center justify-center transition-transform duration-300 hover:rotate-12 ${
+                    theme === 'light'
+                      ? 'bg-gradient-to-tr from-orange-50 to-orange-100/50 text-orange-600 border border-orange-150'
+                      : 'bg-gradient-to-tr from-orange-500/10 to-orange-500/20 text-orange-400 border border-orange-500/30'
+                  }`}>
+                    <Shield size={20} />
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-extrabold tracking-tight ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                      Committee Access
+                    </h2>
+                    <p className={`text-xs mt-0.5 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {adminTab === 'login' ? 'Manage your live hackathons' : 'Create a fresh event dashboard'}
+                    </p>
+                  </div>
                 </div>
-                <h2 className={`text-lg font-bold ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Committee Access</h2>
-              </div>
 
-              {/* Tab Switcher */}
-              <div className={`flex rounded-xl p-1 ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-800'}`}>
-                <button
-                  onClick={() => { setAdminTab('login'); setFormError('') }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                    adminTab === 'login'
-                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-sm'
-                      : theme === 'light' ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => { setAdminTab('register'); setFormError('') }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                    adminTab === 'register'
-                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-sm'
-                      : theme === 'light' ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Register
-                </button>
-              </div>
-
-              {/* Login Form */}
-              {adminTab === 'login' && (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@organisation.com"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  {formError && (
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-500">
-                      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                      <span>{formError}</span>
-                    </div>
-                  )}
+                {/* Tab Switcher */}
+                <div className={`flex rounded-2xl p-1 bg-slate-100/80 dark:bg-slate-950/50 border border-slate-200/40 dark:border-slate-800/50`}>
                   <button
-                    type="submit"
-                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                    onClick={() => { setAdminTab('login'); setFormError('') }}
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${
+                      adminTab === 'login'
+                        ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
+                        : theme === 'light'
+                          ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                    }`}
                   >
-                    Login to Console <ArrowRight size={14} />
+                    Login
                   </button>
-                </form>
-              )}
-
-              {/* Register Form */}
-              {adminTab === 'register' && (
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Organisation Name</label>
-                    <input
-                      type="text"
-                      value={orgName}
-                      onChange={(e) => setOrgName(e.target.value)}
-                      placeholder="e.g. IIT Bombay Techfest"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@organisation.com"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={`block text-xs font-bold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className={`w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all ${
-                        theme === 'light'
-                          ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                          : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                      }`}
-                    />
-                  </div>
-                  {formError && (
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 text-xs text-red-500">
-                      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                      <span>{formError}</span>
-                    </div>
-                  )}
                   <button
-                    type="submit"
-                    className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                    onClick={() => { setAdminTab('register'); setFormError('') }}
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${
+                      adminTab === 'register'
+                        ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
+                        : theme === 'light'
+                          ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                    }`}
                   >
-                    Create Account <ArrowRight size={14} />
+                    Register
                   </button>
-                </form>
-              )}
+                </div>
+
+                {/* Login Form */}
+                {adminTab === 'login' && (
+                  <form onSubmit={handleLogin} className="space-y-5">
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Mail size={16} />
+                        </div>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="admin@organisation.com"
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Lock size={16} />
+                        </div>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                    {formError && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                        <span className="font-semibold">{formError}</span>
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-orange-500/10 hover:shadow-orange-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Login to Console <ArrowRight size={14} />
+                    </button>
+                  </form>
+                )}
+
+                {/* Register Form */}
+                {adminTab === 'register' && (
+                  <form onSubmit={handleRegister} className="space-y-5">
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Organisation Name</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Building size={16} />
+                        </div>
+                        <input
+                          type="text"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                          placeholder="e.g. IIT Bombay Techfest"
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Mail size={16} />
+                        </div>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="admin@organisation.com"
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Lock size={16} />
+                        </div>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Lock size={16} />
+                        </div>
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
+                            theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                    {formError && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                        <span className="font-semibold">{formError}</span>
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-orange-500/10 hover:shadow-orange-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Create Account <ArrowRight size={14} />
+                    </button>
+                  </form>
+                )}
 
               {/* Participant access link */}
-              <div className={`pt-2 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
+              <div className={`pt-3.5 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
                 <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                   Are you a participant?{' '}
                   <button
@@ -528,6 +599,7 @@ const handleRegister = async (e: React.FormEvent) => {
             </div>
           </div>
         </div>
+      </div>
 
         {/* Features Section */}
         <section id="features" className={`py-20 border-t mt-20 space-y-12 transition-all ${

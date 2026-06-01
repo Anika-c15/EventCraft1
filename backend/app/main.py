@@ -24,9 +24,15 @@ def _migrate_db():
     from sqlalchemy import text
     db = SessionLocal()
     try:
+        dialect = db.bind.dialect.name
+        
         # ── teams table migrations ──────────────────────────────────────────
-        result = db.execute(text("PRAGMA table_info(teams)"))
-        columns = [row[1] for row in result.fetchall()]
+        if dialect == "sqlite":
+            result = db.execute(text("PRAGMA table_info(teams)"))
+            columns = [row[1] for row in result.fetchall()]
+        else:
+            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='teams'"))
+            columns = [row[0] for row in result.fetchall()]
 
         for col, col_type in [
             ("public_vote_score",  "FLOAT"),
@@ -48,6 +54,19 @@ def _migrate_db():
             if col not in columns:
                 db.execute(text(f"ALTER TABLE teams ADD COLUMN {col} {col_type}"))
                 print(f"🚀 Migrated: added {col} to teams")
+
+        # ── events table migrations ──────────────────────────────────────────
+        if dialect == "sqlite":
+            result = db.execute(text("PRAGMA table_info(events)"))
+            columns_events = [row[1] for row in result.fetchall()]
+        else:
+            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='events'"))
+            columns_events = [row[0] for row in result.fetchall()]
+
+        if "owner_id" not in columns_events:
+            db.execute(text("ALTER TABLE events ADD COLUMN owner_id VARCHAR(255)"))
+            print("🚀 Migrated: added owner_id to events")
+
 
         # ── peer_reviews table ──────────────────────────────────────────────
         tables_result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
@@ -114,6 +133,12 @@ def _seed_db():
         # ── Demo event (only if no events exist) ────────────────────────────
         if db.query(models.Event).count() == 0:
             _seed_demo_event(db)
+
+        # Make sure the admin owns the seeded demo event if it has no owner
+        seeded = db.query(models.Event).filter(models.Event.name == "EventCraft Hackathon 2026").first()
+        if seeded and seeded.owner_id is None:
+            seeded.owner_id = admin.id
+            db.flush()
 
         db.commit()
     except Exception as e:

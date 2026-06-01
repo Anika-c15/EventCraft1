@@ -100,6 +100,8 @@ class Event(Base):
     # Dynamic pipeline — stored as JSON list of stage definitions
     pipeline_config = Column(JSON, nullable=True)  # set by conversational agent
     formation_rules = Column(JSON, nullable=True)
+    owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+
 
     stages = relationship("PipelineStage", back_populates="event", cascade="all, delete-orphan")
     participants = relationship("Participant", back_populates="event", cascade="all, delete-orphan")
