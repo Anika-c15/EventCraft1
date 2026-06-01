@@ -314,6 +314,40 @@ def root():
     return {"message": "EventCraft API", "version": "1.0.0", "docs": "/docs"}
 
 
+@app.get("/api/debug-db")
+def debug_db():
+    from sqlalchemy import inspect
+    db = SessionLocal()
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        details = {}
+        for t in tables:
+            try:
+                cols = [col["name"] for col in inspector.get_columns(t)]
+                details[t] = cols
+            except Exception as e:
+                details[t] = f"Error: {e}"
+        
+        query_error = None
+        events_count = None
+        try:
+            events_count = db.query(models.Event).count()
+        except Exception as e:
+            query_error = str(e)
+            
+        return {
+            "tables": tables,
+            "columns": details,
+            "query_error": query_error,
+            "events_count": events_count,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
