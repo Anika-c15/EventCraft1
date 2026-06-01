@@ -1,46 +1,38 @@
 import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  User,
-  Users,
-  ClipboardList,
-  Send,
-  GitBranch,
-  Shield,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Bot,
-  LogOut,
-  Bell,
-  Sun,
-  Moon,
+  LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
+  Shield, Settings, ChevronLeft, ChevronRight, Bot, LogOut,
+  Bell, Sun, Moon, Trophy,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { path: '/participants', label: 'Participants', icon: User },
-  { path: '/teams', label: 'Teams', icon: Users },
-  { path: '/evaluations', label: 'Evaluations', icon: ClipboardList },
-  { path: '/communications', label: 'Communications', icon: Send },
-  { path: '/pipeline', label: 'Pipeline', icon: GitBranch },
-  { path: '/approvals', label: 'Approvals', icon: Shield },
-  { path: '/formation-rules', label: 'Formation Rules', icon: Settings },
-  { path: '/agent', label: 'AI Agent', icon: Bot },
-  { path: '/subscribers', label: 'Subscribers', icon: Bell },
+  { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+  { path: '/participants',    label: 'Participants',     icon: User },
+  { path: '/teams',           label: 'Teams',            icon: Users },
+  { path: '/evaluations',     label: 'Evaluations',      icon: ClipboardList },
+  { path: '/communications',  label: 'Communications',   icon: Send },
+  { path: '/pipeline',        label: 'Pipeline',         icon: GitBranch },
+  { path: '/approvals',       label: 'Approvals',        icon: Shield },
+  { path: '/formation-rules', label: 'Formation Rules',  icon: Settings },
+  { path: '/agent',           label: 'AI Agent',         icon: Bot },
+  { path: '/subscribers',     label: 'Subscribers',      icon: Bell },
 ]
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
-  const { user, logout, wsConnected, theme, toggleTheme } = useAppContext()
+  const { user, logout, wsConnected, theme, toggleTheme, dashboardStats } = useAppContext()
   const navigate = useNavigate()
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
+
+  // Show Live Leaderboard only when event is in Results or Progression phase (scores fully locked)
+  const stage = dashboardStats?.current_stage?.toLowerCase() || ''
+  const scoresLocked = stage.includes('result') || stage.includes('progression')
 
   return (
     <aside
@@ -86,8 +78,8 @@ export const Sidebar: React.FC = () => {
                 <Icon
                   size={18}
                   className={`flex-shrink-0 ${
-                    isActive 
-                      ? 'text-primary dark:text-primary-400' 
+                    isActive
+                      ? 'text-primary dark:text-primary-400'
                       : 'text-gray-400 group-hover:text-gray-600 dark:text-slate-500 dark:group-hover:text-slate-300'
                   }`}
                 />
@@ -96,6 +88,25 @@ export const Sidebar: React.FC = () => {
             )}
           </NavLink>
         ))}
+
+        {/* Live Leaderboard — only when scores are locked */}
+        {scoresLocked && (
+          <a
+            href="/live-leaderboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={collapsed ? 'Live Leaderboard' : undefined}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer group text-yellow-600 hover:bg-yellow-50 dark:text-yellow-400 dark:hover:bg-yellow-950/20"
+          >
+            <Trophy size={18} className="flex-shrink-0 text-yellow-500" />
+            {!collapsed && (
+              <span className="truncate flex items-center gap-1.5">
+                Live Leaderboard
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              </span>
+            )}
+          </a>
+        )}
       </nav>
 
       {/* User + Collapse */}

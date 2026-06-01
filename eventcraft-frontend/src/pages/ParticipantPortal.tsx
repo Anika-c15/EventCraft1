@@ -5,7 +5,7 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder, Sun, Moon, Bell,
+  Loader2, Home, Folder, Sun, Moon, Bell, Trophy,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
@@ -835,6 +835,33 @@ export const ParticipantPortal: React.FC = () => {
                 Subscribe for Future Events
               </Link>
             </div>
+
+            {/* Live Leaderboard — only when results are out */}
+            {isPhase3 && (
+              <a
+                href="/live-leaderboard"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gradient-to-r from-yellow-500/10 to-amber-500/5 border border-yellow-500/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm hover:border-yellow-500/50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Trophy size={20} className="text-yellow-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      Live Leaderboard
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Final rankings are live — see where your team stands!</p>
+                  </div>
+                </div>
+                <span className="flex-shrink-0 flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-bold px-5 py-2.5 rounded-lg transition-colors shadow-sm">
+                  <Trophy size={13} />
+                  View Rankings
+                </span>
+              </a>
+            )}
           </div>
         )}
 
