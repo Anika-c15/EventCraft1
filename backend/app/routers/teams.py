@@ -251,6 +251,71 @@ def is_valid_url(url: str) -> bool:
 
 submission_router = APIRouter(prefix="/api/teams/submission", tags=["teams-submission"])
 
+@submission_router.post("/rename")
+def rename_team(
+    payload: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Allows a participant to rename their team once via portal token.
+    Once name_locked=True, further renames are rejected.
+    """
+    token = payload.get("token", "")
+    new_name = (payload.get("name") or "").strip()
+
+    if not new_name:
+        raise HTTPException(400, "Team name cannot be empty")
+    if len(new_name) > 50:
+        raise HTTPException(400, "Team name must be 50 characters or fewer")
+
+    participant_id = decode_portal_token(token)
+    if not participant_id:
+        raise HTTPException(401, "Invalid or expired portal token")
+
+    participant = db.query(models.Participant).filter(models.Participant.id == participant_id).first()
+    if not participant or not participant.team_id:
+        raise HTTPException(404, "No team assigned to this participant")
+
+    team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    if team.name_locked:
+        raise HTTPException(400, "Your team name has already been set and cannot be changed again.")
+
+    # Check name not already taken in this event
+    existing = db.query(models.Team).filter(
+        models.Team.event_id == team.event_id,
+        models.Team.name == new_name,
+        models.Team.id != team.id,
+    ).first()
+    if existing:
+        raise HTTPException(409, "A team with this name already exists. Please choose a different name.")
+
+    old_name = team.name
+    team.name = new_name
+    team.name_locked = True
+
+    db.add(models.ActivityLog(
+        event_id=team.event_id,
+        message=f"Team renamed: '{old_name}' → '{new_name}' by {participant.name}",
+        log_type="info",
+    ))
+    db.commit()
+    db.refresh(team)
+
+    # Broadcast so committee dashboard updates live
+    try:
+        from ..ws import manager
+        manager.broadcast_sync(team.event_id, {
+            "type": "dashboard_update",
+            "message": f"Team renamed to '{new_name}'"
+        })
+    except Exception as e:
+        print(f"⚠️ WS broadcast error: {e}")
+
+    return {"message": "Team name updated successfully", "name": team.name, "name_locked": True}
+
 @submission_router.post("/save-draft")
 def save_submission_draft(
     payload: TeamSubmissionDraft,

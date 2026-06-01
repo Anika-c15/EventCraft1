@@ -119,6 +119,7 @@ class TeamOut(BaseModel):
     ai_proposed_score: Optional[float] = None
     bias_rationale: Optional[str] = None
     is_locked: Optional[bool] = False
+    name_locked: Optional[bool] = False
     members: List[ParticipantOut] = []
     created_at: datetime
 

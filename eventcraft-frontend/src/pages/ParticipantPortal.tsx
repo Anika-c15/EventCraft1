@@ -5,7 +5,7 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder, Sun, Moon, Bell, Trophy,
+  Loader2, Home, Folder, Sun, Moon, Bell, Trophy, Edit2,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
@@ -186,6 +186,13 @@ export const ParticipantPortal: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [qaNotification, setQaNotification] = useState<any>(null)
 
+  // Team rename state
+  const [showRenameForm, setShowRenameForm] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [renameSuccess, setRenameSuccess] = useState(false)
+
   const loadPortal = useCallback(() => {
     if (!token || !eventId) {
       setError('Invalid portal link — missing event or token.')
@@ -230,6 +237,27 @@ export const ParticipantPortal: React.FC = () => {
 
   const handleVoteSubmitted = (teamId: string, score: number) => {
     setShowroom(prev => prev.map(t => t.id === teamId ? { ...t, my_vote: score } : t))
+  }
+
+  const handleRenameTeam = async () => {
+    if (!token || !newTeamName.trim()) return
+    setRenameLoading(true)
+    setRenameError('')
+    try {
+      const res = await teamsApi.renameTeam(token, newTeamName.trim())
+      // Update local data so name reflects immediately
+      setData((prev: any) => ({
+        ...prev,
+        team: { ...prev.team, name: res.name, name_locked: true },
+      }))
+      setRenameSuccess(true)
+      setShowRenameForm(false)
+      setNewTeamName('')
+    } catch (err: any) {
+      setRenameError(err.message || 'Failed to rename team')
+    } finally {
+      setRenameLoading(false)
+    }
   }
 
   const handleSaveDraft = async () => {
@@ -646,6 +674,60 @@ export const ParticipantPortal: React.FC = () => {
                           <h3 className="text-lg font-bold text-gray-900">{team.name}</h3>
                           <Badge variant="yellow">{team.status}</Badge>
                         </div>
+
+                        {/* ── Name Your Team (one-time) ── */}
+                        {!team.name_locked && !isPhase2 && !isPhase3 && (
+                          <div className="mb-4">
+                            {renameSuccess ? (
+                              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                                <CheckCircle size={13} className="text-green-500" />
+                                Team name set! This cannot be changed again.
+                              </div>
+                            ) : showRenameForm ? (
+                              <div className="bg-orange-50/60 border border-orange-100 rounded-xl p-3 space-y-2">
+                                <p className="text-xs font-semibold text-orange-800">Choose your team name — you can only do this once.</p>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={newTeamName}
+                                    onChange={e => { setNewTeamName(e.target.value); setRenameError('') }}
+                                    placeholder="e.g. Team Nexus"
+                                    maxLength={50}
+                                    className="flex-1 px-3 py-2 text-xs border border-orange-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-white"
+                                  />
+                                  <button
+                                    onClick={handleRenameTeam}
+                                    disabled={renameLoading || !newTeamName.trim()}
+                                    className="flex items-center gap-1 bg-primary text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                                  >
+                                    {renameLoading ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => { setShowRenameForm(false); setRenameError('') }}
+                                    className="text-xs text-gray-400 hover:text-gray-600 px-2"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                {renameError && <p className="text-xs text-red-500">{renameError}</p>}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setShowRenameForm(true); setNewTeamName(team.name) }}
+                                className="flex items-center gap-1.5 text-xs text-primary hover:text-orange-600 font-semibold transition-colors"
+                              >
+                                <Edit2 size={12} />
+                                Name your team (one-time)
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {team.name_locked && !renameSuccess && (
+                          <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
+                            <Lock size={10} /> Team name locked
+                          </p>
+                        )}
                         {team.rationale && !team.rationale.startsWith('[') && (
                           <p className="text-sm text-gray-600 mb-4 leading-relaxed line-clamp-3">
                             {team.rationale}

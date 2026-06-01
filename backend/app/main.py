@@ -37,6 +37,7 @@ def _migrate_db():
             ("github_link",        "TEXT"),
             ("demo_link",          "TEXT"),
             ("is_locked",          "BOOLEAN DEFAULT 0"),
+            ("name_locked",        "BOOLEAN DEFAULT 0"),
             ("project_title",      "TEXT"),
             ("project_description","TEXT"),
             ("github_url",         "TEXT"),

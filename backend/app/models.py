@@ -174,6 +174,7 @@ class Team(Base):
     ai_proposed_score = Column(Float, nullable=True)
     bias_rationale = Column(Text, nullable=True)
     is_locked = Column(Boolean, default=False)
+    name_locked = Column(Boolean, default=False)         # True once team has chosen their own name
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event", back_populates="teams")

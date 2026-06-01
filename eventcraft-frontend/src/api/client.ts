@@ -165,6 +165,13 @@ export const teamsApi = {
   leaderboard: (eventId: string) => request<any[]>(`/api/events/${eventId}/teams/leaderboard`),
   publicLeaderboard: (eventId: string) =>
     request<any[]>(`/api/events/${eventId}/teams/leaderboard/public`, {}, true),
+
+  renameTeam: (token: string, name: string) =>
+    request<{ message: string; name: string; name_locked: boolean }>(
+      '/api/teams/submission/rename',
+      { method: 'POST', body: JSON.stringify({ token, name }) },
+      true,
+    ),
 }
 
 // ── Evaluations ────────────────────────────────────────────────────────────────
