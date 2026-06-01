@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { FileUp, Loader2, CheckCircle, Sparkles, User, Mail, Building2, Code2, AlertCircle, RefreshCw } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 import { participantsApi, eventsApi } from '../api/client'
 import type { ParticipantLevel } from '../types'
 import { Modal } from '../components/ui/Modal'
@@ -31,6 +32,7 @@ async function extractFromResume(eventId: string, file: File): Promise<Extracted
 
 export const CandidatePortal: React.FC = () => {
   const { addApproval } = useAppContext()
+  const toast = useToast()
   const [activeEventId, setActiveEventId] = useState<string>('')
   const [activeEvent, setActiveEvent] = useState<any>(null)
   const [pageState, setPageState] = useState<PageState>('upload')
@@ -60,7 +62,7 @@ export const CandidatePortal: React.FC = () => {
   }
 
   const handleFile = async (file: File) => {
-    if (!file.name.match(/\.(pdf|txt|doc|docx)$/i)) { alert('Please upload a PDF, TXT, DOC or DOCX file'); return }
+    if (!file.name.match(/\.(pdf|txt|doc|docx)$/i)) { toast.error('Please upload a PDF, TXT, DOC or DOCX file'); return }
     setFileName(file.name); setPageState('extracting')
     
     let evId = activeEventId

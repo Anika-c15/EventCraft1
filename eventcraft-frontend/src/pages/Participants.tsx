@@ -6,6 +6,7 @@ import { Modal } from '../components/ui/Modal'
 import { TableSkeleton } from '../components/ui/Skeleton'
 import { participantsApi, communicationsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
 import type { ParticipantLevel, ParticipantStatus } from '../types'
 
 const levelVariant = (level: string) => {
@@ -39,6 +40,8 @@ const emptyForm = {
 
 export const Participants: React.FC = () => {
   const { eventId } = useAppContext()
+  const toast = useToast()
+  const confirm = useConfirm()
   const [participants, setParticipants] = useState<any[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -79,20 +82,28 @@ export const Participants: React.FC = () => {
       })
       setForm(emptyForm)
       setShowAddModal(false)
+      toast.success('Participant added successfully')
       load()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!eventId) return
-    if (!confirm('Remove this participant?')) return
+    const confirmed = await confirm({
+      title: 'Remove Participant',
+      message: 'Are you sure you want to remove this participant? This action cannot be undone.',
+      confirmText: 'Remove',
+      type: 'danger'
+    })
+    if (!confirmed) return
     try {
       await participantsApi.delete(eventId, id)
+      toast.success('Participant removed successfully')
       load()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     }
   }
 
@@ -102,10 +113,10 @@ export const Participants: React.FC = () => {
     setImporting(true)
     try {
       const result = await participantsApi.importCsv(eventId, file)
-      alert(`Imported ${result.imported} participants. Skipped: ${result.skipped}`)
+      toast.success(`Imported ${result.imported} participants. Skipped: ${result.skipped}`)
       load()
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -114,13 +125,19 @@ export const Participants: React.FC = () => {
 
   const handleSendPortalLinks = async () => {
     if (!eventId) return
-    if (!confirm(`Send personal portal links to all ${participants.length} participants via email?`)) return
+    const confirmed = await confirm({
+      title: 'Send Portal Links',
+      message: `Send personal portal links to all ${participants.length} participants via email?`,
+      confirmText: 'Send Links',
+      type: 'info'
+    })
+    if (!confirmed) return
     setSendingLinks(true)
     try {
       const result = await communicationsApi.sendPortalLinks(eventId)
-      alert(`Portal links sent to ${result.recipients} participants. Check Communications page for status.`)
+      toast.success(`Portal links sent to ${result.recipients} participants successfully!`)
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setSendingLinks(false)
     }

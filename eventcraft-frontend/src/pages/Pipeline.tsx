@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 
 const stageIcon = (name: string) => {
   if (name.toLowerCase().includes('intake') || name.toLowerCase().includes('participant')) return <UserPlus size={20} />
@@ -24,6 +25,7 @@ const formatDate = (iso?: string) => {
 
 export const Pipeline: React.FC = () => {
   const { eventId, loadApprovals, approvals } = useAppContext()
+  const toast = useToast()
   const [stages, setStages] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [requesting, setRequesting] = useState(false)
@@ -55,10 +57,11 @@ export const Pipeline: React.FC = () => {
     try {
       const res = await eventsApi.setStageDirect(eventId, selectedStageName)
       setSuccessMsg(`Debug: Successfully set pipeline stage to '${res.current_stage}' directly.`)
+      toast.success(`Pipeline Stage set to ${res.current_stage}!`)
       await load()
       await loadApprovals()
     } catch (e: any) {
-      alert(e.message || 'Failed to override stage')
+      toast.error(e.message || 'Failed to override stage')
     } finally {
       setOverriding(false)
     }
@@ -74,7 +77,7 @@ export const Pipeline: React.FC = () => {
   const handleRequestAdvance = async () => {
     if (!eventId) return
     if (hasPendingProgression) {
-      alert('There is already a pending progression approval. Go to the Approvals page and approve it first.')
+      toast.error('There is already a pending progression approval. Go to the Approvals page and approve it first.')
       return
     }
     setRequesting(true)
@@ -83,8 +86,9 @@ export const Pipeline: React.FC = () => {
       await eventsApi.advanceStage(eventId)
       await loadApprovals()
       setSuccessMsg('Approval request created. Go to Approvals and click Approve to advance the pipeline.')
+      toast.success('Advancement approval request submitted!')
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setRequesting(false)
     }

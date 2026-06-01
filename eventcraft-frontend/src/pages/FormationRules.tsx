@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Save, Settings, CheckCircle, Users, Building, Layers, Zap, ChevronRight } from 'lucide-react'
 import { eventsApi, teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 import type { FormationRules as FormationRulesType } from '../types'
 
 const Toggle: React.FC<{
@@ -74,6 +75,7 @@ const AVATAR_COLORS = [
 
 export const FormationRules: React.FC = () => {
   const { eventId } = useAppContext()
+  const toast = useToast()
   const [rules, setRules] = useState<FormationRulesType>({
     eventName: 'EventCraft Hackathon 2025',
     teamSize: 3,
@@ -129,9 +131,10 @@ export const FormationRules: React.FC = () => {
         max_teams: rules.maxTeams,
       })
       setSaved(true)
+      toast.success('Formation rules saved successfully!')
       setTimeout(() => setSaved(false), 3000)
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setLoading(false)
     }
