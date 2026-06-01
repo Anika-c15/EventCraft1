@@ -231,66 +231,82 @@ def _seed_demo_event(db):
 
 
 def _seed_communications(db, event_id: str):
-    comms = [
-        {
-            "recipient": "All Participants",
-            "subject": "Your Personal Portal Link — EventCraft Hackathon 2026",
-            "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026!\n\nYou can access your personal participant portal using the link below.\nNo account or password is required — just click the link:\n\n{portal_url}\n\nYour portal shows:\n• Your current stage in the event journey\n• Team details and teammates (once teams are formed)\n• Key event dates and milestones\n• Progression status\n\nThis link is unique to you — please do not share it.\n\nBest regards,\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Participant Intake",
-        },
-        {
-            "recipient": "All Participants",
+    # Only seed if no communications exist for this event yet
+    existing_count = db.query(models.Communication).filter(
+        models.Communication.event_id == event_id
+    ).count()
+    if existing_count > 0:
+        return  # Already seeded — don't duplicate
+
+    # Try to generate AI drafts via Groq; fall back to static templates
+    from . import llm as _llm
+
+    stage_configs = [
+        ("Participant Intake",  "all_participants", "All Participants",   models.CommStatus.draft),
+        ("Team Formation",      "all_participants", "All Participants",   models.CommStatus.draft),
+        ("Evaluation",          "judges",           "Judges Panel",       models.CommStatus.draft),
+        ("Evaluation",          "all_participants", "All Participants",   models.CommStatus.draft),
+        ("Results",             "all_participants", "All Participants",   models.CommStatus.draft),
+        ("Progression",         "winners",          "Qualifying Teams",   models.CommStatus.draft),
+    ]
+
+    # Static fallbacks keyed by (stage, recipient_type)
+    static_fallbacks = {
+        ("Participant Intake", "all_participants"): {
             "subject": "Welcome to EventCraft Hackathon 2026 — Registration Confirmed",
             "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026! Your registration has been confirmed.\n\nHere's what to expect:\n1. Team Formation — Balanced teams will be formed based on your skills.\n2. Evaluation — Teams present solutions to expert judges.\n3. Results & Progression — Top teams advance to the final round.\n\nBest regards,\nEventCraft Committee",
-            "status": models.CommStatus.sent,
-            "stage": "Participant Intake",
         },
-        {
-            "recipient": "All Participants",
+        ("Team Formation", "all_participants"): {
             "subject": "Team Formation Complete — Meet Your Team!",
             "body": "Dear {participant_name},\n\nTeams have been formed for EventCraft Hackathon 2026!\n\nLog in to your participant portal to see your team details and teammates.\n\nNext Steps:\n- Connect with your teammates\n- Review the problem statement\n- Begin planning your solution\n\nGood luck!\n\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Team Formation",
         },
-        {
-            "recipient": "Judges Panel",
+        ("Evaluation", "judges"): {
             "subject": "Evaluation Portal Now Open — Submission Guidelines",
             "body": "Dear Judge,\n\nThe evaluation portal for EventCraft Hackathon 2026 is now open.\n\nPlease score each team on:\n• Innovation (0-10): Originality and creativity\n• Execution (0-10): Technical implementation quality\n• Presentation (0-10): Clarity of demo and communication\n• Impact (0-10): Real-world potential and scalability\n\nThank you for your time.\n\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Evaluation",
         },
-        {
-            "recipient": "All Participants",
+        ("Evaluation", "all_participants"): {
             "subject": "Reminder: Project Submission Deadline Tomorrow",
             "body": "Dear {participant_name},\n\nFriendly reminder — project submission deadline is tomorrow!\n\nEnsure your team has:\n✅ Completed your solution\n✅ Prepared your demo\n✅ Submitted all materials\n\nGood luck!\n\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Evaluation",
         },
-        {
-            "recipient": "All Participants",
+        ("Results", "all_participants"): {
             "subject": "Results Announcement — EventCraft Hackathon 2026",
             "body": "Dear {participant_name},\n\nThe results for EventCraft Hackathon 2026 are in!\n\nThank you for your incredible effort and creativity. Final rankings are available in your participant portal.\n\nCongratulations to all teams!\n\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Results",
         },
-        {
-            "recipient": "Qualifying Teams",
+        ("Progression", "winners"): {
             "subject": "Congratulations! You've Qualified for the Next Round",
             "body": "Dear {participant_name},\n\nCongratulations! Your team has qualified for the next round.\n\nPlease confirm your participation via your portal link.\n\nWe look forward to seeing you at the finals!\n\nEventCraft Committee",
-            "status": models.CommStatus.draft,
-            "stage": "Progression",
         },
-    ]
-    for c in comms:
+    }
+
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    event_name = event.name if event else "EventCraft Hackathon 2026"
+
+    for stage, recipient_type, recipient_label, status in stage_configs:
+        try:
+            drafted = _llm.draft_communication(
+                stage=stage,
+                recipient_type=recipient_type,
+                event_name=event_name,
+            )
+            subject = drafted.get("subject", "")
+            body = drafted.get("body", "")
+            # Validate — if LLM returned empty/error, use fallback
+            if not subject or not body or subject.startswith("[") or len(body) < 50:
+                raise ValueError("LLM returned invalid draft")
+        except Exception:
+            fallback = static_fallbacks.get((stage, recipient_type), {})
+            subject = fallback.get("subject", f"{stage} Update")
+            body = fallback.get("body", f"Dear participant,\n\nUpdate for {stage} stage.\n\nEventCraft Committee")
+
         db.add(models.Communication(
             event_id=event_id,
-            recipient=c["recipient"],
-            subject=c["subject"],
-            body=c["body"],
-            status=c["status"],
-            stage=c["stage"],
+            recipient=recipient_label,
+            subject=subject,
+            body=body,
+            status=status,
+            stage=stage,
         ))
+        print(f"✅ Seeded communication: [{stage}] {subject[:60]}")
 
 app = FastAPI(
     title="EventCraft API",

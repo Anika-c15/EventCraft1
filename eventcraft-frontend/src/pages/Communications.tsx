@@ -206,6 +206,11 @@ const handleSend = async (commId: string) => {
                           {sending === c.id ? 'Sending...' : 'Send'}
                         </Button>
                       )}
+                      {c.status === 'Sent' && (
+                        <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+                          <CheckCircle size={12} /> Sent
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))

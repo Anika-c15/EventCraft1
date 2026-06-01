@@ -150,41 +150,50 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
     db.flush()
 
     criteria = config.get("evaluation_criteria", ["Innovation", "Execution", "Presentation", "Impact"])
-    comm_stages = config.get("communication_stages", [s["name"] for s in stages])
+    comm_stages_raw = config.get("communication_stages", [s["name"] for s in stages])
 
-    for stage_name in comm_stages:
-        # Participant communication
+    # Support both old format (list of strings) and new format (list of dicts)
+    comm_stage_entries = []
+    for entry in comm_stages_raw:
+        if isinstance(entry, dict):
+            comm_stage_entries.append((entry["stage"], entry.get("recipient_type", "all_participants")))
+        else:
+            # Old string format — infer recipient type
+            stage_lower = str(entry).lower()
+            if any(w in stage_lower for w in ["eval", "judg", "scor"]):
+                comm_stage_entries.append((entry, "judges"))
+            comm_stage_entries.append((entry, "all_participants"))
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_entries = []
+    for stage_name, recipient_type in comm_stage_entries:
+        key = (stage_name, recipient_type)
+        if key not in seen:
+            seen.add(key)
+            unique_entries.append(key)
+
+    for stage_name, recipient_type in unique_entries:
+        recipient_label = {
+            "all_participants": "All Participants",
+            "judges": "Judges Panel",
+            "winners": "Qualifying Teams",
+        }.get(recipient_type, recipient_type.replace("_", " ").title())
+
         drafted = llm.draft_communication(
             stage=stage_name,
-            recipient_type="all_participants",
+            recipient_type=recipient_type,
             event_name=event.name,
             extra_context=f"Evaluation criteria: {', '.join(criteria)}",
         )
         db.add(models.Communication(
             event_id=event_id,
-            recipient="All Participants",
+            recipient=recipient_label,
             subject=drafted["subject"],
             body=drafted["body"],
             status=models.CommStatus.draft,
             stage=stage_name,
         ))
-
-        # Judge communication for evaluation stages
-        if any(word in stage_name.lower() for word in ["eval", "judg", "scor", "review"]):
-            judge_drafted = llm.draft_communication(
-                stage=stage_name,
-                recipient_type="judges",
-                event_name=event.name,
-                extra_context=f"Scoring criteria: {', '.join(criteria)}",
-            )
-            db.add(models.Communication(
-                event_id=event_id,
-                recipient="Judges Panel",
-                subject=judge_drafted["subject"],
-                body=judge_drafted["body"],
-                status=models.CommStatus.draft,
-                stage=stage_name,
-            ))
 
     # 5. Create approval gate for the new pipeline
     db.add(models.Approval(
@@ -213,7 +222,7 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
     ))
     db.add(models.ActivityLog(
         event_id=event_id,
-        message=f"Auto-generated {len(comm_stages)} draft communications from agent config",
+        message=f"Auto-generated {len(unique_entries)} draft communications from agent config",
         log_type="info",
     ))
 

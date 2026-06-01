@@ -51,15 +51,28 @@ def draft_communication(
         team_info=team_info,
     )
 
-    comm = models.Communication(
-        event_id=event_id,
-        recipient=payload.recipient_type.replace("_", " ").title(),
-        subject=drafted["subject"],
-        body=drafted["body"],
-        status=models.CommStatus.draft,
-        stage=payload.stage,
-    )
-    db.add(comm)
+    # Upsert: replace existing unsent draft for same stage+recipient instead of duplicating
+    existing = db.query(models.Communication).filter(
+        models.Communication.event_id == event_id,
+        models.Communication.stage == payload.stage,
+        models.Communication.recipient == payload.recipient_type.replace("_", " ").title(),
+        models.Communication.status == models.CommStatus.draft,
+    ).first()
+
+    if existing:
+        existing.subject = drafted["subject"]
+        existing.body = drafted["body"]
+        comm = existing
+    else:
+        comm = models.Communication(
+            event_id=event_id,
+            recipient=payload.recipient_type.replace("_", " ").title(),
+            subject=drafted["subject"],
+            body=drafted["body"],
+            status=models.CommStatus.draft,
+            stage=payload.stage,
+        )
+        db.add(comm)
 
     log = models.ActivityLog(
         event_id=event_id,
@@ -108,6 +121,8 @@ async def send_communication(
     ).first()
     if not comm:
         raise HTTPException(404, "Communication not found")
+    if comm.status == models.CommStatus.sent:
+        raise HTTPException(400, "This communication has already been sent and cannot be sent again.")
 
     recipients = []
     recipient_lower = comm.recipient.lower()

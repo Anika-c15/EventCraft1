@@ -192,6 +192,81 @@ Example:
 
 # ── Communication Drafting ─────────────────────────────────────────────────────
 
+# Stage-specific instructions so Groq knows exactly what each email should contain
+_STAGE_INSTRUCTIONS = {
+    "Participant Intake": {
+        "all_participants": (
+            "This is the welcome/registration confirmation email sent to participants after they register. "
+            "It should: confirm their registration, briefly explain the event flow (team formation → hacking → evaluation → results), "
+            "mention they will receive their personal portal link separately, and build excitement. "
+            "Warm, energetic tone. Use {participant_name} placeholder."
+        ),
+        "default": (
+            "Welcome email for the Participant Intake stage. Confirm registration and explain next steps."
+        ),
+    },
+    "Team Formation": {
+        "all_participants": (
+            "Teams have just been formed by AI. This email tells participants their team has been assigned. "
+            "It should: announce team formation is complete, tell them to check their participant portal for team details and teammates, "
+            "encourage them to connect with teammates immediately, mention the hacking phase begins soon. "
+            "Excited, motivating tone. Use {participant_name} placeholder."
+        ),
+        "default": (
+            "Team formation complete email. Tell participants to check their portal for team assignments."
+        ),
+    },
+    "Evaluation": {
+        "all_participants": (
+            "This is a reminder email during the evaluation/hacking phase. "
+            "It should: remind participants of the project submission deadline, list what they need to submit "
+            "(GitHub repo, demo video, presentation slides), encourage them to use their submission portal, "
+            "and wish them luck. Urgent but supportive tone. Use {participant_name} placeholder."
+        ),
+        "judges": (
+            "This email is sent to judges when the evaluation portal opens. "
+            "It should: inform them the evaluation portal is now live, explain the 4 scoring criteria "
+            "(Innovation 0-10, Execution 0-10, Presentation 0-10, Impact 0-10), "
+            "provide guidance on what each score range means, and thank them for their time. "
+            "Professional, clear tone. Address as 'Dear Judge'."
+        ),
+        "default": (
+            "Evaluation phase email. Inform recipients about the evaluation process and deadlines."
+        ),
+    },
+    "Results": {
+        "all_participants": (
+            "Results announcement email sent after final rankings are published. "
+            "It should: announce that results are now live, tell participants to check their portal for final rankings, "
+            "congratulate all participants for their hard work regardless of placement, "
+            "and mention the live leaderboard is available. "
+            "Celebratory, inclusive tone. Use {participant_name} placeholder."
+        ),
+        "default": (
+            "Results announcement email. Inform participants that final rankings are published."
+        ),
+    },
+    "Progression": {
+        "winners": (
+            "Congratulations email sent ONLY to teams that qualified/won. "
+            "It should: congratulate them on qualifying for the next round or winning, "
+            "ask them to confirm their participation, mention what comes next (finals, prizes, certificates), "
+            "and express pride in their achievement. "
+            "Celebratory, prestigious tone. Use {participant_name} placeholder."
+        ),
+        "all_participants": (
+            "Thank you email sent to all participants at the end of the event. "
+            "It should: thank everyone for participating, acknowledge the effort put in, "
+            "mention certificates will be shared, and invite them to subscribe for future events. "
+            "Warm, appreciative tone. Use {participant_name} placeholder."
+        ),
+        "default": (
+            "Progression/closing email. Thank participants and share next steps."
+        ),
+    },
+}
+
+
 def draft_communication(
     stage: str,
     recipient_type: str,
@@ -199,33 +274,58 @@ def draft_communication(
     extra_context: Optional[str] = None,
     team_info: Optional[Dict] = None,
 ) -> Dict[str, str]:
-    context = extra_context or ""
+
+    # Get stage-specific instructions
+    stage_instructions = _STAGE_INSTRUCTIONS.get(stage, {})
+    instruction = stage_instructions.get(recipient_type) or stage_instructions.get("default") or (
+        f"Draft a professional email for the '{stage}' stage of a hackathon, addressed to {recipient_type}."
+    )
+
+    extra = f"\nAdditional context: {extra_context}" if extra_context else ""
     team_ctx = f"\nTeam Info: {json.dumps(team_info)}" if team_info else ""
 
-    prompt = f"""Event: {event_name}
-Stage: {stage}
-Recipient Type: {recipient_type}
-{context}
+    prompt = f"""You are drafting an official email for a hackathon event management system.
+
+Event Name: {event_name}
+Pipeline Stage: {stage}
+Recipient: {recipient_type.replace('_', ' ').title()}
+
+Email Purpose:
+{instruction}
+{extra}
 {team_ctx}
 
-Draft a professional, warm email. Use {{participant_name}} as placeholder where needed.
+Requirements:
+- Use {{participant_name}} as the salutation placeholder (e.g. "Dear {{participant_name}},")
+- Subject line should be specific and action-oriented, not generic
+- Body should be 150-250 words — professional but warm
+- End with "Best regards,\\nEventCraft Committee"
+- Do NOT include placeholder URLs or fake links
+- Do NOT use markdown formatting in the body
 
 Return ONLY a JSON object inside a ```json block with exactly two keys:
-- "subject": email subject line
-- "body": full email body
+- "subject": the email subject line
+- "body": the full email body text
 
 ```json
 {{"subject": "...", "body": "..."}}
 ```"""
 
-    system = "You are drafting official emails for a competitive event management system. Return only valid JSON."
+    system = (
+        "You are an expert event communications manager drafting emails for a hackathon. "
+        "Return only valid JSON with 'subject' and 'body' keys. No extra text."
+    )
     result = _call(prompt, system)
     parsed = _extract_json(result)
     if isinstance(parsed, dict) and "subject" in parsed and "body" in parsed:
-        return parsed
+        # Validate content quality
+        if len(parsed["body"]) > 50 and not parsed["subject"].startswith("["):
+            return parsed
+
+    # Fallback
     return {
-        "subject": f"[{event_name}] Update: {stage}",
-        "body": f"Dear Participant,\n\nThis is an update regarding {stage} for {event_name}.\n\nBest regards,\nEventCraft Team",
+        "subject": f"[{event_name}] {stage} Update",
+        "body": f"Dear {{participant_name}},\n\nThis is an update regarding the {stage} phase of {event_name}.\n\nPlease check your participant portal for the latest information.\n\nBest regards,\nEventCraft Committee",
     }
 
 
@@ -388,7 +488,14 @@ When ready, respond with EXACTLY this JSON block (no extra text before or after 
     "Impact": 0.25
   },
   "anomaly_threshold": 2.5,
-  "communication_stages": ["Participant Intake", "Team Formation", "Evaluation", "Results", "Progression"]
+  "communication_stages": [
+    {"stage": "Participant Intake", "recipient_type": "all_participants"},
+    {"stage": "Team Formation",     "recipient_type": "all_participants"},
+    {"stage": "Evaluation",         "recipient_type": "judges"},
+    {"stage": "Evaluation",         "recipient_type": "all_participants"},
+    {"stage": "Results",            "recipient_type": "all_participants"},
+    {"stage": "Progression",        "recipient_type": "winners"}
+  ]
 }
 ```
 

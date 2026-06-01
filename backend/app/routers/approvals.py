@@ -134,6 +134,47 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
                     from .events import clear_event_teams_and_submissions
                     clear_event_teams_and_submissions(approval.event_id, db)
 
+                # Auto-generate AI draft for the new stage if one doesn't exist yet
+                try:
+                    from .. import llm as _llm
+                    stage_recipient_map = {
+                        "Team Formation":     ("all_participants", "All Participants"),
+                        "Evaluation":         ("all_participants", "All Participants"),
+                        "Results":            ("all_participants", "All Participants"),
+                        "Progression":        ("winners",          "Qualifying Teams"),
+                    }
+                    if next_stage.name in stage_recipient_map:
+                        recipient_type, recipient_label = stage_recipient_map[next_stage.name]
+                        # Only create if no unsent draft exists for this stage
+                        existing_draft = db.query(models.Communication).filter(
+                            models.Communication.event_id == approval.event_id,
+                            models.Communication.stage == next_stage.name,
+                            models.Communication.status == models.CommStatus.draft,
+                        ).first()
+                        if not existing_draft:
+                            ev = db.query(models.Event).filter(models.Event.id == approval.event_id).first()
+                            drafted = _llm.draft_communication(
+                                stage=next_stage.name,
+                                recipient_type=recipient_type,
+                                event_name=ev.name if ev else "EventCraft",
+                            )
+                            if drafted.get("subject") and drafted.get("body") and not drafted["subject"].startswith("["):
+                                db.add(models.Communication(
+                                    event_id=approval.event_id,
+                                    recipient=recipient_label,
+                                    subject=drafted["subject"],
+                                    body=drafted["body"],
+                                    status=models.CommStatus.draft,
+                                    stage=next_stage.name,
+                                ))
+                                db.add(models.ActivityLog(
+                                    event_id=approval.event_id,
+                                    message=f"AI draft generated for '{next_stage.name}' stage",
+                                    log_type="info",
+                                ))
+                except Exception as e:
+                    print(f"⚠️ Auto-draft error on stage advance: {e}")
+
     elif approval.type == models.ApprovalType.team_formation:
         team_ids = payload.get("team_ids", [])
         for team_id in team_ids:
