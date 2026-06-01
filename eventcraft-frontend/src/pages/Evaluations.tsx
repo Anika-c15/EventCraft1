@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, BookOpen, Sliders, RefreshCw, Link2, Copy, CheckCircle, Github, Youtube } from 'lucide-react'
+import { Plus, BookOpen, Sliders, RefreshCw, Link2, Copy, CheckCircle, Github, Youtube, BarChart2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
 import { evaluationsApi, teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { RadarChart } from '../components/RadarChart'
 
 // Use window.location to derive API base — avoids ImportMeta.env issues
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -345,6 +346,72 @@ export const Evaluations: React.FC = () => {
               </Card>
             </div>
           </div>
+
+          {/* ── Radar Chart Analytics ── */}
+          {scores.length > 0 && (() => {
+            // Build per-team averaged scores
+            const teamMap: Record<string, { name: string; counts: Record<string, number>; sums: Record<string, number> }> = {}
+            scores.forEach((s: any) => {
+              const name = getTeamName(s.team_id)
+              if (!teamMap[s.team_id]) teamMap[s.team_id] = { name, counts: {}, sums: {} }
+              criteriaConfig.forEach(c => {
+                const val = s.scores_json?.[c.key]
+                if (val !== undefined && val !== null) {
+                  teamMap[s.team_id].sums[c.key] = (teamMap[s.team_id].sums[c.key] || 0) + val
+                  teamMap[s.team_id].counts[c.key] = (teamMap[s.team_id].counts[c.key] || 0) + 1
+                }
+              })
+            })
+
+            const teamEntries = Object.entries(teamMap)
+
+            return (
+              <div className="mt-6">
+                <Card>
+                  <div className="flex items-center gap-2 border-b border-gray-100 pb-4 mb-5">
+                    <BarChart2 size={18} className="text-primary" />
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">Scoring Analytics — Radar Charts</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">Average judge scores per team across all four criteria</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {teamEntries.map(([teamId, td]) => {
+                      const chartScores = criteriaConfig.map(c => ({
+                        label: c.label,
+                        value: td.counts[c.key]
+                          ? parseFloat((td.sums[c.key] / td.counts[c.key]).toFixed(2))
+                          : 0,
+                        max: 10,
+                      }))
+                      const overall = chartScores.reduce((a, b) => a + b.value, 0) / chartScores.length
+
+                      return (
+                        <div key={teamId} className="flex flex-col items-center bg-gray-50/60 rounded-xl border border-gray-100 p-4 hover:shadow-sm transition-shadow">
+                          <RadarChart scores={chartScores} size={180} label={td.name} />
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <span className="text-xs text-gray-400">Overall avg:</span>
+                            <span className="text-sm font-bold text-primary">{overall.toFixed(2)}</span>
+                            <span className="text-xs text-gray-400">/ 10</span>
+                          </div>
+                          {/* Mini score breakdown */}
+                          <div className="mt-2 w-full grid grid-cols-2 gap-x-3 gap-y-1">
+                            {chartScores.map(s => (
+                              <div key={s.label} className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400">{s.label}</span>
+                                <span className="text-[10px] font-bold text-gray-700">{s.value.toFixed(1)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              </div>
+            )
+          })()}
 
           {/* ── AI Bias Mitigation & Public Consensus Panel ── */}
           <div className="mt-8">
