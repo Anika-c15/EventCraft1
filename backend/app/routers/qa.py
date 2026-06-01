@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -7,6 +7,7 @@ from ..auth import require_committee
 from .. import models
 from ..email_service import send_email
 from ..config import settings
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/qa", tags=["qa"])
 
@@ -38,7 +39,9 @@ def get_messages(
 
 
 @router.post("")
+@limiter.limit("10/minute")
 async def post_message(
+    request: Request,
     event_id: str,
     payload: QAMessageIn,
     db: Session = Depends(get_db),

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import asyncio
@@ -8,6 +8,7 @@ from ..auth import get_current_user
 from ..email_service import send_email
 from ..config import settings
 from .. import models, schemas
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/subscribers", tags=["subscribers"])
 
@@ -84,7 +85,8 @@ def _build_notification_email(name: str, event_name: str, description: str, unsu
 # ── Public: subscribe ──────────────────────────────────────────────────────────
 
 @router.post("", response_model=schemas.SubscriberOut, status_code=201)
-def subscribe(data: schemas.SubscriberCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def subscribe(request: Request, data: schemas.SubscriberCreate, db: Session = Depends(get_db)):
     """Anyone can subscribe — no auth required."""
     existing = db.query(models.Subscriber).filter(
         models.Subscriber.email == data.email.lower().strip()
@@ -109,7 +111,8 @@ class UnsubscribeRequest(BaseModel):
     reason: str = ""
 
 @router.post("/unsubscribe", status_code=200)
-def unsubscribe(data: UnsubscribeRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def unsubscribe(request: Request, data: UnsubscribeRequest, db: Session = Depends(get_db)):
     """Anyone can unsubscribe by email — no auth required."""
     sub = db.query(models.Subscriber).filter(
         models.Subscriber.email == data.email.lower().strip()

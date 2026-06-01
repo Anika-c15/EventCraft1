@@ -8,8 +8,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/index-DIpDmWfQ.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CFRzJUgK.css">
+    <!-- Blocking theme script — runs before React, prevents flash -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('ec_theme');
+          if (saved === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            // No saved preference — use time-based default
+            var hour = new Date().getHours();
+            if (hour >= 18 || hour < 6) {
+              document.documentElement.classList.add('dark');
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BklWj4GK.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BAiy2cZR.css">
   </head>
   <body>
     <div id="root"></div>

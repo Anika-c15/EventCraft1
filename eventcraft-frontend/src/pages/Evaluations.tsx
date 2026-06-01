@@ -6,6 +6,7 @@ import { Modal } from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
 import { evaluationsApi, teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 import { RadarChart } from '../components/RadarChart'
 
 // Use window.location to derive API base — avoids ImportMeta.env issues
@@ -25,6 +26,7 @@ const emptyForm = {
 
 export const Evaluations: React.FC = () => {
   const { eventId, loadApprovals, loadDashboard, dashboardStats } = useAppContext()
+  const toast = useToast()
 
   const activeStage = dashboardStats?.current_stage?.toLowerCase() || ''
   const isClosed = activeStage.includes('result') || activeStage.includes('progression')
@@ -73,9 +75,10 @@ export const Evaluations: React.FC = () => {
     if (!eventId) return
     try {
       await evaluationsApi.revokeInvitation(eventId, inviteId)
+      toast.success('Invitation revoked successfully')
       await loadInvitations()
     } catch (e: any) {
-      alert(e.message || 'Error revoking invitation')
+      toast.error(e.message || 'Error revoking invitation')
     }
   }
 
@@ -100,10 +103,11 @@ export const Evaluations: React.FC = () => {
     try {
       await evaluationsApi.savePublicVote(eventId!, teamId, parseFloat(val))
       setPublicScores({ ...publicScores, [teamId]: '' })
+      toast.success('Public score saved!')
       await loadBiasMitigation()
       await loadScores()
     } catch (e: any) {
-      alert(e.message || 'Error saving public score')
+      toast.error(e.message || 'Error saving public score')
     }
   }
 
@@ -113,12 +117,13 @@ export const Evaluations: React.FC = () => {
         final_score: finalScore,
         bias_rationale: rationale,
       })
+      toast.success('Consensus score locked successfully!')
       await loadBiasMitigation()
       await loadScores()
       await loadApprovals()
       await loadDashboard()
     } catch (e: any) {
-      alert(e.message || 'Error locking score')
+      toast.error(e.message || 'Error locking score')
     }
   }
 
@@ -158,22 +163,27 @@ export const Evaluations: React.FC = () => {
       })
       setForm(emptyForm)
       setShowModal(false)
+      toast.success('Judge score submitted successfully!')
       await loadScores()
       await loadApprovals()
       await loadDashboard()
       await loadBiasMitigation()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
   }
 
   const handleConsolidate = async () => {
     if (!eventId) return
     try {
       const result = await evaluationsApi.consolidate(eventId)
-      alert(`Scores consolidated! ${result.rankings?.length ?? 0} teams ranked.`)
+      toast.success(`Scores consolidated! ${result.rankings?.length ?? 0} teams ranked.`)
       await loadApprovals()
       await loadDashboard()
       await loadBiasMitigation()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
   }
 
   const handleInviteJudge = async () => {
@@ -186,9 +196,12 @@ export const Evaluations: React.FC = () => {
         body: JSON.stringify({ judge_name: inviteName, judge_email: inviteEmail }),
       })
       if (!res.ok) throw new Error('Failed to generate invite')
+      toast.success('Judge invitation link generated!')
       setInviteResult(await res.json())
       await loadInvitations()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
   }
 
   const copyLink = () => {
