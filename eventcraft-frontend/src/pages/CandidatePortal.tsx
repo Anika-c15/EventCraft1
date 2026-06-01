@@ -8,6 +8,10 @@ import { Modal } from '../components/ui/Modal'
 interface ExtractedProfile {
   name: string; email: string; institution: string
   level: ParticipantLevel; skills: string; summary: string
+  fit_score?: number
+  fit_breakdown?: { technical_depth: number; project_experience: number; collaboration: number; innovation: number }
+  strengths?: string[]
+  flags?: string[]
 }
 
 type PageState = 'upload' | 'extracting' | 'review' | 'submitted' | 'error'
@@ -43,12 +47,11 @@ export const CandidatePortal: React.FC = () => {
   const [verifyError, setVerifyError] = useState('')
 
   useEffect(() => {
-    eventsApi.list().then(events => {
-      if (events.length > 0) {
-        setActiveEventId(events[0].id)
-        setActiveEvent(events[0])
-      }
-    }).catch(err => console.error("Failed to load events:", err))
+    // Use public endpoint — candidates are not logged in
+    eventsApi.getActiveEvent().then(data => {
+      setActiveEventId(data.event_id)
+      setActiveEvent({ id: data.event_id, name: data.event_name })
+    }).catch(err => console.error("Failed to load active event:", err))
   }, [])
 
   const reset = () => {
@@ -64,13 +67,11 @@ export const CandidatePortal: React.FC = () => {
     let evObj = activeEvent
     if (!evId) {
       try {
-        const events = await eventsApi.list()
-        if (events.length > 0) {
-          evId = events[0].id
-          evObj = events[0]
-          setActiveEventId(evId)
-          setActiveEvent(evObj)
-        }
+        const data = await eventsApi.getActiveEvent()
+        evId = data.event_id
+        evObj = { id: data.event_id, name: data.event_name }
+        setActiveEventId(evId)
+        setActiveEvent(evObj)
       } catch {}
     }
 
@@ -88,7 +89,7 @@ export const CandidatePortal: React.FC = () => {
     addApproval({
       type: 'Candidate Registration',
       status: 'pending',
-      description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution || 'No institution'}. Skills: ${profile.skills || 'N/A'}. Level: ${profile.level}. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
+      description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution || 'No institution'}. Skills: ${profile.skills || 'N/A'}. Level: ${profile.level}. AI Fit Score: ${profile.fit_score ?? 'N/A'}/100. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
       payload: {
         name: profile.name,
         email: profile.email,
@@ -96,6 +97,10 @@ export const CandidatePortal: React.FC = () => {
         level: profile.level,
         skills: profile.skills,
         summary: profile.summary,
+        fit_score: profile.fit_score,
+        fit_breakdown: profile.fit_breakdown,
+        strengths: profile.strengths,
+        flags: profile.flags,
       },
     })
     setPageState('submitted')
@@ -208,6 +213,68 @@ export const CandidatePortal: React.FC = () => {
                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-4 py-3">
                   <p className="text-xs font-semibold text-indigo-600 mb-0.5">AI Summary</p>
                   <p className="text-sm text-indigo-800">{profile.summary}</p>
+                </div>
+              )}
+
+              {/* AI Fit Score */}
+              {profile.fit_score !== undefined && (
+                <div className="bg-white border border-gray-100 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">AI Fit Score</p>
+                    <span className={`text-lg font-black ${
+                      profile.fit_score >= 80 ? 'text-green-600' :
+                      profile.fit_score >= 60 ? 'text-blue-600' :
+                      profile.fit_score >= 40 ? 'text-yellow-600' : 'text-red-500'
+                    }`}>{profile.fit_score}<span className="text-xs font-normal text-gray-400">/100</span></span>
+                  </div>
+                  {/* Score bar */}
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        profile.fit_score >= 80 ? 'bg-green-500' :
+                        profile.fit_score >= 60 ? 'bg-blue-500' :
+                        profile.fit_score >= 40 ? 'bg-yellow-500' : 'bg-red-400'
+                      }`}
+                      style={{ width: `${profile.fit_score}%` }}
+                    />
+                  </div>
+                  {/* Breakdown */}
+                  {profile.fit_breakdown && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(profile.fit_breakdown).map(([key, val]) => (
+                        <div key={key} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500 capitalize">{key.replace('_', ' ')}</span>
+                          <span className="font-semibold text-gray-700">{val}/25</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Strengths */}
+                  {profile.strengths && profile.strengths.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-green-600 mb-1">✓ Strengths</p>
+                      <ul className="space-y-0.5">
+                        {profile.strengths.map((s, i) => (
+                          <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                            <span className="text-green-500 mt-0.5">•</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {/* Flags */}
+                  {profile.flags && profile.flags.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-yellow-600 mb-1">⚠ Flags</p>
+                      <ul className="space-y-0.5">
+                        {profile.flags.map((f, i) => (
+                          <li key={i} className="text-xs text-gray-500 flex items-start gap-1.5">
+                            <span className="text-yellow-500 mt-0.5">•</span>{f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="space-y-3">

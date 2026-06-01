@@ -409,9 +409,12 @@ Write a brief 2-sentence neutral explanation for the committee dashboard."""
 
 
 def extract_profile_from_resume(text: str) -> dict:
-    """Use Groq LLM to parse a candidate's resume and extract structured profile details."""
-    prompt = f"""You are an expert resume parser for a hackathon registration system.
-Extract structured information from the following resume text and return ONLY a valid JSON object. Do not include markdown fences, backticks, or any other introductory or concluding text.
+    """
+    Use Groq LLM to parse a candidate's resume and extract structured profile details
+    including an AI fit score and skill breakdown.
+    """
+    prompt = f"""You are an expert resume screener for a competitive hackathon registration system.
+Analyze the following resume and return ONLY a valid JSON object with NO markdown fences, backticks, or extra text.
 
 JSON Structure:
 {{
@@ -419,39 +422,75 @@ JSON Structure:
   "email": "email address or empty string",
   "institution": "university or college name or empty string",
   "level": "one of exactly: Beginner, Intermediate, Advanced, Expert",
-  "skills": "comma-separated technical skills e.g. Python, React, ML",
-  "summary": "one sentence describing this candidate's strongest area"
+  "skills": "comma-separated technical skills e.g. Python, React, ML, Docker",
+  "summary": "one sentence describing this candidate's strongest technical area",
+  "fit_score": <integer 0-100 representing overall hackathon readiness>,
+  "fit_breakdown": {{
+    "technical_depth": <0-25, score for depth of technical skills>,
+    "project_experience": <0-25, score for hands-on project/internship experience>,
+    "collaboration": <0-25, score for teamwork, open source, or group project evidence>,
+    "innovation": <0-25, score for creative or research work, novel projects>
+  }},
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "flags": ["any concern or gap, or empty list if none"]
 }}
 
-For level: 0-1yr experience = Beginner, 1-2yr = Intermediate, 2-4yr = Advanced, 4+yr = Expert.
+Scoring guide:
+- fit_score = sum of all fit_breakdown values (max 100)
+- 80-100: Exceptional candidate, strong technical background
+- 60-79: Good candidate, solid skills with some gaps
+- 40-59: Average candidate, basic skills present
+- 0-39: Weak fit, limited relevant experience
+
+Experience level guide:
+- Beginner: 0-1yr or student with no internships
+- Intermediate: 1-2yr or student with 1 internship
+- Advanced: 2-4yr or multiple internships/projects
+- Expert: 4+yr or significant open source/research contributions
 
 Resume Text:
 {text[:4000]}
 """
-    system = "You are a JSON resume parser. You output only valid raw JSON."
+    system = "You are a JSON resume screener for hackathon registration. Output only valid raw JSON, no markdown."
     response_text = _call(prompt, system=system).strip()
-    
-    # Extract JSON in case LLM wrapped it in markdown fences
+
+    # Try to extract JSON
     parsed = _extract_json(response_text)
+    if not isinstance(parsed, dict):
+        try:
+            start = response_text.find('{')
+            end = response_text.rfind('}')
+            if start != -1 and end != -1:
+                parsed = json.loads(response_text[start:end+1])
+        except Exception:
+            parsed = None
+
     if isinstance(parsed, dict):
+        # Validate and clamp fit_score
+        if "fit_score" not in parsed:
+            breakdown = parsed.get("fit_breakdown", {})
+            parsed["fit_score"] = sum(breakdown.values()) if breakdown else 50
+        parsed["fit_score"] = max(0, min(100, int(parsed.get("fit_score", 50))))
+        # Ensure required fields exist
+        parsed.setdefault("strengths", [])
+        parsed.setdefault("flags", [])
+        parsed.setdefault("fit_breakdown", {
+            "technical_depth": 0, "project_experience": 0,
+            "collaboration": 0, "innovation": 0
+        })
         return parsed
-    
-    # Fallback parsing
-    try:
-        start = response_text.find('{')
-        end = response_text.rfind('}')
-        if start != -1 and end != -1:
-            return json.loads(response_text[start:end+1])
-    except Exception:
-        pass
-        
+
     return {
         "name": "",
         "email": "",
         "institution": "",
         "level": "Intermediate",
         "skills": "",
-        "summary": "Failed to parse resume text dynamically."
+        "summary": "Failed to parse resume text.",
+        "fit_score": 0,
+        "fit_breakdown": {"technical_depth": 0, "project_experience": 0, "collaboration": 0, "innovation": 0},
+        "strengths": [],
+        "flags": ["Could not extract resume content — please upload a text-based PDF or .txt file"],
     }
 
 
