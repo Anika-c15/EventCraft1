@@ -22,19 +22,25 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false) 
   const { user, logout, wsConnected, theme, toggleTheme, dashboardStats } = useAppContext()
   const navigate = useNavigate()
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  setShowLogoutModal(true)
+}
+
+const confirmLogout = () => {
+  logout()
+  navigate('/')
+}
 
   // Show Live Leaderboard only when event is in Results or Progression phase (scores fully locked)
   const stage = dashboardStats?.current_stage?.toLowerCase() || ''
   const scoresLocked = stage.includes('result') || stage.includes('progression')
 
   return (
+    <>
     <aside
       className={`bg-white border-r border-gray-100 dark:bg-slate-900 dark:border-slate-800 flex flex-col transition-all duration-300 ${
         collapsed ? 'w-16' : 'w-60'
@@ -168,5 +174,36 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
     </aside>
+    {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full p-6 shadow-xl border border-gray-100 dark:border-slate-800 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center">
+                <LogOut size={18} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-sm">Logout?</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">You will be returned to the home page.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-xs font-semibold py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
   )
 }
