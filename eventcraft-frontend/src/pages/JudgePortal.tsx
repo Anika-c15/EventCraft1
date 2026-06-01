@@ -10,11 +10,12 @@
 import { QAChat } from '../components/QAChat'
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink, Sun, Moon } from 'lucide-react'
+import { CheckCircle, ClipboardList, Send, Star, Github, Youtube, ExternalLink, Sun, Moon, Bot, Sparkles } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useAppContext } from '../context/AppContext'
+import { OmniAgentSidebar } from '../components/OmniAgentSidebar'
 
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -42,6 +43,7 @@ export const JudgePortal: React.FC = () => {
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState<string[]>([])
+  const [isAgentOpen, setIsAgentOpen] = useState(false)
 
   useEffect(() => {
     if (!eventId || !token) {
@@ -417,6 +419,29 @@ export const JudgePortal: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Floating AI Companion Trigger */}
+      {eventId && token && (
+        <>
+          <button
+            onClick={() => setIsAgentOpen(!isAgentOpen)}
+            className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-full shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all cursor-pointer flex items-center justify-center border border-white/10"
+          >
+            <div className="relative">
+              <Bot size={22} className="animate-pulse" />
+              <Sparkles size={11} className="absolute -top-1.5 -right-1.5 text-yellow-300 animate-bounce" />
+            </div>
+          </button>
+
+          <OmniAgentSidebar
+            eventId={eventId}
+            role="judge"
+            token={token}
+            isOpen={isAgentOpen}
+            onClose={() => setIsAgentOpen(false)}
+          />
+        </>
+      )}
     </div>
   )
 }

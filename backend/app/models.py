@@ -255,6 +255,8 @@ class AgentMessage(Base):
 
     id = Column(String, primary_key=True, default=gen_uuid)
     event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    user_id = Column(String, nullable=True)  # email or unique id of user
+    user_role = Column(String, nullable=True)  # "admin" | "judge" | "participant"
     role = Column(String, nullable=False)  # "user" | "assistant"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

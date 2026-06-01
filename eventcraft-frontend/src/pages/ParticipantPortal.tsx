@@ -5,13 +5,14 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder, Sun, Moon, Bell, Trophy, Edit2,
+  Loader2, Home, Folder, Sun, Moon, Bell, Trophy, Edit2, Bot, Sparkles,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAppContext } from '../context/AppContext'
 import { QAChat, QANotificationPopup } from '../components/QAChat'
+import { OmniAgentSidebar } from '../components/OmniAgentSidebar'
 
 const levelVariant = (level: string) => {
   switch (level) {
@@ -185,6 +186,7 @@ export const ParticipantPortal: React.FC = () => {
   const [submissionError, setSubmissionError] = useState('')
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [qaNotification, setQaNotification] = useState<any>(null)
+  const [isAgentOpen, setIsAgentOpen] = useState(false)
 
   // Team rename state
   const [showRenameForm, setShowRenameForm] = useState(false)
@@ -1301,6 +1303,29 @@ export const ParticipantPortal: React.FC = () => {
   message={qaNotification}
   onClose={() => setQaNotification(null)}
 />
+
+      {/* Floating AI Companion Trigger */}
+      {eventId && token && (
+        <>
+          <button
+            onClick={() => setIsAgentOpen(!isAgentOpen)}
+            className="fixed bottom-6 right-6 z-40 p-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-full shadow-lg shadow-orange-500/20 hover:shadow-orange-500/40 hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all cursor-pointer flex items-center justify-center border border-white/10"
+          >
+            <div className="relative">
+              <Bot size={22} className="animate-pulse" />
+              <Sparkles size={11} className="absolute -top-1.5 -right-1.5 text-yellow-300 animate-bounce" />
+            </div>
+          </button>
+
+          <OmniAgentSidebar
+            eventId={eventId}
+            role="participant"
+            token={token}
+            isOpen={isAgentOpen}
+            onClose={() => setIsAgentOpen(false)}
+          />
+        </>
+      )}
     </div>
   )
 }

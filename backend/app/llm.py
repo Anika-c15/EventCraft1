@@ -7,18 +7,50 @@ from typing import List, Dict, Any, Optional
 from functools import lru_cache
 
 # pyrefly: ignore [missing-import]
-from groq import Groq
+from groq import Groq, AuthenticationError, RateLimitError
 
 from .config import settings
 
 _client: Optional[Groq] = None
+_cached_key: Optional[str] = None
+
+_PLACEHOLDER_KEYS = {"", "your-groq-api-key-here", "gsk_your_key_here"}
+
+
+def _reset_client() -> None:
+    global _client, _cached_key
+    _client = None
+    _cached_key = None
+
+
+def _api_key() -> str:
+    return (settings.GROQ_API_KEY or "").strip()
 
 
 def _get_client() -> Optional[Groq]:
-    global _client
-    if _client is None and settings.GROQ_API_KEY and settings.GROQ_API_KEY not in ("", "your-groq-api-key-here"):
-        _client = Groq(api_key=settings.GROQ_API_KEY)
+    global _client, _cached_key
+    key = _api_key()
+    if key in _PLACEHOLDER_KEYS:
+        _reset_client()
+        return None
+    if _client is None or _cached_key != key:
+        _client = Groq(api_key=key)
+        _cached_key = key
     return _client
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    if isinstance(exc, AuthenticationError):
+        return True
+    err = str(exc).lower()
+    return "invalid_api_key" in err or "invalid api key" in err
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    if isinstance(exc, RateLimitError):
+        return True
+    err = str(exc).lower()
+    return "429" in err or "rate_limit" in err
 
 
 MODEL = "llama-3.3-70b-versatile"
@@ -43,12 +75,12 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        err = str(e)
-        if "429" in err or "rate_limit" in err.lower():
+        if _is_rate_limit_error(e):
             return "[Groq rate limit hit — wait a moment and try again]"
-        if "401" in err or "invalid_api_key" in err.lower():
+        if _is_auth_error(e):
+            _reset_client()
             return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
-        return f"[LLM Error: {err}]"
+        return f"[LLM Error: {e}]"
 
 
 @lru_cache(maxsize=128)
@@ -572,13 +604,13 @@ def agent_chat(
             "needs_clarification": needs_clarification,
         }
     except Exception as e:
-        err = str(e)
-        if "429" in err or "rate_limit" in err.lower():
+        if _is_rate_limit_error(e):
             msg = "Groq rate limit hit — wait a moment and try again."
-        elif "401" in err or "invalid_api_key" in err.lower():
+        elif _is_auth_error(e):
+            _reset_client()
             msg = "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
         else:
-            msg = f"I encountered an error: {err}. Please check your Groq API key in backend/.env"
+            msg = f"I encountered an error: {e}. Please check your Groq API key in backend/.env"
         return {
             "reply": msg,
             "pipeline_config": None,
@@ -651,4 +683,92 @@ def generate_bias_mitigation_rationale(
     except Exception as e:
         print(f"Error generating LLM bias mitigation rationale: {e}")
         return f"Why did this get flagged? The judge average of {judge_score:.1f} and public voting score of {public_score:.1f} diverged significantly, reflecting differing assessments of technical execution versus presentation appeal."
+
+
+def omni_agent_chat(
+    role: str,
+    context: str,
+    history: List[Dict[str, str]],
+    new_message: str,
+) -> str:
+    """Multi-turn conversation with the EventCraft Omni-Agent (Admin/Judge/Participant) using Groq."""
+    client = _get_client()
+    if client is None:
+        return "Groq API key not configured. Please add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)"
+
+    try:
+        # Build prompt based on role
+        if role == "admin":
+            system_prompt = f"""You are EventCraft Copilot — a powerful AI assistant for hackathon organizers.
+Your tone is professional, direct, and action-oriented.
+
+LIVE EVENT DATA:
+{context}
+
+You can answer questions about the event AND execute real actions. When asked to perform an action, ALWAYS confirm you are executing it and append EXACTLY ONE action block at the very end of your reply in this precise format:
+[[[ACTION: {{"type": "<action_type>"}}]]]
+
+Supported actions (only use the exact type strings below):
+- "form_teams" → Run AI team formation for unassigned participants
+- "show_scores" → Retrieve all judge scores and evaluation breakdowns
+- "advance_stage" → Immediately advance the pipeline to the next stage
+- "approve_formation" → Approve the currently pending team formation proposal
+
+Recognition rules:
+- "form teams", "create teams", "run team formation" → "form_teams"
+- "show scores", "who scored what", "judge scores", "evaluation results", "what did judges score" → "show_scores"
+- "advance stage", "next stage", "move to next stage" → "advance_stage"
+- "approve teams", "approve formation" → "approve_formation"
+
+IMPORTANT: Output the action block on its own line at the very end. Never output more than one action block. If no action is requested, just answer conversationally."""
+
+        elif role == "judge":
+            system_prompt = f"""You are the EventCraft Judge Assistant. You assist the event evaluators/judges.
+Your tone is objective, helpful, and fair.
+
+Here is the current evaluation and rubric context:
+{context}
+
+You help the judge understand evaluation rubrics, find project details, and recall their scoring notes. Keep the conversation focused strictly on the event criteria and submissions."""
+
+        else:  # participant
+            system_prompt = f"""You are the EventCraft Project Mentor — a dedicated AI guide for hackathon participants.
+Your tone is encouraging, insightful, creative, and technical.
+
+Your participant's context:
+{context}
+
+YOUR ROLE — YOU ARE ONLY A MENTOR:
+- Help brainstorm features and innovative ideas for the project
+- Critique pitch decks, project descriptions, and demo scripts
+- Give technical advice on architecture, APIs, tools, or code
+- Help align the project with the event's scoring rubric weights
+- Suggest how to present the project compellingly to judges
+
+HARD RESTRICTIONS:
+- You CANNOT execute any system commands or actions
+- Do NOT reveal other teams' names, projects, or scores (you don't know them)
+- Do NOT reveal other judges' identities or notes
+- If asked to do something administrative (like form teams or advance stages), politely decline and say only organizers can do that"""
+
+        # Build messages array
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": new_message})
+
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=4096,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        if _is_rate_limit_error(e):
+            return "Groq rate limit hit — wait a moment and try again."
+        if _is_auth_error(e):
+            _reset_client()
+            return "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
+        return f"I encountered an error: {e}."
 

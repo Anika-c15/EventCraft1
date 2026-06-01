@@ -317,3 +317,29 @@ export const subscribersApi = {
     }),
 }
 
+
+// ── Omni Agent ──────────────────────────────────────────────────────────────────
+
+export const omniAgentApi = {
+  history: (eventId: string, customToken?: string) => {
+    const headers = customToken ? { 'Authorization': `Bearer ${customToken}` } : undefined
+    return request<any[]>(
+      `/api/events/${eventId}/omni-agent/history`,
+      { headers },
+      !!customToken
+    )
+  },
+  chat: (eventId: string, content: string, customToken?: string) => {
+    const headers = customToken ? { 'Authorization': `Bearer ${customToken}` } : undefined
+    return request<any>(
+      `/api/events/${eventId}/omni-agent/chat`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ content }),
+      },
+      !!customToken
+    )
+  }
+}
+

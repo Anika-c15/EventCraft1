@@ -6,7 +6,7 @@ from .database import engine, SessionLocal
 from . import models
 from .config import settings
 from .auth import hash_password, create_portal_token
-from .routers import auth, events, participants, teams, evaluations, approvals, communications, agent
+from .routers import auth, events, participants, teams, evaluations, approvals, communications, agent, omni_agent
 from .routers import peer_review
 from .routers.websocket import router as ws_router
 from .routers import qa
@@ -99,6 +99,21 @@ def _migrate_db():
                 print("🚀 Migrated: created subscribers table")
             except Exception as tbl_err:
                 print(f"⚠️ Could not create subscribers table: {tbl_err}")
+
+        # ── agent_messages table migrations ─────────────────────────────────
+        if "agent_messages" in existing_tables:
+            columns_agent = [col["name"] for col in inspector.get_columns("agent_messages")]
+            for col, col_type in [
+                ("user_id", "VARCHAR(255)"),
+                ("user_role", "VARCHAR(50)"),
+            ]:
+                if col not in columns_agent:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE agent_messages ADD COLUMN {col} {col_type}"))
+                        print(f"🚀 Migrated: added {col} to agent_messages")
+                    except Exception as col_err:
+                        print(f"⚠️ Could not add {col} to agent_messages: {col_err}")
 
     except Exception as e:
         print(f"⚠️ Migration error: {e}")
@@ -357,6 +372,7 @@ app.include_router(evaluations.router)
 app.include_router(approvals.router)
 app.include_router(communications.router)
 app.include_router(agent.router)
+app.include_router(omni_agent.router)
 app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 
