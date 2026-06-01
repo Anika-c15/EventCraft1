@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -10,7 +12,6 @@ from .routers import auth, events, participants, teams, evaluations, approvals, 
 from .routers import peer_review
 from .routers.websocket import router as ws_router
 from .routers import qa
-from .routers import subscribers as subscribers_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,15 +25,9 @@ def _migrate_db():
     from sqlalchemy import text
     db = SessionLocal()
     try:
-        dialect = db.bind.dialect.name
-        
         # ── teams table migrations ──────────────────────────────────────────
-        if dialect == "sqlite":
-            result = db.execute(text("PRAGMA table_info(teams)"))
-            columns = [row[1] for row in result.fetchall()]
-        else:
-            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='teams'"))
-            columns = [row[0] for row in result.fetchall()]
+        result = db.execute(text("PRAGMA table_info(teams)"))
+        columns = [row[1] for row in result.fetchall()]
 
         for col, col_type in [
             ("public_vote_score",  "FLOAT"),
@@ -43,7 +38,6 @@ def _migrate_db():
             ("github_link",        "TEXT"),
             ("demo_link",          "TEXT"),
             ("is_locked",          "BOOLEAN DEFAULT 0"),
-            ("name_locked",        "BOOLEAN DEFAULT 0"),
             ("project_title",      "TEXT"),
             ("project_description","TEXT"),
             ("github_url",         "TEXT"),
@@ -54,19 +48,6 @@ def _migrate_db():
             if col not in columns:
                 db.execute(text(f"ALTER TABLE teams ADD COLUMN {col} {col_type}"))
                 print(f"🚀 Migrated: added {col} to teams")
-
-        # ── events table migrations ──────────────────────────────────────────
-        if dialect == "sqlite":
-            result = db.execute(text("PRAGMA table_info(events)"))
-            columns_events = [row[1] for row in result.fetchall()]
-        else:
-            result = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='events'"))
-            columns_events = [row[0] for row in result.fetchall()]
-
-        if "owner_id" not in columns_events:
-            db.execute(text("ALTER TABLE events ADD COLUMN owner_id VARCHAR(255)"))
-            print("🚀 Migrated: added owner_id to events")
-
 
         # ── peer_reviews table ──────────────────────────────────────────────
         tables_result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
@@ -83,19 +64,6 @@ def _migrate_db():
                 )
             """))
             print("🚀 Migrated: created peer_reviews table")
-
-        # ── subscribers table ───────────────────────────────────────────────
-        if "subscribers" not in existing_tables:
-            db.execute(text("""
-                CREATE TABLE subscribers (
-                    id            TEXT PRIMARY KEY,
-                    name          TEXT NOT NULL,
-                    email         TEXT NOT NULL UNIQUE,
-                    notified      BOOLEAN DEFAULT 0,
-                    subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            print("🚀 Migrated: created subscribers table")
 
         db.commit()
     except Exception as e:
@@ -133,12 +101,6 @@ def _seed_db():
         # ── Demo event (only if no events exist) ────────────────────────────
         if db.query(models.Event).count() == 0:
             _seed_demo_event(db)
-
-        # Make sure the admin owns the seeded demo event if it has no owner
-        seeded = db.query(models.Event).filter(models.Event.name == "EventCraft Hackathon 2026").first()
-        if seeded and seeded.owner_id is None:
-            seeded.owner_id = admin.id
-            db.flush()
 
         db.commit()
     except Exception as e:
@@ -256,82 +218,66 @@ def _seed_demo_event(db):
 
 
 def _seed_communications(db, event_id: str):
-    # Only seed if no communications exist for this event yet
-    existing_count = db.query(models.Communication).filter(
-        models.Communication.event_id == event_id
-    ).count()
-    if existing_count > 0:
-        return  # Already seeded — don't duplicate
-
-    # Try to generate AI drafts via Groq; fall back to static templates
-    from . import llm as _llm
-
-    stage_configs = [
-        ("Participant Intake",  "all_participants", "All Participants",   models.CommStatus.draft),
-        ("Team Formation",      "all_participants", "All Participants",   models.CommStatus.draft),
-        ("Evaluation",          "judges",           "Judges Panel",       models.CommStatus.draft),
-        ("Evaluation",          "all_participants", "All Participants",   models.CommStatus.draft),
-        ("Results",             "all_participants", "All Participants",   models.CommStatus.draft),
-        ("Progression",         "winners",          "Qualifying Teams",   models.CommStatus.draft),
-    ]
-
-    # Static fallbacks keyed by (stage, recipient_type)
-    static_fallbacks = {
-        ("Participant Intake", "all_participants"): {
+    comms = [
+        {
+            "recipient": "All Participants",
+            "subject": "Your Personal Portal Link — EventCraft Hackathon 2026",
+            "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026!\n\nYou can access your personal participant portal using the link below.\nNo account or password is required — just click the link:\n\n{portal_url}\n\nYour portal shows:\n• Your current stage in the event journey\n• Team details and teammates (once teams are formed)\n• Key event dates and milestones\n• Progression status\n\nThis link is unique to you — please do not share it.\n\nBest regards,\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Participant Intake",
+        },
+        {
+            "recipient": "All Participants",
             "subject": "Welcome to EventCraft Hackathon 2026 — Registration Confirmed",
             "body": "Dear {participant_name},\n\nWelcome to EventCraft Hackathon 2026! Your registration has been confirmed.\n\nHere's what to expect:\n1. Team Formation — Balanced teams will be formed based on your skills.\n2. Evaluation — Teams present solutions to expert judges.\n3. Results & Progression — Top teams advance to the final round.\n\nBest regards,\nEventCraft Committee",
+            "status": models.CommStatus.sent,
+            "stage": "Participant Intake",
         },
-        ("Team Formation", "all_participants"): {
+        {
+            "recipient": "All Participants",
             "subject": "Team Formation Complete — Meet Your Team!",
             "body": "Dear {participant_name},\n\nTeams have been formed for EventCraft Hackathon 2026!\n\nLog in to your participant portal to see your team details and teammates.\n\nNext Steps:\n- Connect with your teammates\n- Review the problem statement\n- Begin planning your solution\n\nGood luck!\n\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Team Formation",
         },
-        ("Evaluation", "judges"): {
+        {
+            "recipient": "Judges Panel",
             "subject": "Evaluation Portal Now Open — Submission Guidelines",
             "body": "Dear Judge,\n\nThe evaluation portal for EventCraft Hackathon 2026 is now open.\n\nPlease score each team on:\n• Innovation (0-10): Originality and creativity\n• Execution (0-10): Technical implementation quality\n• Presentation (0-10): Clarity of demo and communication\n• Impact (0-10): Real-world potential and scalability\n\nThank you for your time.\n\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Evaluation",
         },
-        ("Evaluation", "all_participants"): {
+        {
+            "recipient": "All Participants",
             "subject": "Reminder: Project Submission Deadline Tomorrow",
             "body": "Dear {participant_name},\n\nFriendly reminder — project submission deadline is tomorrow!\n\nEnsure your team has:\n✅ Completed your solution\n✅ Prepared your demo\n✅ Submitted all materials\n\nGood luck!\n\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Evaluation",
         },
-        ("Results", "all_participants"): {
+        {
+            "recipient": "All Participants",
             "subject": "Results Announcement — EventCraft Hackathon 2026",
             "body": "Dear {participant_name},\n\nThe results for EventCraft Hackathon 2026 are in!\n\nThank you for your incredible effort and creativity. Final rankings are available in your participant portal.\n\nCongratulations to all teams!\n\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Results",
         },
-        ("Progression", "winners"): {
+        {
+            "recipient": "Qualifying Teams",
             "subject": "Congratulations! You've Qualified for the Next Round",
             "body": "Dear {participant_name},\n\nCongratulations! Your team has qualified for the next round.\n\nPlease confirm your participation via your portal link.\n\nWe look forward to seeing you at the finals!\n\nEventCraft Committee",
+            "status": models.CommStatus.draft,
+            "stage": "Progression",
         },
-    }
-
-    event = db.query(models.Event).filter(models.Event.id == event_id).first()
-    event_name = event.name if event else "EventCraft Hackathon 2026"
-
-    for stage, recipient_type, recipient_label, status in stage_configs:
-        try:
-            drafted = _llm.draft_communication(
-                stage=stage,
-                recipient_type=recipient_type,
-                event_name=event_name,
-            )
-            subject = drafted.get("subject", "")
-            body = drafted.get("body", "")
-            # Validate — if LLM returned empty/error, use fallback
-            if not subject or not body or subject.startswith("[") or len(body) < 50:
-                raise ValueError("LLM returned invalid draft")
-        except Exception:
-            fallback = static_fallbacks.get((stage, recipient_type), {})
-            subject = fallback.get("subject", f"{stage} Update")
-            body = fallback.get("body", f"Dear participant,\n\nUpdate for {stage} stage.\n\nEventCraft Committee")
-
+    ]
+    for c in comms:
         db.add(models.Communication(
             event_id=event_id,
-            recipient=recipient_label,
-            subject=subject,
-            body=body,
-            status=status,
-            stage=stage,
+            recipient=c["recipient"],
+            subject=c["subject"],
+            body=c["body"],
+            status=c["status"],
+            stage=c["stage"],
         ))
-        print(f"✅ Seeded communication: [{stage}] {subject[:60]}")
 
 app = FastAPI(
     title="EventCraft API",
@@ -362,7 +308,6 @@ app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 
 app.include_router(qa.router, tags=["qa"])
-app.include_router(subscribers_router.router)
 
 @app.get("/")
 def root():
