@@ -899,14 +899,14 @@ export const ParticipantPortal: React.FC = () => {
               </div>
             )}
             {/* Subscribe for Future Events Banner */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-900 dark:to-slate-950 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-700/50 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border border-gray-100 dark:border-slate-800 shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
                   <Bell size={20} className="text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Stay Notified for Future Events</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Subscribe to get notified when new events are announced — no spam, just updates.</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Stay Notified for Future Events</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Subscribe to get notified when new events are announced — no spam, just updates.</p>
                 </div>
               </div>
               <Link
