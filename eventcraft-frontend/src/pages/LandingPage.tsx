@@ -295,7 +295,7 @@ const handleRegister = async (e: React.FormEvent) => {
                 onClick={() => navigate('/candidate')}
                 className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/20 hover:shadow-orange-500/35 transition-all duration-150 cursor-pointer flex items-center gap-2 hover:-translate-y-0.5"
               >
-                Register Now <ArrowRight size={16} />
+                Register as Participant <ArrowRight size={16} />
               </button>
               <button
                 onClick={() => setShowEmailPopup(true)}
