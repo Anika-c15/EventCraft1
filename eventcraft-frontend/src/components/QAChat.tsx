@@ -26,6 +26,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
   const [clearing, setClearing] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(0)
   
   const load = async () => {
@@ -53,7 +54,15 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
   }, [eventId, teamId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Only scroll within the chat box itself — never scroll the page
+    // Only auto-scroll if user is already near the bottom of the chat container
+    const container = scrollContainerRef.current
+    if (!container) return
+    const { scrollTop, scrollHeight, clientHeight } = container
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 80
+    if (isNearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
   }, [messages])
 
   const handleSend = async () => {
@@ -154,7 +163,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 ? (
           <p className="text-xs text-gray-400 text-center mt-8">
             No messages yet. Start the conversation!
