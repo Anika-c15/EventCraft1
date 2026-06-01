@@ -141,6 +141,50 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
             if team:
                 team.status = models.TeamStatus.approved
 
+        # Auto-create a Stage Advance approval to move to the next stage
+        event = db.query(models.Event).filter(models.Event.id == approval.event_id).first()
+        if event:
+            stages = (
+                db.query(models.PipelineStage)
+                .filter(models.PipelineStage.event_id == approval.event_id)
+                .order_by(models.PipelineStage.order_index)
+                .all()
+            )
+            current_idx = event.current_stage_index
+            if current_idx < len(stages) - 1:
+                current_stage = stages[current_idx]
+                next_stage = stages[current_idx + 1]
+
+                # Only create if no pending progression approval already exists
+                existing_prog = db.query(models.Approval).filter(
+                    models.Approval.event_id == approval.event_id,
+                    models.Approval.type == models.ApprovalType.progression,
+                    models.Approval.status == models.ApprovalStatus.pending,
+                ).first()
+
+                if not existing_prog:
+                    db.add(models.Approval(
+                        event_id=approval.event_id,
+                        type=models.ApprovalType.progression,
+                        status=models.ApprovalStatus.pending,
+                        description=(
+                            f"Team Formation complete — {len(team_ids)} teams approved. "
+                            f"Ready to advance from '{current_stage.name}' → '{next_stage.name}'. "
+                            f"Approve to unlock the next phase for all participants."
+                        ),
+                        payload={
+                            "from_stage": current_stage.name,
+                            "to_stage": next_stage.name,
+                            "from_index": current_idx,
+                            "to_index": current_idx + 1,
+                        },
+                    ))
+                    db.add(models.ActivityLog(
+                        event_id=approval.event_id,
+                        message=f"Stage advance approval created: '{current_stage.name}' → '{next_stage.name}'",
+                        log_type="info",
+                    ))
+
     elif approval.type == models.ApprovalType.candidate_registration:
         # Auto-add the candidate as a participant when the approval is approved
         from ..auth import create_portal_token

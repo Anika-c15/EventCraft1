@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react'
-import { Users, UserCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Users, UserCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, ArrowRight, Bell, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -61,13 +61,41 @@ export const Dashboard: React.FC = () => {
     approvals, loadApprovals, resolveApproval,
     dashboardStats, loadDashboard,
     activityLog, loadActivityLog,
+    lastWsMessage,
   } = useAppContext()
+
+  const [approvalBanner, setApprovalBanner] = useState<string | null>(null)
 
   useEffect(() => {
     loadDashboard()
     loadApprovals()
     loadActivityLog()
   }, [])
+
+  // Show banner when new approval arrives via WebSocket
+  useEffect(() => {
+    if (!lastWsMessage) return
+    if (
+      lastWsMessage.type === 'approval_created' ||
+      lastWsMessage.type === 'approval_resolved' ||
+      lastWsMessage.type === 'stage_advanced' ||
+      lastWsMessage.type === 'rationales_ready'
+    ) {
+      loadApprovals()
+      loadDashboard()
+      loadActivityLog()
+    }
+    if (lastWsMessage.type === 'approval_created') {
+      setApprovalBanner(lastWsMessage.description || 'A new approval requires your attention.')
+    }
+    if (lastWsMessage.type === 'approval_resolved') {
+      if (lastWsMessage.pending_count > 0) {
+        setApprovalBanner(`${lastWsMessage.pending_count} approval${lastWsMessage.pending_count > 1 ? 's' : ''} still pending.`)
+      } else {
+        setApprovalBanner(null)
+      }
+    }
+  }, [lastWsMessage])
 
   const pendingApprovals = approvals.filter((a) => a.status === 'pending')
   const stats = dashboardStats
@@ -92,6 +120,27 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="text-sm text-gray-500 dark:text-slate-400">{today}</div>
       </div>
+
+      {/* ── Approval notification banner ── */}
+      {approvalBanner && (
+        <div className="mb-4 flex items-center justify-between gap-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Bell size={15} className="text-primary flex-shrink-0" />
+            <p className="text-sm font-medium text-orange-800 dark:text-orange-300">{approvalBanner}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => navigate('/approvals')}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              View Approvals →
+            </button>
+            <button onClick={() => setApprovalBanner(null)} className="text-orange-400 hover:text-orange-600">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -122,7 +171,13 @@ export const Dashboard: React.FC = () => {
               <p className="text-xs font-semibold text-gray-400 dark:text-slate-400 uppercase tracking-wider mb-1">Teams Formed</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.teams_formed ?? '—'}</p>
               <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-                {stats?.teams_formed ? 'Formation pending' : 'Not yet formed'}
+                {!stats?.teams_formed
+                  ? 'Not yet formed'
+                  : (stats?.current_stage_index ?? 0) >= 2
+                  ? 'Active ✓'
+                  : (stats?.pending_approvals ?? 0) > 0
+                  ? 'Awaiting approval'
+                  : 'Approved ✓'}
               </p>
             </div>
             <div className="w-10 h-10 bg-purple-50 dark:bg-purple-950/30 rounded-lg flex items-center justify-center">

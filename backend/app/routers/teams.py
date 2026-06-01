@@ -54,6 +54,18 @@ def form_teams_endpoint(
     if not event:
         raise HTTPException(404, "Event not found")
 
+    # Block re-formation if stage has advanced past Team Formation (index 1)
+    if event.current_stage_index > 1:
+        raise HTTPException(400, "Cannot re-form teams — the event has already advanced past the Team Formation stage.")
+
+    # Block if teams are already approved (formation approval resolved)
+    approved_teams = db.query(models.Team).filter(
+        models.Team.event_id == event_id,
+        models.Team.status == models.TeamStatus.approved,
+    ).count()
+    if approved_teams > 0:
+        raise HTTPException(400, "Teams have already been approved. Re-formation is not allowed after approval.")
+
     participants = (
         db.query(models.Participant)
         .filter(
@@ -167,6 +179,21 @@ def clear_teams(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    # Block clearing if stage has advanced past Team Formation
+    if event.current_stage_index > 1:
+        raise HTTPException(400, "Cannot clear teams — the event has already advanced past the Team Formation stage.")
+
+    # Block if teams are already approved
+    approved_teams = db.query(models.Team).filter(
+        models.Team.event_id == event_id,
+        models.Team.status == models.TeamStatus.approved,
+    ).count()
+    if approved_teams > 0:
+        raise HTTPException(400, "Teams have already been approved and cannot be cleared.")
     teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
     for team in teams:
         for member in team.members:

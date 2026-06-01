@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Sparkles, RefreshCw, Users, ArrowRight } from 'lucide-react'
+import { Sparkles, RefreshCw, Users, ArrowRight, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -15,7 +15,7 @@ const teamColors = [
 ]
 
 export const Teams: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard, approvals } = useAppContext()
+  const { eventId, loadApprovals, loadDashboard, approvals, dashboardStats } = useAppContext()
   const navigate = useNavigate()
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -24,6 +24,12 @@ export const Teams: React.FC = () => {
   useEffect(() => {
     if (eventId) loadTeams()
   }, [eventId])
+
+  // Lock formation controls once stage has advanced past Team Formation (index > 1)
+  // or once any team is approved
+  const stageIndex = dashboardStats?.current_stage_index ?? 0
+  const teamsApproved = teams.some(t => t.status === 'Approved' || t.status === 'Active')
+  const formationLocked = stageIndex > 1 || teamsApproved
 
   const loadTeams = async () => {
     if (!eventId) return
@@ -73,7 +79,6 @@ export const Teams: React.FC = () => {
       alert(e.message)
     }
   }
-
   return (
     <div className="pb-16">
       <div className="flex items-center justify-between mb-6">
@@ -82,14 +87,22 @@ export const Teams: React.FC = () => {
           <p className="text-sm text-gray-500 mt-0.5">{teams.length} teams formed</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={handleClear}>
-            <RefreshCw size={15} />
-            Clear &amp; Re-form
-          </Button>
-          <Button variant="primary" onClick={handleFormTeams} disabled={forming}>
-            <Sparkles size={15} />
-            {forming ? 'Forming...' : 'Form Teams with AI'}
-          </Button>
+          {formationLocked ? (
+            <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg flex items-center gap-1.5">
+              <CheckCircle size={13} className="text-green-500" /> Teams locked — formation complete
+            </span>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={handleClear}>
+                <RefreshCw size={15} />
+                Clear &amp; Re-form
+              </Button>
+              <Button variant="primary" onClick={handleFormTeams} disabled={forming}>
+                <Sparkles size={15} />
+                {forming ? 'Forming...' : 'Form Teams with AI'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -157,16 +170,13 @@ export const Teams: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Bar */}
-      {teams.length > 0 && (
+      {/* Bottom Bar — only while Team Formation approval is pending */}
+      {teams.length > 0 && approvals.filter(a => a.status === 'pending' && a.type === 'Team Formation').length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-yellow-400" />
+            <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
             <span className="text-sm text-gray-600">
-              <strong>{teams.length} teams formed</strong>
-              {approvals.filter(a => a.status === 'pending' && a.type === 'Team Formation').length > 0
-                ? ' — approval pending'
-                : ' — approved ✓'}
+              <strong>{teams.length} teams formed</strong> — approval pending
             </span>
           </div>
           <Button variant="primary" size="sm" onClick={() => navigate('/approvals')}>
