@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate()
@@ -54,7 +55,7 @@ const handleRegister = async (e: React.FormEvent) => {
   if (!email || !password || !orgName) { setFormError('Please fill in all fields.'); return }
   if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
   try {
-    const res = await fetch('http://localhost:8000/api/auth/register', {
+    const res = await fetch(`${BASE_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name: orgName, org_name: orgName }),

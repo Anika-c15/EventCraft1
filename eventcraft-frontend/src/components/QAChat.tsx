@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Send, MessageCircle, X, Bell, Trash2 } from 'lucide-react'
-
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 interface QAMessage {
   id: string
   sender_name: string
@@ -27,10 +27,10 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
   const [showConfirm, setShowConfirm] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef(0)
-
+  
   const load = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/events/${eventId}/qa/${teamId}`)
+     const res = await fetch(`${BASE_URL}/api/events/${eventId}/qa/${teamId}`)
       const data = await res.json()
 
       if (data.length > prevCountRef.current) {
@@ -60,7 +60,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
     if (!input.trim()) return
     setSending(true)
     try {
-      await fetch(`http://localhost:8000/api/events/${eventId}/qa`, {
+     await fetch(`${BASE_URL}/api/events/${eventId}/qa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,8 +79,7 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
  const handleClear = async () => {
   setClearing(true)
   try {
-    await fetch(
-      `http://localhost:8000/api/events/${eventId}/qa/${teamId}/clear`,
+    await fetch(`${BASE_URL}/api/events/${eventId}/qa/${teamId}/clear`, 
       { method: 'DELETE' }
     )
     setMessages([])
