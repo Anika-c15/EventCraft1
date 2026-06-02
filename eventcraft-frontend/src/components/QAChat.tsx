@@ -54,14 +54,13 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
   }, [eventId, teamId])
 
   useEffect(() => {
-    // Only scroll within the chat box itself — never scroll the page
-    // Only auto-scroll if user is already near the bottom of the chat container
+    // Only scroll within the chat container itself — never the page
     const container = scrollContainerRef.current
     if (!container) return
     const { scrollTop, scrollHeight, clientHeight } = container
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 80
     if (isNearBottom) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      container.scrollTop = container.scrollHeight
     }
   }, [messages])
 
