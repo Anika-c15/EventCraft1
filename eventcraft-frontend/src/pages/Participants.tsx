@@ -91,6 +91,7 @@ export const Participants: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!eventId) return
+    // THIS is your pop-up!
     const confirmed = await confirm({
       title: 'Remove Participant',
       message: 'Are you sure you want to remove this participant? This action cannot be undone.',
