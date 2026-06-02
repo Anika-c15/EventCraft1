@@ -480,3 +480,20 @@ def clear_event_teams_and_submissions(event_id: str, db: Session):
     ).delete()
     
     db.flush()
+
+
+@router.delete("/{event_id}")
+def delete_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if current_user.role != models.UserRole.admin and event.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this event")
+    db.delete(event)
+    db.commit()
+    return {"message": "Event deleted successfully"}
+

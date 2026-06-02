@@ -84,6 +84,8 @@ export const eventsApi = {
       method: 'POST',
       body: JSON.stringify({ stage_name: stageName }),
     }),
+  delete: (id: string) =>
+    request<any>(`/api/events/${id}`, { method: 'DELETE' }),
 }
 
 // ── Participants ───────────────────────────────────────────────────────────────

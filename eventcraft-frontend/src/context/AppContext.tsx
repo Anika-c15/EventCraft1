@@ -22,6 +22,7 @@ interface AppContextType {
 
   eventsList: any[]
   loadEventsList: () => Promise<any[]>
+  deleteEvent: (id: string) => Promise<void>
 
   approvals: any[]
   loadApprovals: () => Promise<void>
@@ -212,6 +213,39 @@ const logout = () => {
     localStorage.setItem('ec_event_id', id)
   }
 
+  const deleteEvent = async (id: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      await eventsApi.delete(id)
+      const list = await loadEventsList()
+      
+      if (eventId === id) {
+        if (list && list.length > 0) {
+          let activeEvent = null
+          if (user?.role === 'admin') {
+            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+          }
+          if (!activeEvent) {
+            activeEvent = list[0]
+          }
+          setEventIdState(activeEvent.id)
+          localStorage.setItem('ec_event_id', activeEvent.id)
+          setEventName(activeEvent.name)
+        } else {
+          setEventIdState(null)
+          localStorage.removeItem('ec_event_id')
+          setEventName('')
+        }
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete event')
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ── Data loaders ───────────────────────────────────────────────────────────
   const loadApprovals = useCallback(async () => {
     if (!eventId) return
@@ -308,7 +342,7 @@ const logout = () => {
       user, isAuthenticated: !!user, authChecked,
       login, logout,
       eventId, setEventId, eventName,
-      eventsList, loadEventsList,
+      eventsList, loadEventsList, deleteEvent,
       approvals, loadApprovals, resolveApproval, addApproval,
       dashboardStats, loadDashboard,
       activityLog, loadActivityLog,
