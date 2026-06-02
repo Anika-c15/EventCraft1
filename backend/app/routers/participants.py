@@ -2,7 +2,7 @@ import io
 import csv
 from typing import List, Optional
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
 # pyrefly: ignore [missing-import]
@@ -15,7 +15,6 @@ from ..auth import require_committee, create_portal_token, decode_portal_token
 from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData, TeamSubmissionUpdate, TeamOut
 from .. import models
 from .. import llm
-from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/participants", tags=["participants"])
 
@@ -490,9 +489,7 @@ def extract_text_from_txt(file_bytes: bytes) -> str:
 
 
 @router.post("/parse-resume")
-@limiter.limit("5/minute")
 async def parse_resume(
-    request: Request,
     event_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),

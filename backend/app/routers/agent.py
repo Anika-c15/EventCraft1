@@ -8,7 +8,7 @@ When the agent has enough info, it:
 """
 from typing import List
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -16,7 +16,6 @@ from ..database import get_db
 from ..auth import require_committee
 from ..schemas import AgentMessageIn, AgentMessageOut, AgentChatResponse
 from .. import models, llm
-from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/agent", tags=["agent"])
 
@@ -36,9 +35,7 @@ def get_history(
 
 
 @router.post("/chat", response_model=AgentChatResponse)
-@limiter.limit("10/minute")
 def chat(
-    request: Request,
     event_id: str,
     payload: AgentMessageIn,
     db: Session = Depends(get_db),

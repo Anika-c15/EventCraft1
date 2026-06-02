@@ -82,10 +82,10 @@ const confirmLogout = () => {
             to={path}
             end={exact}
             className={({ isActive }) =>
-              `flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer group ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer group ${
                 isActive
-                  ? 'bg-orange-50 text-primary dark:bg-orange-950/20 dark:text-primary-400 border-l-2 border-primary pl-[10px] pr-3 rounded-l-none'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 px-3'
+                  ? 'bg-orange-50 text-primary dark:bg-orange-950/20 dark:text-primary-400'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
               }`
             }
             title={collapsed ? label : undefined}
