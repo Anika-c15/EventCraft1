@@ -93,32 +93,13 @@ def create_event(
 
 @router.get("", response_model=List[EventOut])
 def list_events(
-    request: Request,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
 ):
-    # Extract token from Authorization header if present
-    auth_header = request.headers.get("Authorization")
-    user = None
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ")[1]
-        try:
-            from jose import jwt
-            from ..config import settings
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
-                user = db.query(models.User).filter(models.User.id == user_id).first()
-        except Exception:
-            pass
-
-    if user:
-        if user.role == models.UserRole.admin:
-            return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
-        # Return events owned by this user
-        return db.query(models.Event).filter(models.Event.owner_id == user.id).order_by(models.Event.created_at.desc()).all()
-
-    # Anonymous/Public: return only active events
-    return db.query(models.Event).filter(models.Event.is_active == True).order_by(models.Event.created_at.desc()).all()
+    if current_user.role == models.UserRole.admin:
+        return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
+    
+    return db.query(models.Event).filter(models.Event.owner_id == current_user.id).order_by(models.Event.created_at.desc()).all()
 
 
 @router.get("/public/demo-portal")

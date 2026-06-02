@@ -23,6 +23,7 @@ interface AppContextType {
   eventsList: any[]
   loadEventsList: () => Promise<any[]>
   deleteEvent: (id: string) => Promise<void>
+  createEvent: (name: string, description?: string) => Promise<any>
 
   approvals: any[]
   loadApprovals: () => Promise<void>
@@ -173,10 +174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const events = await eventsApi.list()
       setEventsList(events)
       if (events.length > 0) {
-        let activeEvent = null
-        if (userData.role === 'admin') {
-          activeEvent = events.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
-        }
+        let activeEvent = events.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
         if (!activeEvent) {
           const savedId = localStorage.getItem('ec_event_id')
           activeEvent = events.find((e: any) => e.id === savedId) || events[0]
@@ -246,6 +244,24 @@ const logout = () => {
     }
   }
 
+  const createEvent = async (name: string, description?: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const newEvent = await eventsApi.create(name, description)
+      await loadEventsList()
+      setEventIdState(newEvent.id)
+      localStorage.setItem('ec_event_id', newEvent.id)
+      setEventName(newEvent.name)
+      return newEvent
+    } catch (e: any) {
+      setError(e.message || 'Failed to create event')
+      throw e
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ── Data loaders ───────────────────────────────────────────────────────────
   const loadApprovals = useCallback(async () => {
     if (!eventId) return
@@ -309,9 +325,7 @@ const logout = () => {
           const currentId = localStorage.getItem('ec_event_id')
           let activeEvent = list.find((e: any) => e.id === currentId)
           if (!activeEvent) {
-            if (user.role === 'admin') {
-              activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
-            }
+            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
             if (!activeEvent) {
               activeEvent = list[0]
             }
@@ -342,7 +356,7 @@ const logout = () => {
       user, isAuthenticated: !!user, authChecked,
       login, logout,
       eventId, setEventId, eventName,
-      eventsList, loadEventsList, deleteEvent,
+      eventsList, loadEventsList, deleteEvent, createEvent,
       approvals, loadApprovals, resolveApproval, addApproval,
       dashboardStats, loadDashboard,
       activityLog, loadActivityLog,

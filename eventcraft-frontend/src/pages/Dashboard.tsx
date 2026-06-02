@@ -59,6 +59,7 @@ const typeVariant = (type: string) => {
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const {
+    eventId, createEvent,
     approvals, loadApprovals, resolveApproval,
     dashboardStats, loadDashboard,
     activityLog, loadActivityLog,
@@ -69,7 +70,20 @@ export const Dashboard: React.FC = () => {
   const [statsLoading, setStatsLoading] = useState(true)
   const [approvalsLoading, setApprovalsLoading] = useState(true)
 
+  // Form states for creating a new event when none are active
+  const [newEventName, setNewEventName] = useState('')
+  const [newEventDesc, setNewEventDesc] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
   useEffect(() => {
+    if (!eventId) {
+      setStatsLoading(false)
+      setApprovalsLoading(false)
+      return
+    }
+    setStatsLoading(true)
+    setApprovalsLoading(true)
     Promise.all([
       loadDashboard(),
       loadApprovals(),
@@ -78,7 +92,21 @@ export const Dashboard: React.FC = () => {
       setStatsLoading(false)
       setApprovalsLoading(false)
     })
-  }, [])
+  }, [eventId])
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newEventName.trim()) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await createEvent(newEventName.trim(), newEventDesc.trim())
+    } catch (err: any) {
+      setCreateError(err.message || 'Failed to create event space')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   // Show banner when new approval arrives via WebSocket
   useEffect(() => {
@@ -111,6 +139,71 @@ export const Dashboard: React.FC = () => {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
+
+  if (!eventId) {
+    return (
+      <div className="max-w-md mx-auto my-12">
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 bg-orange-50 dark:bg-orange-950/30 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-orange-100 dark:border-orange-900/30">
+              <Bell size={24} className="text-primary" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Create an Event Space</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+              You do not currently own any active event spaces. Please name your event to create a brand new space.
+            </p>
+          </div>
+
+          <form onSubmit={handleCreateEvent} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+                Event Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                placeholder="e.g., EventCraft Hackathon 2026"
+                className="w-full border border-gray-200 dark:border-slate-850 rounded-xl px-3.5 py-2.5 text-sm bg-white dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-white placeholder-gray-400 transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
+                Description <span className="font-normal text-gray-400 dark:text-slate-600">(optional)</span>
+              </label>
+              <textarea
+                value={newEventDesc}
+                onChange={(e) => setNewEventDesc(e.target.value)}
+                placeholder="Brief description of the event format..."
+                rows={3}
+                className="w-full border border-gray-200 dark:border-slate-850 rounded-xl px-3.5 py-2.5 text-sm bg-white dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-white placeholder-gray-400 transition-all resize-none"
+              />
+            </div>
+
+            {createError && (
+              <p className="text-xs font-medium text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-3 py-2 rounded-lg border border-red-100 dark:border-red-900/30">
+                ⚠️ {createError}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full justify-center py-2.5 rounded-xl text-sm font-bold shadow-md shadow-orange-500/10 hover:shadow-orange-500/20 active:translate-y-0.5 transition-all"
+              disabled={creating || !newEventName.trim()}
+            >
+              {creating ? 'Creating Event...' : 'Create Event Space'}
+            </Button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
