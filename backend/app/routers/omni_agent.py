@@ -1,6 +1,6 @@
 import json
 import re
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from typing import List, Optional, Dict, Any
@@ -11,6 +11,7 @@ from ..database import get_db
 from ..config import settings
 from .. import models, llm
 from ..team_formation import form_teams as _form_teams
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/omni-agent", tags=["omni-agent"])
 
@@ -460,7 +461,9 @@ def get_omni_history(
     )
 
 @router.post("/chat", response_model=OmniChatResponse)
+@limiter.limit("10/minute")
 def chat_omni(
+    request: Request,
     event_id: str,
     payload: OmniMessageIn,
     db: Session = Depends(get_db),

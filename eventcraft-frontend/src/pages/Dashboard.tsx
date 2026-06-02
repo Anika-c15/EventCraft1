@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
+import { StatCardSkeleton, CardItemSkeleton } from '../components/ui/Skeleton'
 import { useAppContext } from '../context/AppContext'
 
 const formatDate = (iso: string) => {
@@ -65,11 +66,18 @@ export const Dashboard: React.FC = () => {
   } = useAppContext()
 
   const [approvalBanner, setApprovalBanner] = useState<string | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [approvalsLoading, setApprovalsLoading] = useState(true)
 
   useEffect(() => {
-    loadDashboard()
-    loadApprovals()
-    loadActivityLog()
+    Promise.all([
+      loadDashboard(),
+      loadApprovals(),
+      loadActivityLog(),
+    ]).finally(() => {
+      setStatsLoading(false)
+      setApprovalsLoading(false)
+    })
   }, [])
 
   // Show banner when new approval arrives via WebSocket
@@ -144,6 +152,16 @@ export const Dashboard: React.FC = () => {
 
       {/* ── Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {statsLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+
         {/* Participants */}
         <div
           className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-slate-800 cursor-pointer hover:border-blue-200 dark:hover:border-blue-800 transition-colors"
@@ -225,6 +243,8 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── Bottom Section ── */}
@@ -247,7 +267,9 @@ export const Dashboard: React.FC = () => {
             </div>
           </CardHeader>
           <div className="space-y-3">
-            {pendingApprovals.length === 0 ? (
+            {approvalsLoading ? (
+              <CardItemSkeleton count={2} />
+            ) : pendingApprovals.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
                 <CheckCircle size={28} className="text-green-400 mb-2" />
                 <p className="text-sm text-gray-400 dark:text-slate-500">No pending approvals</p>

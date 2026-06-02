@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { teamsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
 
 const teamColors = [
   { bg: 'bg-blue-50', border: 'border-blue-100', dot: 'bg-blue-500' },
@@ -16,6 +17,8 @@ const teamColors = [
 
 export const Teams: React.FC = () => {
   const { eventId, loadApprovals, loadDashboard, approvals, dashboardStats } = useAppContext()
+  const toast = useToast()
+  const confirm = useConfirm()
   const navigate = useNavigate()
   const [teams, setTeams] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -52,21 +55,30 @@ export const Teams: React.FC = () => {
       await loadTeams()
       await loadApprovals()
       await loadDashboard()
+      toast.success('Teams formed with AI successfully!')
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setForming(false)
     }
   }
 
   const handleClear = async () => {
-    if (!eventId || !confirm('Clear all teams and re-form?')) return
+    if (!eventId) return
+    const confirmed = await confirm({
+      title: 'Clear Teams',
+      message: 'Are you sure you want to clear all teams? Any currently generated team compositions will be removed.',
+      confirmText: 'Clear Teams',
+      type: 'danger'
+    })
+    if (!confirmed) return
     try {
       await teamsApi.clear(eventId)
       setTeams([])
       await loadDashboard()
+      toast.success('Teams cleared successfully')
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     }
   }
   return (

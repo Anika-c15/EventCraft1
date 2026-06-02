@@ -8,7 +8,7 @@ Two access modes:
 """
 from typing import List, Optional
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -18,6 +18,7 @@ from ..schemas import ScoreSubmit, EvaluationScoreOut, PublicVoteInput, LockScor
 from ..config import settings
 from .. import models, llm
 from ..ws import broadcast
+from ..rate_limit import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/evaluations", tags=["evaluations"])
 
@@ -159,7 +160,9 @@ def list_scores(
 
 
 @router.post("", response_model=EvaluationScoreOut)
+@limiter.limit("10/minute")
 async def submit_score_committee(
+    request: Request,
     event_id: str,
     payload: ScoreSubmit,
     background_tasks: BackgroundTasks,
@@ -223,7 +226,9 @@ def consolidate_scores(
 
 
 @router.get("/assessment-guide/{team_id}")
+@limiter.limit("10/minute")
 def get_assessment_guide(
+    request: Request,
     event_id: str,
     team_id: str,
     db: Session = Depends(get_db),
@@ -255,7 +260,9 @@ class JudgeInviteRequest(BaseModel):
 
 
 @router.post("/invite-judge")
+@limiter.limit("10/minute")
 async def invite_judge(
+    request: Request,
     event_id: str,
     payload: JudgeInviteRequest,
     db: Session = Depends(get_db),
@@ -410,7 +417,9 @@ def get_judge_portal(
 
 
 @router.post("/judge-submit")
+@limiter.limit("10/minute")
 async def judge_submit_score(
+    request: Request,
     event_id: str,
     payload: ScoreSubmit,
     background_tasks: BackgroundTasks,
@@ -540,7 +549,9 @@ def update_public_vote(
 
 
 @router.get("/bias-mitigation")
+@limiter.limit("10/minute")
 def get_bias_mitigation(
+    request: Request,
     event_id: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),

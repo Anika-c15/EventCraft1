@@ -2,6 +2,7 @@ import React, { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AppProvider, useAppContext } from './context/AppContext'
+import { ToastAndConfirmProvider } from './context/ToastAndConfirmContext'
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })))
@@ -49,41 +50,43 @@ const PageLoader: React.FC = () => (
 const App: React.FC = () => {
   return (
     <AppProvider>
-      <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/portal/:id" element={<ParticipantPortal />} />
-            <Route path="/judge/:eventId" element={<JudgePortal />} />
-            <Route path="/subscribe" element={<Subscribe />} />
-            <Route path="/unsubscribe" element={<Unsubscribe />} />
-            <Route path="/live-leaderboard" element={<LiveLeaderboard />} />
-            <Route path="/candidate" element={<CandidatePortal />} />
+      <ToastAndConfirmProvider>
+        <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/portal/:id" element={<ParticipantPortal />} />
+              <Route path="/judge/:eventId" element={<JudgePortal />} />
+              <Route path="/subscribe" element={<Subscribe />} />
+              <Route path="/unsubscribe" element={<Unsubscribe />} />
+              <Route path="/live-leaderboard" element={<LiveLeaderboard />} />
+              <Route path="/candidate" element={<CandidatePortal />} />
 
-            {/* Protected routes with sidebar */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/participants" element={<Participants />} />
-              <Route path="/teams" element={<Teams />} />
-              <Route path="/evaluations" element={<Evaluations />} />
-              <Route path="/communications" element={<Communications />} />
-              <Route path="/pipeline" element={<Pipeline />} />
-              <Route path="/approvals" element={<Approvals />} />
-              <Route path="/formation-rules" element={<FormationRules />} />
-              <Route path="/agent" element={<Agent />} />
-              <Route path="/subscribers" element={<Subscribers />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
+              {/* Protected routes with sidebar */}
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/participants" element={<Participants />} />
+                <Route path="/teams" element={<Teams />} />
+                <Route path="/evaluations" element={<Evaluations />} />
+                <Route path="/communications" element={<Communications />} />
+                <Route path="/pipeline" element={<Pipeline />} />
+                <Route path="/approvals" element={<Approvals />} />
+                <Route path="/formation-rules" element={<FormationRules />} />
+                <Route path="/agent" element={<Agent />} />
+                <Route path="/subscribers" element={<Subscribers />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ToastAndConfirmProvider>
     </AppProvider>
   )
 }

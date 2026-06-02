@@ -15,6 +15,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 import { OmniAgentSidebar } from '../components/OmniAgentSidebar'
 
 
@@ -29,6 +30,7 @@ const CRITERIA_DESCRIPTIONS: Record<string, string> = {
 
 export const JudgePortal: React.FC = () => {
   const { theme, toggleTheme } = useAppContext()
+  const toast = useToast()
   const { eventId } = useParams<{ eventId: string }>()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token') || ''
@@ -97,10 +99,11 @@ export const JudgePortal: React.FC = () => {
         const err = await res.json()
         throw new Error(err.detail || 'Submission failed')
       }
+      toast.success(`Score submitted successfully for team ${scoringTeam.name}!`)
       setSubmitted((prev) => [...prev, scoringTeam.id])
       setScoringTeam(null)
     } catch (e: any) {
-      alert(e.message)
+      toast.error(e.message)
     } finally {
       setSubmitting(false)
     }
