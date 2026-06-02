@@ -112,8 +112,10 @@ def list_events(
             pass
 
     if user:
-        # All authenticated users see all events
-        return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
+        if user.role == models.UserRole.admin:
+            return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
+        # Return events owned by this user
+        return db.query(models.Event).filter(models.Event.owner_id == user.id).order_by(models.Event.created_at.desc()).all()
 
     # Anonymous/Public: return only active events
     return db.query(models.Event).filter(models.Event.is_active == True).order_by(models.Event.created_at.desc()).all()

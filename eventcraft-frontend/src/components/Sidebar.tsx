@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
   Shield, Settings, ChevronLeft, ChevronRight, Bot, LogOut,
-  Bell, Sun, Moon, Trophy,
+  Bell, Sun, Moon, Trophy, ChevronsUpDown,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import logoImage from '../assets/logo.png'
@@ -25,7 +25,18 @@ const navItems = [
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false) 
-  const { user, logout, wsConnected, theme, toggleTheme, dashboardStats } = useAppContext()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const { 
+    user, 
+    logout, 
+    wsConnected, 
+    theme, 
+    toggleTheme, 
+    dashboardStats, 
+    eventsList, 
+    eventId, 
+    setEventId 
+  } = useAppContext()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -73,6 +84,81 @@ const confirmLogout = () => {
           </div>
         )}
       </div>
+
+      {/* Event Switcher */}
+      {user && eventsList.length > 0 && (
+        <div className="px-3 py-2.5 border-b border-gray-100 dark:border-slate-800 relative">
+          {collapsed ? (
+            <div className="flex justify-center py-1">
+              <button
+                onClick={() => setCollapsed(false)}
+                className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/20 text-primary dark:text-primary-400 flex items-center justify-center font-bold text-sm shadow-sm border border-orange-100/50 dark:border-orange-900/30 hover:scale-105 active:scale-95 transition-all duration-200"
+                title={`Active Event: ${eventsList.find((e: any) => e.id === eventId)?.name || 'EventCraft'}`}
+              >
+                {eventsList.find((e: any) => e.id === eventId)?.name?.charAt(0) || 'E'}
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100/80 dark:bg-slate-950/40 dark:hover:bg-slate-800/40 border border-gray-100 dark:border-slate-800/60 transition-all duration-200 group text-left cursor-pointer"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider leading-none mb-1">
+                    Current Event
+                  </span>
+                  <span className="block text-xs font-bold text-gray-800 dark:text-slate-200 truncate group-hover:text-primary dark:group-hover:text-primary-400 transition-colors leading-tight">
+                    {eventsList.find((e: any) => e.id === eventId)?.name || 'Select Event'}
+                  </span>
+                </div>
+                <ChevronsUpDown size={14} className="text-gray-400 group-hover:text-gray-600 dark:text-slate-500 dark:group-hover:text-slate-350 transition-colors flex-shrink-0" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {dropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setDropdownOpen(false)}
+                  />
+                  <div className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3 py-1 border-b border-gray-50 dark:border-slate-800/50 mb-1">
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                        Switch Event
+                      </span>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      {eventsList.map((e: any) => {
+                        const isSelected = e.id === eventId
+                        return (
+                          <button
+                            key={e.id}
+                            onClick={() => {
+                              setEventId(e.id)
+                              setDropdownOpen(false)
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs font-semibold flex items-center justify-between transition-colors duration-150 cursor-pointer ${
+                              isSelected
+                                ? 'bg-orange-50/80 text-primary dark:bg-orange-950/20 dark:text-primary-400'
+                                : 'text-gray-600 hover:bg-gray-50 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            <span className="truncate pr-2">{e.name}</span>
+                            {isSelected && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary dark:bg-primary-400 flex-shrink-0" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-0.5">

@@ -20,6 +20,9 @@ interface AppContextType {
   setEventId: (id: string) => void
   eventName: string
 
+  eventsList: any[]
+  loadEventsList: () => Promise<any[]>
+
   approvals: any[]
   loadApprovals: () => Promise<void>
   resolveApproval: (id: string, status: 'approved' | 'rejected') => Promise<void>
@@ -48,6 +51,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [user, setUser]               = useState<AuthUser | null>(null)
   const [authChecked, setAuthChecked] = useState(false)   // ← key fix
   const [eventId, setEventIdState]    = useState<string | null>(localStorage.getItem('ec_event_id'))
+  const [eventsList, setEventsList]   = useState<any[]>([])
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('ec_theme')
     if (saved) return saved as 'light' | 'dark'
@@ -143,6 +147,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [eventId])
 
+  const loadEventsList = useCallback(async () => {
+    if (!localStorage.getItem('ec_token')) return []
+    try {
+      const list = await eventsApi.list()
+      setEventsList(list)
+      return list
+    } catch (e: any) {
+      setError(e.message || 'Failed to load events list')
+      return []
+    }
+  }, [])
+
   // ── Auth helpers ───────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
     setLoading(true)
@@ -150,14 +166,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await authApi.login(email, password)
       localStorage.setItem('ec_token', res.access_token)
-      setUser({ id: res.user_id, email, name: res.name, role: res.role })
+      const userData = { id: res.user_id, email, name: res.name, role: res.role }
+      setUser(userData)
 
       const events = await eventsApi.list()
+      setEventsList(events)
       if (events.length > 0) {
-        const ev = events[0]
-        setEventIdState(ev.id)
-        localStorage.setItem('ec_event_id', ev.id)
-        setEventName(ev.name)
+        let activeEvent = null
+        if (userData.role === 'admin') {
+          activeEvent = events.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+        }
+        if (!activeEvent) {
+          const savedId = localStorage.getItem('ec_event_id')
+          activeEvent = events.find((e: any) => e.id === savedId) || events[0]
+        }
+        setEventIdState(activeEvent.id)
+        localStorage.setItem('ec_event_id', activeEvent.id)
+        setEventName(activeEvent.name)
+      } else {
+        setEventIdState(null)
+        localStorage.removeItem('ec_event_id')
+        setEventName('')
       }
     } catch (e: any) {
       setError(e.message || 'Login failed')
@@ -172,6 +201,7 @@ const logout = () => {
   localStorage.removeItem('ec_event_id')
   setUser(null)
   setEventIdState(null)
+  setEventsList([])
   setApprovals([])
   setDashboardStats(null)
   window.location.href = '/'
@@ -237,20 +267,48 @@ const logout = () => {
     catch (e: any) { setError(e.message) }
   }, [eventId])
 
-  // Auto-load when both user and eventId are available
+  // Auto-load when user is available (checks and updates eventsList)
+  useEffect(() => {
+    if (user) {
+      loadEventsList().then((list) => {
+        if (list && list.length > 0) {
+          const currentId = localStorage.getItem('ec_event_id')
+          let activeEvent = list.find((e: any) => e.id === currentId)
+          if (!activeEvent) {
+            if (user.role === 'admin') {
+              activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+            }
+            if (!activeEvent) {
+              activeEvent = list[0]
+            }
+            localStorage.setItem('ec_event_id', activeEvent.id)
+          }
+          setEventIdState(activeEvent.id)
+          setEventName(activeEvent.name)
+        } else {
+          setEventIdState(null)
+          localStorage.removeItem('ec_event_id')
+          setEventName('')
+        }
+      })
+    }
+  }, [user, loadEventsList])
+
+  // Auto-load details when both user and eventId are available
   useEffect(() => {
     if (eventId && user) {
       loadApprovals()
       loadDashboard()
       loadActivityLog()
     }
-  }, [eventId, user]) // eslint-disable-line
+  }, [eventId, user, loadApprovals, loadDashboard, loadActivityLog])
 
   return (
     <AppContext.Provider value={{
       user, isAuthenticated: !!user, authChecked,
       login, logout,
       eventId, setEventId, eventName,
+      eventsList, loadEventsList,
       approvals, loadApprovals, resolveApproval, addApproval,
       dashboardStats, loadDashboard,
       activityLog, loadActivityLog,
