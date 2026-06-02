@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
+import logoImage from '../assets/logo.png'
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const LandingPage: React.FC = () => {
@@ -234,8 +235,12 @@ const handleRegister = async (e: React.FormEvent) => {
       }`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-              <span className="text-white font-extrabold text-base tracking-tight">EC</span>
+          <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
+              <img 
+                src={logoImage} 
+                alt="EventCraft Logo" 
+                className="w-full h-full object-contain drop-shadow-md transition-transform hover:scale-[1.8] duration-300 scale-[1.7]" 
+              />
             </div>
             <div>
               <div className={`text-base font-black leading-none ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>EventCraft</div>

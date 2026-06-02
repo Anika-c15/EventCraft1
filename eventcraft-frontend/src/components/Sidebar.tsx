@@ -6,6 +6,8 @@ import {
   Bell, Sun, Moon, Trophy,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
+import logoImage from '../assets/logo.png'
+
 
 const navItems = [
   { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard, exact: true },
@@ -47,16 +49,25 @@ const confirmLogout = () => {
       } h-screen sticky top-0 flex-shrink-0`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100 dark:border-slate-800">
-        <div className="flex-shrink-0 w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm tracking-tight">EC</span>
+   {/* Logo Section */}
+      <div className="flex items-center gap-4 px-3 py-3 border-b border-gray-100 dark:border-slate-800">
+        
+        {/* Shrunk the container even further to w-8 h-8 */}
+        <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center">
+          <img 
+            src={logoImage} 
+            alt="EventCraft Logo" 
+            // Bumped scale to 1.7 so the logo stays the exact same visual size 
+            className="w-full h-full object-contain drop-shadow-md transition-transform hover:scale-[1.8] duration-300 scale-[1.7]" 
+          />
         </div>
+
         {!collapsed && (
-          <div className="overflow-hidden">
-            <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight whitespace-nowrap">
+          <div className="overflow-hidden py-1">
+            <div className="text-base font-bold text-gray-900 dark:text-white leading-tight whitespace-nowrap">
               EventCraft
             </div>
-            <div className="text-[10px] font-medium text-gray-400 dark:text-slate-500 uppercase tracking-widest whitespace-nowrap">
+            <div className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em] whitespace-nowrap mt-0.5">
               Orchestration System
             </div>
           </div>
