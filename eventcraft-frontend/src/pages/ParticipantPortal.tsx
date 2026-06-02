@@ -366,8 +366,9 @@ export const ParticipantPortal: React.FC = () => {
           <div className="space-y-4">
             {/* EventCraft logo block */}
             <div className="flex items-center gap-2.5 px-1 py-1">
-              <div className="w-8 h-8 bg-gradient-to-tr from-[#E8450A] to-orange-400 rounded-lg flex items-center justify-center shadow-sm">
-                <span className="text-white font-extrabold text-sm">EC</span>
+             
+              <div className="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden">
+                <img src="/src/assets/logo.png" alt="EventCraft" className="w-full h-full object-cover" />
               </div>
               <div>
                 <div className="text-xs font-black text-gray-900 dark:text-white tracking-wider">EventCraft</div>

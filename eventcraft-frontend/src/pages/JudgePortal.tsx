@@ -147,10 +147,10 @@ export const JudgePortal: React.FC = () => {
       {/* Header */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-6 py-4 transition-colors duration-200">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xs">EC</span>
-            </div>
+          <div className="flex items-center gap-2">
+           <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden">
+              <img src="/src/assets/logo.png" alt="EventCraft" className="w-full h-full object-cover" />
+           </div>
             <div>
               <div className="text-sm font-bold text-gray-900 dark:text-white">EventCraft</div>
               <div className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-bold">Judge Portal</div>

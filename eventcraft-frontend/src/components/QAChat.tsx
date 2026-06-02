@@ -106,10 +106,12 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
     }
   }
 
-  const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString('en-US', {
-      hour: 'numeric', minute: '2-digit', hour12: true
-    })
+  const formatTime = (iso: string) => {
+  const date = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true
+  })
+}
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col h-96 relative">
