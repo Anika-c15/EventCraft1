@@ -314,6 +314,17 @@ def rename_team(
     if team.name_locked:
         raise HTTPException(400, "Your team name has already been set and cannot be changed again.")
 
+    # Reject rename if event has moved past Team Formation phase
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == team.event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    if active_stage:
+        stage_lower = active_stage.name.lower()
+        is_team_formation = 'team' in stage_lower or 'formation' in stage_lower
+        if not is_team_formation:
+            raise HTTPException(400, "Team renaming is only allowed during the Team Formation phase.")
+
     # Check name not already taken in this event
     existing = db.query(models.Team).filter(
         models.Team.event_id == team.event_id,

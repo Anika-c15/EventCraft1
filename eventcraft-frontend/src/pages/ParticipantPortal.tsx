@@ -354,6 +354,12 @@ export const ParticipantPortal: React.FC = () => {
   const isPhase2 = !isPhase3 && (scoring_phase_active ?? false)
   const isPhase1 = !isPhase2 && !isPhase3
 
+  // Rename window: open only during Team Formation stage, locked from Evaluation onwards
+  const currentStageLower = (current_stage || '').toLowerCase()
+  const isTeamFormationPhase = currentStageLower.includes('team') || currentStageLower.includes('formation')
+  const isEvalOrLater = isPhase2 || isPhase3 || currentStageLower.includes('eval') || currentStageLower.includes('result') || currentStageLower.includes('progression')
+  const canRenameTeam = isTeamFormationPhase && !isEvalOrLater
+
   const teammates = (team?.members || []).filter((m: any) => m.id !== participant.id)
   const votedCount = showroom.filter(t => t.my_vote !== null && t.my_vote !== undefined).length
   const isClosed = isPhase3
@@ -678,8 +684,8 @@ export const ParticipantPortal: React.FC = () => {
                           <Badge variant="yellow">{team.status}</Badge>
                         </div>
 
-                        {/* ── Name Your Team (one-time) ── */}
-                        {!team.name_locked && !isPhase2 && !isPhase3 && (
+                        {/* ── Name Your Team (one-time, only during Team Formation) ── */}
+                        {!team.name_locked && canRenameTeam && (
                           <div className="mb-4">
                             {renameSuccess ? (
                               <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
