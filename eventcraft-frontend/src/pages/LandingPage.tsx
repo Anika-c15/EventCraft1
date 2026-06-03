@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -9,8 +9,6 @@ import {
   Sparkles,
   Link as LinkIcon,
   AlertCircle,
-  Sun,
-  Moon,
   Mail,
   Lock,
   Building,
@@ -19,14 +17,167 @@ import {
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
-import logoImage from '../assets/logo.png'
+import { Header } from '../components/Header'
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+interface JourneyStep {
+  phase: string
+  title: string
+  shortLabel: string
+  subtitle: string
+  description: string
+  icon: any
+  actions: string[]
+}
+
+const JOURNEY_DATA: Record<'participant' | 'judge' | 'organizer', JourneyStep[]> = {
+  participant: [
+    {
+      phase: "01",
+      title: "Secure Onboarding",
+      shortLabel: "Onboarding",
+      subtitle: "Passwordless magic link login",
+      description: "Log in securely via a one-click magic link sent to your registered email. No password needed.",
+      icon: Mail,
+      actions: ["Enter registered email", "Retrieve magic link", "One-click secure portal access"]
+    },
+    {
+      phase: "02",
+      title: "Smart Team Formation",
+      shortLabel: "Team Matching",
+      subtitle: "AI matching engine coordination",
+      description: "AI groups you into balanced teams based on skills and experience. View your teammates instantly.",
+      icon: Users,
+      actions: ["Inspect assigned teammates", "Check dynamic matchmaking logs", "View collective team skill tags"]
+    },
+    {
+      phase: "03",
+      title: "Hacking & Submission",
+      shortLabel: "Submission",
+      subtitle: "Workspace details & dynamic deliverables",
+      description: "Submit repository links and demo videos in the Submission Hub before the deadline.",
+      icon: Zap,
+      actions: ["Submit repository & link details", "Modify deliverables before deadline", "Track live timeline progression"]
+    },
+    {
+      phase: "04",
+      title: "Peer Evaluation",
+      shortLabel: "Peer Review",
+      subtitle: "Dynamic project showroom",
+      description: "Explore other submissions and cast peer votes using the interactive scoring panel.",
+      icon: Shield,
+      actions: ["Browse submitted projects showroom", "Cast peer scoring parameters", "Ensure consensus evaluation alignment"]
+    },
+    {
+      phase: "05",
+      title: "Leaderboard & Results",
+      shortLabel: "Live Board",
+      subtitle: "Real-time consensus scoring",
+      description: "Track real-time rankings and see final results once scores are locked.",
+      icon: Sparkles,
+      actions: ["Track live consensus leaderboard", "View certificate declarations", "Celebrate event outcomes"]
+    }
+  ],
+  judge: [
+    {
+      phase: "01",
+      title: "Invitation Intake",
+      shortLabel: "Invitation",
+      subtitle: "Secure registration link",
+      description: "Receive a secure invite to join the review panel and access your dashboard.",
+      icon: Mail,
+      actions: ["Receive email invitation", "Open judge portal dashboard", "Confirm evaluation capacity"]
+    },
+    {
+      phase: "02",
+      title: "Secure Panel Entry",
+      shortLabel: "Portal Access",
+      subtitle: "Dedicated reviewer interface",
+      description: "Access the reviewer console to view assigned teams and review instructions.",
+      icon: Shield,
+      actions: ["Click secure reviewer magic link", "Access team evaluation list", "Read judging overview instructions"]
+    },
+    {
+      phase: "03",
+      title: "AI Rubric Guidance",
+      shortLabel: "AI Rubrics",
+      subtitle: "Dynamic team-specific instructions",
+      description: "Get personalized AI guidelines tailored to each team's project description and tech stack.",
+      icon: Cpu,
+      actions: ["Open team scoring modal", "Read custom AI scoring prompt guidelines", "Consult standardized grading scale"]
+    },
+    {
+      phase: "04",
+      title: "Interactive Evaluation",
+      shortLabel: "Scoring",
+      subtitle: "Continuous slider scoring",
+      description: "Grade projects and leave feedback to update rankings in real time.",
+      icon: Sparkles,
+      actions: ["Adjust scoring parameters on sliders", "Provide qualitative comments", "Submit secure evaluations to consensus pool"]
+    },
+    {
+      phase: "05",
+      title: "Consensus Locking",
+      shortLabel: "Sign-off",
+      subtitle: "Finalizing peer & judge results",
+      description: "Submit your final evaluation batch to lock consolidated rankings.",
+      icon: Lock,
+      actions: ["Mark evaluation batch as completed", "Review final aggregated scores", "Sign-off on rankings"]
+    }
+  ],
+  organizer: [
+    {
+      phase: "01",
+      title: "Roster Setup & Import",
+      shortLabel: "Roster Intake",
+      subtitle: "Intake synchronization",
+      description: "Import participants via CSV and auto-generate passwordless dashboard links.",
+      icon: Building,
+      actions: ["Upload roster CSV in admin console", "Configure custom pipeline stages", "Broadcast passwordless portal invites"]
+    },
+    {
+      phase: "02",
+      title: "AI Matchmaking Engine",
+      shortLabel: "Team Formation",
+      subtitle: "Explainable multi-factor grouping",
+      description: "Run the AI matching engine with custom rules to form balanced teams automatically.",
+      icon: Users,
+      actions: ["Adjust diversity matching rules", "Execute AI matchmaking algorithms", "Review and adjust formed teams manually"]
+    },
+    {
+      phase: "03",
+      title: "AI Assessment Setup",
+      shortLabel: "Assessment",
+      subtitle: "Dynamic rubric compilation",
+      description: "Let the AI agent auto-compile customized evaluation guides for each team.",
+      icon: Cpu,
+      actions: ["Analyze team deliverables using AI", "Auto-compile specific rubric sheets", "Preview custom judge criteria guidelines"]
+    },
+    {
+      phase: "04",
+      title: "Bias Mitigation Panel",
+      shortLabel: "Bias Check",
+      subtitle: "Real-time score anomaly flagger",
+      description: "Monitor live scoring; the system automatically flags judge score divergences.",
+      icon: AlertCircle,
+      actions: ["Monitor live evaluations feed", "Inspect flagged score divergences", "Initiate judge consensus review"]
+    },
+    {
+      phase: "05",
+      title: "Leaderboard & Publishing",
+      shortLabel: "Reveal",
+      subtitle: "Linear ranking reveal",
+      description: "Lock rankings, publish the live leaderboard, and distribute certificates.",
+      icon: Zap,
+      actions: ["Validate and lock composite scoring", "Publish final rankings to live board", "Export event results analytics"]
+    }
+  ]
+}
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate()
   const context = useAppContext()
   const theme = context?.theme || 'light'
-  const toggleTheme = context?.toggleTheme || (() => {})
   const { login } = useAppContext()
 
   const [portalInput, setPortalInput] = useState('')
@@ -42,39 +193,66 @@ export const LandingPage: React.FC = () => {
   const [formError, setFormError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [activeRole, setActiveRole] = useState<'participant' | 'judge' | 'organizer'>('organizer')
+  const [activeStepIndex, setActiveStepIndex] = useState(0)
+  const [activeSection, setActiveSection] = useState<'features' | 'journey' | 'portal-access' | null>(null)
 
-  
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollPosition = window.scrollY + 160 // offset for fixed header
 
- const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setFormError('')
-  if (!email || !password) { setFormError('Please fill in all fields.'); return }
-  try {
-    await login(email, password)
-    navigate('/dashboard')
-  } catch (err: any) {
-    setFormError(err.message || 'Login failed')
+      const featuresEl = document.getElementById('features')
+      const journeyEl = document.getElementById('journey')
+      const portalEl = document.getElementById('portal-access')
+
+      if (featuresEl && scrollPosition >= featuresEl.offsetTop) {
+        setActiveSection('features')
+      } else if (journeyEl && scrollPosition >= journeyEl.offsetTop) {
+        setActiveSection('journey')
+      } else if (portalEl && scrollPosition >= portalEl.offsetTop) {
+        setActiveSection('portal-access')
+      } else {
+        setActiveSection(null)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    handleScroll() // run once initially
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!email || !password) { setFormError('Please fill in all fields.'); return }
+    try {
+      await login(email, password)
+      navigate('/dashboard')
+    } catch (err: any) {
+      setFormError(err.message || 'Login failed')
+    }
   }
-}
-const handleRegister = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setFormError('')
-  if (!email || !password || !orgName) { setFormError('Please fill in all fields.'); return }
-  if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
-  try {
-    const res = await fetch(`${BASE_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name: orgName, org_name: orgName }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setFormError(data.detail || 'Registration failed'); return }
-    await login(email, password)
-    navigate('/dashboard')
-  } catch (err: any) {
-    setFormError(err.message || 'Registration failed')
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!email || !password || !orgName) { setFormError('Please fill in all fields.'); return }
+    if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name: orgName, org_name: orgName }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setFormError(data.detail || 'Registration failed'); return }
+      await login(email, password)
+      navigate('/dashboard')
+    } catch (err: any) {
+      setFormError(err.message || 'Registration failed')
+    }
   }
-}
 
   const handlePortalAccess = (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,7 +295,7 @@ const handleRegister = async (e: React.FormEvent) => {
           }
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (trimmed.includes('/portal/')) {
       const portalMatch = trimmed.match(/portal\/([^/?\s]+)(?:\?|&)?event=([^&\s]+)/)
@@ -144,33 +322,32 @@ const handleRegister = async (e: React.FormEvent) => {
   }
 
   return (
-    <div className={`min-h-screen font-sans selection:bg-orange-500 selection:text-white relative overflow-hidden transition-colors duration-300 ${
-      theme === 'light'
-        ? 'bg-white text-slate-800'
-        : 'bg-gradient-to-br from-slate-955 via-slate-900 to-slate-955 text-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950'
-    }`}>
+    <div
+      className={`min-h-screen font-sans selection:bg-orange-500 selection:text-white relative overflow-x-hidden transition-colors duration-300 ${theme === 'light' ? 'text-slate-800' : 'bg-gradient-to-br from-slate-955 via-slate-900 to-slate-955 text-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950'}`}
+      style={theme === 'light' ? { background: 'linear-gradient(to bottom, #FFFFFF 0%, #FFF5EF 30%, #FEF0E8 65%, #FDE8D8 100%)' } : {}}
+    >
 
       {/* Background Fluid Waves & Grid */}
       {theme === 'light' ? (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <div className="absolute inset-0 bg-white" />
           <div
-            className="absolute inset-0 opacity-90"
+            className="absolute inset-0 opacity-50"
             style={{
               backgroundImage: `
-                radial-gradient(circle at 80% 10%, rgba(232, 69, 10, 0.12) 0%, transparent 50%),
-                radial-gradient(circle at 20% 25%, rgba(253, 216, 204, 0.6) 0%, transparent 45%),
-                radial-gradient(circle at 50% -5%, rgba(254, 240, 235, 0.9) 0%, transparent 40%),
-                radial-gradient(circle at 90% 45%, rgba(250, 177, 153, 0.25) 0%, transparent 50%),
-                radial-gradient(circle at 10% 60%, rgba(232, 69, 10, 0.06) 0%, transparent 40%),
-                radial-gradient(circle at 60% 30%, rgba(253, 216, 204, 0.3) 0%, transparent 60%)
+                radial-gradient(circle at 80% 10%, rgba(232, 69, 10, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 20% 25%, rgba(253, 216, 204, 0.15) 0%, transparent 45%),
+                radial-gradient(circle at 50% -5%, rgba(254, 240, 235, 0.20) 0%, transparent 40%),
+                radial-gradient(circle at 90% 45%, rgba(250, 177, 153, 0.10) 0%, transparent 50%),
+                radial-gradient(circle at 10% 60%, rgba(232, 69, 10, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 60% 30%, rgba(253, 216, 204, 0.08) 0%, transparent 60%)
               `
             }}
           />
-          <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[60%] rounded-full bg-gradient-to-br from-orange-200/20 via-amber-100/20 to-red-100/10 blur-[130px]" />
-          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.35] mix-blend-multiply pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
+          <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[60%] rounded-full bg-gradient-to-br from-orange-200/10 via-amber-100/10 to-red-100/5 blur-[130px]" />
+          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.12] mix-blend-multiply pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-1)" />
-            <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-2)" opacity="0.6" />
+            <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-2)" opacity="0.2" />
             <defs>
               <linearGradient id="fluid-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#FEF0EB" />
@@ -185,7 +362,8 @@ const handleRegister = async (e: React.FormEvent) => {
               </linearGradient>
             </defs>
           </svg>
-          <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-60" />
+          <div className="absolute top-[450px] left-0 right-0 h-[300px] pointer-events-none bg-gradient-to-b from-transparent to-white" />
+          <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_0.5px,transparent_0.5px)] [background-size:16px_16px] opacity-40" />
         </div>
       ) : (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
@@ -204,89 +382,48 @@ const handleRegister = async (e: React.FormEvent) => {
           />
           <div className="absolute top-[-20%] right-[-10%] w-[70%] h-[60%] rounded-full bg-gradient-to-br from-orange-500/15 via-amber-500/10 to-transparent blur-[140px]" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[50%] rounded-full bg-gradient-to-tr from-red-500/10 via-orange-500/15 to-transparent blur-[120px]" />
-          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.12] mix-blend-screen pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
+          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.22] mix-blend-screen pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-dark-1)" />
             <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-dark-2)" opacity="0.6" />
             <defs>
               <linearGradient id="fluid-grad-dark-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#762304" />
-                <stop offset="40%" stopColor="#C23A08" />
-                <stop offset="80%" stopColor="#E8450A" />
-                <stop offset="100%" stopColor="#762304" />
+                <stop offset="0%" stopColor="#7c2d12" />
+                <stop offset="40%" stopColor="#9a3412" />
+                <stop offset="80%" stopColor="#ea580c" />
+                <stop offset="100%" stopColor="#7c2d12" />
               </linearGradient>
               <linearGradient id="fluid-grad-dark-2" x1="100%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#762304" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#9C2E06" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#C23A08" stopOpacity="0.5" />
+                <stop offset="0%" stopColor="#9a3412" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#c2410c" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#7c2d12" stopOpacity="0.5" />
               </linearGradient>
             </defs>
           </svg>
-          <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:16px_16px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(rgba(255,122,24,0.03)_1px,transparent_1px)] [background-size:16px_16px]" />
         </div>
       )}
 
 
 
       {/* Floating Header */}
-      <header className={`sticky top-0 z-40 w-full backdrop-blur-md transition-colors ${
-        theme === 'light'
-          ? 'bg-white/75 border-b border-orange-100/60'
-          : 'bg-slate-950/75 border-b border-slate-900'
-      }`}>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-          <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center">
-              <img 
-                src={logoImage} 
-                alt="EventCraft Logo" 
-                className="w-full h-full object-contain drop-shadow-md transition-transform hover:scale-[1.8] duration-300 scale-[1.7]" 
-              />
-            </div>
-            <div>
-              <div className={`text-base font-black leading-none ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>EventCraft</div>
-              <div className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">Orchestration System</div>
-            </div>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-500 dark:text-slate-400">
-            <a href="#features" className="hover:text-orange-500 transition-colors">Features</a>
-            <a href="#stats" className="hover:text-orange-500 transition-colors">Milestones</a>
-            <a href="#portal-access" className="hover:text-orange-500 transition-colors">Access Portal</a>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-xl border transition-all cursor-pointer shadow-sm ${
-                theme === 'light'
-                  ? 'border-orange-100 bg-orange-50/50 text-orange-600 hover:bg-orange-100/50'
-                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
-              }`}
-              title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            >
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} className="text-yellow-500" />}
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header activeSection={activeSection} isLandingPage />
 
       {/* Main Hero & Access Section */}
-      <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 relative z-10">
+      <main className="max-w-7xl mx-auto px-6 pt-28 pb-12 lg:pt-36 lg:pb-20 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
 
           {/* Left Column: Hero Text */}
           <div className="lg:col-span-7 space-y-8 text-left">
-            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${
-              theme === 'light'
-                ? 'border-orange-200 bg-orange-50/60 text-orange-600'
-                : 'border-orange-500/20 bg-orange-500/5 text-orange-400'
-            }`}>
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${theme === 'light'
+              ? 'border-orange-200 bg-orange-50/60 text-orange-600'
+              : 'border-orange-500/20 bg-orange-500/5 text-orange-400'
+              }`}>
               <Sparkles size={12} /> Live Event Engine Active
             </div>
 
             <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
               Intelligent, AI-Powered <br />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 via-red-500 to-amber-500">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#FF7A18] via-[#FF5E62] to-[#FF5E62]">
                 Event Orchestration
               </span>
             </h1>
@@ -304,20 +441,18 @@ const handleRegister = async (e: React.FormEvent) => {
               </button>
               <button
                 onClick={() => setShowEmailPopup(true)}
-                className={`px-6 py-3 border rounded-xl font-semibold text-sm transition-all duration-150 flex items-center gap-2 cursor-pointer ${
-                  theme === 'light'
-                    ? 'border-orange-200 bg-orange-50/40 text-orange-700 hover:bg-orange-100/40'
-                    : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-900 hover:text-white'
-                }`}
+                className={`px-6 py-3 border rounded-xl font-semibold text-sm transition-all duration-150 flex items-center gap-2 cursor-pointer ${theme === 'light'
+                  ? 'border-orange-200 bg-orange-50/40 text-orange-700 hover:bg-orange-100/40'
+                  : 'border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-900 hover:text-white'
+                  }`}
               >
                 Access Guest Portal
               </button>
             </div>
 
             {/* Quick Metrics */}
-            <div className={`grid grid-cols-3 gap-6 pt-8 border-t max-w-md ${
-              theme === 'light' ? 'border-orange-100/60' : 'border-slate-800'
-            }`}>
+            <div className={`grid grid-cols-3 gap-6 pt-8 border-t max-w-md ${theme === 'light' ? 'border-orange-100/60' : 'border-slate-800'
+              }`}>
               <div>
                 <p className={`text-2xl font-black ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>100%</p>
                 <p className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>Passwordless Login</p>
@@ -361,23 +496,21 @@ const handleRegister = async (e: React.FormEvent) => {
             </div>
 
             {/* Glowing ring */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />            {/* Admin Login / Register Card */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#FF7A18] to-[#FF5E62] rounded-3xl blur-xl opacity-20 dark:opacity-25 pointer-events-none" />            {/* Admin Login / Register Card */}
             <div className="relative group/card">
               {/* Outer soft glowing background ring */}
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-red-500 rounded-3xl blur-xl opacity-20 group-hover/card:opacity-30 transition duration-500 pointer-events-none" />
-              
-              <div className={`relative backdrop-blur-2xl border rounded-3xl p-6 sm:p-8 space-y-6 transition-all duration-300 shadow-2xl ${
-                theme === 'light'
-                  ? 'bg-white/80 border-orange-100/90 shadow-orange-500/5'
-                  : 'bg-slate-900/80 border-slate-800/80 shadow-black/30'
-              }`}>
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-[#FF7A18] to-[#FF5E62] rounded-3xl blur-xl opacity-20 group-hover/card:opacity-30 transition duration-500 pointer-events-none" />
+
+              <div className={`relative backdrop-blur-2xl border rounded-3xl p-6 sm:p-8 space-y-6 transition-all duration-300 shadow-2xl ${theme === 'light'
+                ? 'bg-[#FFF7F4]/80 border-[rgba(255,122,24,0.4)] shadow-[rgba(255,122,24,0.15)]'
+                : 'bg-slate-900/80 border-slate-800/80 shadow-black/30'
+                }`}>
                 {/* Header */}
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-2xl flex items-center justify-center transition-transform duration-300 hover:rotate-12 ${
-                    theme === 'light'
-                      ? 'bg-gradient-to-tr from-orange-50 to-orange-100/50 text-orange-600 border border-orange-150'
-                      : 'bg-gradient-to-tr from-orange-500/10 to-orange-500/20 text-orange-400 border border-orange-500/30'
-                  }`}>
+                  <div className={`p-2.5 rounded-2xl flex items-center justify-center transition-transform duration-300 hover:rotate-12 ${theme === 'light'
+                    ? 'bg-gradient-to-tr from-orange-50 to-orange-100/50 text-orange-600 border border-orange-150'
+                    : 'bg-gradient-to-tr from-orange-500/10 to-orange-500/20 text-orange-400 border border-orange-500/30'
+                    }`}>
                     <Shield size={20} />
                   </div>
                   <div>
@@ -394,25 +527,23 @@ const handleRegister = async (e: React.FormEvent) => {
                 <div className={`flex rounded-2xl p-1 bg-slate-100/80 dark:bg-slate-950/50 border border-slate-200/40 dark:border-slate-800/50`}>
                   <button
                     onClick={() => { setAdminTab('login'); setFormError('') }}
-                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${
-                      adminTab === 'login'
-                        ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
-                        : theme === 'light'
-                          ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
-                    }`}
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'login'
+                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
+                      : theme === 'light'
+                        ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                      }`}
                   >
                     Login
                   </button>
                   <button
                     onClick={() => { setAdminTab('register'); setFormError('') }}
-                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${
-                      adminTab === 'register'
-                        ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
-                        : theme === 'light'
-                          ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
-                    }`}
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'register'
+                      ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
+                      : theme === 'light'
+                        ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                      }`}
                   >
                     Register
                   </button>
@@ -432,11 +563,10 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="admin@organisation.com"
-                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                       </div>
                     </div>
@@ -451,16 +581,15 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
-                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
                         >
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -495,11 +624,10 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={orgName}
                           onChange={(e) => setOrgName(e.target.value)}
                           placeholder="e.g. IIT Bombay Techfest"
-                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                       </div>
                     </div>
@@ -514,11 +642,10 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="admin@organisation.com"
-                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                       </div>
                     </div>
@@ -533,16 +660,15 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
-                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
                         >
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -559,16 +685,15 @@ const handleRegister = async (e: React.FormEvent) => {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="••••••••"
-                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${
-                            theme === 'light'
-                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                          }`}
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
                         />
                         <button
                           type="button"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 cursor-pointer p-1 rounded-lg"
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
                         >
                           {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -589,33 +714,312 @@ const handleRegister = async (e: React.FormEvent) => {
                   </form>
                 )}
 
-              {/* Participant access link */}
-              <div className={`pt-3.5 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
-                <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Are you a participant?{' '}
-                  <button
-                    onClick={() => setShowEmailPopup(true)}
-                    className="text-orange-500 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
-                  >
-                    Access your portal
-                  </button>
-                </p>
+                {/* Participant access link */}
+                <div className={`pt-3.5 border-t text-center ${theme === 'light' ? 'border-slate-100' : 'border-slate-800'}`}>
+                  <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Are you a participant?{' '}
+                    <button
+                      onClick={() => setShowEmailPopup(true)}
+                      className="text-orange-500 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
+                    >
+                      Access your portal
+                    </button>
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Event Journey Section */}
+        <section id="journey" className={`py-20 border-t mt-20 space-y-12 transition-all duration-300 ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'
+          }`}>
+          {/* Header Title */}
+          <div className="text-center max-w-3xl mx-auto space-y-3">
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${theme === 'light'
+              ? 'bg-orange-50 text-orange-600 border border-orange-100/55'
+              : 'bg-orange-500/10 text-orange-300 border border-orange-500/25'
+              }`}>
+              <Sparkles size={11} className="animate-spin-slow" /> Interactive Journey
+            </div>
+            <h2 className={`text-3xl sm:text-4xl font-black tracking-tight ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+              Explore the Event Journey
+            </h2>
+            <p className={`text-sm sm:text-base leading-relaxed ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+              EventCraft coordinates participants, reviewers, and organizers through a real-time smart pipeline. Click on a role below to explore their synchronized path.
+            </p>
+          </div>
+
+          {/* Role Selector Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto px-4">
+            {/* Organizer Role Card */}
+            <button
+              onClick={() => { setActiveRole('organizer'); setActiveStepIndex(0); }}
+              className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'organizer'
+                ? theme === 'light'
+                  ? 'bg-gradient-to-r from-orange-500/10 to-orange-500/5 border-orange-300 shadow-md shadow-orange-500/5 scale-[1.02]'
+                  : 'bg-slate-900/80 border-orange-500/40 shadow-xl shadow-orange-500/5 scale-[1.02]'
+                : theme === 'light'
+                  ? 'bg-white/50 border-slate-100 hover:border-orange-200 hover:bg-white'
+                  : 'bg-slate-900/30 border-slate-900 hover:border-slate-800 hover:bg-slate-900/50'
+                }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${activeRole === 'organizer'
+                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                : theme === 'light'
+                  ? 'bg-orange-50 text-orange-500'
+                  : 'bg-orange-950/30 text-orange-400'
+                }`}>
+                <Building size={22} />
+              </div>
+              <div>
+                <div className={`font-bold text-base ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Organizer Track</div>
+                <div className={`text-xs mt-0.5 ${activeRole === 'organizer' ? 'text-orange-500 dark:text-orange-400 font-semibold' : 'text-slate-400'}`}>
+                  Matchmaking & Consensus
+                </div>
+              </div>
+            </button>
+
+            {/* Participant Role Card */}
+            <button
+              onClick={() => { setActiveRole('participant'); setActiveStepIndex(0); }}
+              className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'participant'
+                ? theme === 'light'
+                  ? 'bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border-emerald-300 shadow-md shadow-emerald-500/5 scale-[1.02]'
+                  : 'bg-slate-900/80 border-emerald-500/40 shadow-xl shadow-emerald-500/5 scale-[1.02]'
+                : theme === 'light'
+                  ? 'bg-white/50 border-slate-100 hover:border-emerald-200 hover:bg-white'
+                  : 'bg-slate-900/30 border-slate-900 hover:border-slate-800 hover:bg-slate-900/50'
+                }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${activeRole === 'participant'
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
+                : theme === 'light'
+                  ? 'bg-emerald-50 text-emerald-500'
+                  : 'bg-emerald-950/30 text-emerald-400'
+                }`}>
+                <Users size={22} />
+              </div>
+              <div>
+                <div className={`font-bold text-base ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Participant Track</div>
+                <div className={`text-xs mt-0.5 ${activeRole === 'participant' ? 'text-emerald-500 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                  Roster, Teams & Submissions
+                </div>
+              </div>
+            </button>
+
+            {/* Judge Role Card */}
+            <button
+              onClick={() => { setActiveRole('judge'); setActiveStepIndex(0); }}
+              className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'judge'
+                ? theme === 'light'
+                  ? 'bg-gradient-to-r from-indigo-500/10 to-indigo-500/5 border-indigo-300 shadow-md shadow-indigo-500/5 scale-[1.02]'
+                  : 'bg-slate-900/80 border-indigo-500/40 shadow-xl shadow-indigo-500/5 scale-[1.02]'
+                : theme === 'light'
+                  ? 'bg-white/50 border-slate-100 hover:border-indigo-200 hover:bg-white'
+                  : 'bg-slate-900/30 border-slate-900 hover:border-slate-800 hover:bg-slate-900/50'
+                }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${activeRole === 'judge'
+                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                : theme === 'light'
+                  ? 'bg-indigo-50 text-indigo-500'
+                  : 'bg-indigo-950/30 text-indigo-400'
+                }`}>
+                <Shield size={22} />
+              </div>
+              <div>
+                <div className={`font-bold text-base ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>Judge Track</div>
+                <div className={`text-xs mt-0.5 ${activeRole === 'judge' ? 'text-indigo-500 dark:text-indigo-400 font-semibold' : 'text-slate-400'}`}>
+                  Secure Rubrics & Scoring
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Horizontal Stepper Progress Bar */}
+          <div className="max-w-3xl mx-auto px-4 mt-8 mb-12">
+            <div className="relative flex items-center justify-between">
+              {/* Connecting Track Line */}
+              <div className={`absolute left-0 right-0 h-1 -translate-y-1/2 top-1/2 z-0 ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-850/80'
+                }`}>
+                {/* Highlight active progress line */}
+                <div
+                  className={`h-full transition-all duration-500 ${activeRole === 'organizer'
+                    ? 'bg-gradient-to-r from-orange-500 to-red-500'
+                    : activeRole === 'judge'
+                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                    }`}
+                  style={{ width: `${(activeStepIndex / 4) * 100}%` }}
+                />
+              </div>
+
+              {/* Stepper Nodes */}
+              {JOURNEY_DATA[activeRole].map((step, idx) => {
+                const isSelected = idx === activeStepIndex
+                const isCompleted = idx < activeStepIndex
+
+                let nodeBorderColor = 'border-slate-200 dark:border-slate-800'
+                let nodeBg = 'bg-white dark:bg-slate-900 text-[#999] dark:text-[#666]'
+                let ringColor = ''
+
+                if (isSelected) {
+                  nodeBorderColor = activeRole === 'organizer' ? 'border-orange-500' : activeRole === 'judge' ? 'border-indigo-500' : 'border-emerald-500'
+                  nodeBg = activeRole === 'organizer' ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/25' : activeRole === 'judge' ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-500/25' : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25'
+                  ringColor = activeRole === 'organizer' ? 'ring-orange-500/20' : activeRole === 'judge' ? 'ring-indigo-500/20' : 'ring-emerald-500/20'
+                } else if (isCompleted) {
+                  nodeBorderColor = activeRole === 'organizer' ? 'border-orange-400/60' : activeRole === 'judge' ? 'border-indigo-400/60' : 'border-emerald-400/60'
+                  nodeBg = activeRole === 'organizer' ? 'bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400' : activeRole === 'judge' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400' : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400'
+                }
+
+                return (
+                  <div key={idx} className="flex flex-col items-center relative z-10">
+                    <button
+                      onClick={() => setActiveStepIndex(idx)}
+                      className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-all duration-300 cursor-pointer ${nodeBorderColor} ${nodeBg} ${isSelected ? 'scale-110 ring-4' : 'hover:scale-105 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        } ${ringColor}`}
+                      title={step.title}
+                    >
+                      {step.phase}
+                    </button>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider mt-2.5 max-w-[80px] text-center hidden sm:block transition-colors duration-300 ${isSelected
+                      ? activeRole === 'organizer' ? 'text-orange-500' : activeRole === 'judge' ? 'text-indigo-500' : 'text-emerald-500'
+                      : 'text-[#999] dark:text-[#666]'
+                      }`}>
+                      {step.shortLabel}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Stepper Detail View (Single Card) */}
+          <div className="max-w-3xl mx-auto px-4">
+            <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; transform: translateY(8px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in {
+              animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          `}</style>
+            {(() => {
+              const step = JOURNEY_DATA[activeRole][activeStepIndex]
+              const Icon = step.icon
+
+              let roleBorderColor = 'border-emerald-100/80 dark:border-emerald-500/20 hover:border-emerald-200'
+              let roleGlow = 'shadow-emerald-500/5'
+
+              if (activeRole === 'judge') {
+                roleBorderColor = 'border-indigo-100/80 dark:border-indigo-500/20 hover:border-indigo-200'
+                roleGlow = 'shadow-indigo-500/5'
+              } else if (activeRole === 'organizer') {
+                roleBorderColor = 'border-orange-100/80 dark:border-orange-500/20 hover:border-orange-200'
+                roleGlow = 'shadow-orange-500/5'
+              }
+
+              return (
+                <div
+                  key={`${activeRole}-${activeStepIndex}`}
+                  className={`w-full border rounded-3xl p-6 sm:p-8 transition-all duration-500 backdrop-blur-sm animate-fade-in ${theme === 'light'
+                    ? `bg-white/70 ${roleBorderColor} shadow-xl ${roleGlow}`
+                    : `bg-[#1e2130] border border-white/15 shadow-2xl shadow-black/40`
+                    }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest ${activeRole === 'organizer'
+                          ? 'bg-orange-500/10 text-orange-500'
+                          : activeRole === 'judge'
+                            ? 'bg-indigo-500/10 text-indigo-500'
+                            : 'bg-emerald-500/10 text-emerald-500'
+                          }`}>
+                          Phase {step.phase}
+                        </span>
+                        <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'light' ? 'text-slate-400' : 'text-white/75'
+                          }`}>
+                          • {step.subtitle}
+                        </span>
+                      </div>
+                      <h3 className={`text-xl sm:text-2xl font-black tracking-tight ${theme === 'light' ? 'text-slate-900' : 'text-white'
+                        }`}>
+                        {step.title}
+                      </h3>
+                    </div>
+
+                    {/* Dynamic Step Icon */}
+                    <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:rotate-6 self-start sm:self-center ${activeRole === 'organizer'
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                      : activeRole === 'judge'
+                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
+                      }`}>
+                      <Icon size={24} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6">
+                    {/* Left Column: Description */}
+                    <div className="md:col-span-7 space-y-3">
+                      <h4 className={`text-[10px] font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-white/75'
+                        }`}>
+                        Phase Overview
+                      </h4>
+                      <p className={`text-xs sm:text-sm leading-relaxed ${theme === 'light' ? 'text-slate-600' : 'text-white/75'
+                        }`}>
+                        {step.description}
+                      </p>
+                    </div>
+
+                    {/* Right Column: System Interactions */}
+                    <div className={`md:col-span-5 rounded-2xl p-5 border md:mt-0 ${theme === 'light'
+                      ? 'bg-slate-50/50 border-slate-100/80'
+                      : 'bg-slate-950/40 border border-white/15'
+                      }`}>
+                      <h4 className={`text-[10px] font-extrabold uppercase tracking-wider mb-3 ${activeRole === 'organizer'
+                        ? 'text-orange-500'
+                        : activeRole === 'judge'
+                          ? 'text-indigo-500'
+                          : 'text-emerald-500'
+                        }`}>
+                        System Interactions
+                      </h4>
+                      <ul className="space-y-2">
+                        {step.actions.map((act, aIdx) => (
+                          <li key={aIdx} className="flex items-start gap-2 text-xs">
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${activeRole === 'organizer'
+                              ? 'bg-orange-500'
+                              : activeRole === 'judge'
+                                ? 'bg-indigo-500'
+                                : 'bg-emerald-500'
+                              }`} />
+                            <span className={`leading-relaxed ${theme === 'light' ? 'text-slate-600' : 'text-white/75'
+                              }`}>
+                              {act}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </section>
 
         {/* Features Section */}
-        <section id="features" className={`py-20 border-t mt-20 space-y-12 transition-all ${
-          theme === 'light' ? 'border-slate-100' : 'border-slate-900'
-        }`}>
+        <section id="features" className={`py-20 border-t mt-20 space-y-12 transition-all ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'
+          }`}>
           <div className="text-center max-w-3xl mx-auto space-y-3">
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-              theme === 'light'
-                ? 'bg-orange-50 text-orange-600 border border-orange-100/55'
-                : 'bg-orange-500/10 text-orange-300 border border-orange-500/25'
-            }`}>
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${theme === 'light'
+              ? 'bg-orange-50 text-orange-600 border border-orange-100/55'
+              : 'bg-orange-500/10 text-orange-300 border border-orange-500/25'
+              }`}>
               <Sparkles size={11} /> Feature Suite
             </div>
             <h2 className={`text-2xl sm:text-3xl font-black ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
@@ -627,11 +1031,10 @@ const handleRegister = async (e: React.FormEvent) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light'
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5'
-                : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
-            }`}>
+            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${theme === 'light'
+              ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5'
+              : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
+              }`}>
               <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-200">
                 <Users size={20} />
               </div>
@@ -641,11 +1044,10 @@ const handleRegister = async (e: React.FormEvent) => {
               </p>
             </div>
 
-            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light'
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5'
-                : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
-            }`}>
+            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${theme === 'light'
+              ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5'
+              : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
+              }`}>
               <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors duration-200">
                 <Cpu size={20} />
               </div>
@@ -655,11 +1057,10 @@ const handleRegister = async (e: React.FormEvent) => {
               </p>
             </div>
 
-            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light'
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-pink-200 hover:shadow-lg hover:shadow-pink-500/5'
-                : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
-            }`}>
+            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${theme === 'light'
+              ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-pink-200 hover:shadow-lg hover:shadow-pink-500/5'
+              : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
+              }`}>
               <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center text-pink-500 group-hover:bg-pink-500 group-hover:text-white transition-colors duration-200">
                 <Shield size={20} />
               </div>
@@ -669,11 +1070,10 @@ const handleRegister = async (e: React.FormEvent) => {
               </p>
             </div>
 
-            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${
-              theme === 'light'
-                ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-500/5'
-                : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
-            }`}>
+            <div className={`border rounded-2xl p-6 space-y-4 transition-all duration-200 group ${theme === 'light'
+              ? 'bg-white/60 border-slate-100 hover:bg-white hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-500/5'
+              : 'bg-slate-900/40 border-slate-900 hover:border-slate-800'
+              }`}>
               <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors duration-200">
                 <Zap size={20} />
               </div>
@@ -687,9 +1087,8 @@ const handleRegister = async (e: React.FormEvent) => {
       </main>
 
       {/* Footer */}
-      <footer className={`border-t py-8 relative z-10 text-center transition-all ${
-        theme === 'light' ? 'border-slate-100 bg-white/70' : 'border-slate-900 bg-slate-950/80'
-      }`}>
+      <footer className={`border-t py-8 relative z-10 text-center transition-all ${theme === 'light' ? 'border-slate-100 bg-white/70' : 'border-slate-900 bg-slate-950/80'
+        }`}>
         <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-600'}`}>
           &copy; {new Date().getFullYear()} EventCraft Orchestration System. All rights reserved.
         </p>
@@ -707,7 +1106,7 @@ const handleRegister = async (e: React.FormEvent) => {
             <Mail size={28} />
           </div>
           <div className="space-y-3">
-            <p className="text-sm text-gray-650 dark:text-slate-300 leading-relaxed font-medium">
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
               We have sent a secure, passwordless link to your registered email address.
             </p>
             <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
@@ -723,11 +1122,10 @@ const handleRegister = async (e: React.FormEvent) => {
                 value={portalInput}
                 onChange={(e) => setPortalInput(e.target.value)}
                 placeholder="https://eventcraft.com/portal/token?event=id"
-                className={`w-full border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all font-mono ${
-                  theme === 'light'
-                    ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                    : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
-                }`}
+                className={`w-full border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 transition-all font-mono ${theme === 'light'
+                  ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                  : 'bg-slate-950/80 border-slate-800 text-slate-200 focus:border-orange-500'
+                  }`}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
                 <LinkIcon size={14} />
@@ -749,11 +1147,10 @@ const handleRegister = async (e: React.FormEvent) => {
 
           <button
             onClick={() => setShowEmailPopup(false)}
-            className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-              theme === 'light'
-                ? 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                : 'border-slate-700 text-slate-400 hover:bg-slate-800'
-            }`}
+            className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${theme === 'light'
+              ? 'border-slate-200 text-slate-500 hover:bg-slate-50'
+              : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+              }`}
           >
             Close
           </button>
