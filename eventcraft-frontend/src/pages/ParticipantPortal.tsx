@@ -55,7 +55,7 @@ const ShowroomCard: React.FC<ShowroomCardProps> = ({ team, eventId, token, onVot
   }
 
   const sliderPct = (sliderVal / 10) * 100
-  
+
   return (
     <div className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${submitted ? 'border-green-200' : 'border-gray-100'}`}>
       {/* Header */}
@@ -345,7 +345,7 @@ export const ParticipantPortal: React.FC = () => {
   }
 
   const {
-    participant, team, current_stage, key_dates, event_name,
+    participant, team, current_stage, current_stage_description, key_dates, event_name,
     progression_eligible, scoring_phase_active, submission_portal_active,
     results_phase_active,
   } = data
@@ -367,7 +367,7 @@ export const ParticipantPortal: React.FC = () => {
           <div className="space-y-4">
             {/* EventCraft logo block */}
             <div className="flex items-center gap-2.5 px-1 py-1">
-             
+
               <div className="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden">
                 <img src={logoImage} alt="EventCraft" className="w-full h-full object-contain" />
               </div>
@@ -402,11 +402,10 @@ export const ParticipantPortal: React.FC = () => {
             <button
               id="dashboard-tab-button"
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                activeTab === 'dashboard'
-                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
-              }`}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'dashboard'
+                ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
+                }`}
             >
               <Home size={14} />
               <span>Dashboard Overview</span>
@@ -416,13 +415,12 @@ export const ParticipantPortal: React.FC = () => {
               id="showroom-tab-button"
               disabled={isPhase1}
               onClick={() => !isPhase1 && setActiveTab('showroom')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                isPhase1
-                  ? 'opacity-50 cursor-not-allowed text-gray-400'
-                  : activeTab === 'showroom'
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${isPhase1
+                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                : activeTab === 'showroom'
                   ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <BarChart2 size={14} />
@@ -434,11 +432,10 @@ export const ParticipantPortal: React.FC = () => {
             <button
               id="submission-hub-tab-button"
               onClick={() => setActiveTab('submission')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                activeTab === 'submission'
-                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
-              }`}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'submission'
+                ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
+                }`}
             >
               <Folder size={14} />
               <span>My Submission Hub</span>
@@ -496,11 +493,10 @@ export const ParticipantPortal: React.FC = () => {
                   return (
                     <div
                       key={item.team_id}
-                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all duration-200 ${
-                        isMyTeam
-                          ? 'border border-primary/30 bg-orange-50/30 shadow-[0_0_8px_rgba(232,69,10,0.1)] text-gray-900 font-semibold'
-                          : 'border border-transparent hover:bg-gray-50 text-gray-500 hover:text-gray-900'
-                      }`}
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all duration-200 ${isMyTeam
+                        ? 'border border-primary/30 bg-orange-50/30 shadow-[0_0_8px_rgba(232,69,10,0.1)] text-gray-900 font-semibold'
+                        : 'border border-transparent hover:bg-gray-50 text-gray-500 hover:text-gray-900'
+                        }`}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="font-mono text-[10px] text-gray-400 font-bold w-3 flex-shrink-0">
@@ -508,11 +504,10 @@ export const ParticipantPortal: React.FC = () => {
                         </span>
                         <span className="truncate">{item.team_name}</span>
                       </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
-                        isMyTeam
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${isMyTeam
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-600'
+                        }`}>
                         {item.score !== null && item.score !== undefined ? item.score.toFixed(2) : '—'}
                       </span>
                     </div>
@@ -650,17 +645,21 @@ export const ParticipantPortal: React.FC = () => {
                   <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
                     <p className="text-sm font-bold text-primary">{current_stage || 'Participant Intake'}</p>
                     <p className="text-xs text-orange-700 mt-1">
-                      {current_stage === 'Team Formation'
-                        ? "Teams are being formed. You'll receive an email once your team assignment is confirmed."
-                        : current_stage === 'Evaluation'
-                        ? 'Evaluation is underway. Judges are reviewing all team submissions.'
-                        : current_stage === 'Results'
-                        ? 'Results are being compiled. Final rankings will be announced soon.'
-                        : current_stage === 'Progression'
-                        ? 'Qualifying teams are being notified for the next round.'
-                        : scoring_phase_active
-                        ? 'Scoring phase active — peer voting and judge evaluation in progress.'
-                        : 'Registration is open. Your profile has been received.'}
+                      {current_stage_description || (
+                        current_stage === 'Team Formation'
+                          ? "Teams are being formed. You'll receive an email once your team assignment is confirmed."
+                          : current_stage === 'Evaluation'
+                            ? 'Evaluation is underway. Judges are reviewing all team submissions.'
+                            : current_stage === 'Results'
+                              ? 'Results are being compiled. Final rankings will be announced soon.'
+                              : current_stage === 'Progression'
+                                ? 'Qualifying teams are being notified for the next round.'
+                                : scoring_phase_active
+                                  ? 'Scoring phase active — peer voting and judge evaluation in progress.'
+                                  : submission_portal_active || current_stage?.toLowerCase().includes('hack')
+                                    ? 'Hacking is in progress! Build your project and submit it using the My Submission Hub.'
+                                    : 'Registration is open. Your profile has been received.'
+                      )}
                     </p>
                   </div>
                 </div>
@@ -770,27 +769,27 @@ export const ParticipantPortal: React.FC = () => {
                         <Clock size={28} className="text-gray-300 mx-auto mb-2" />
                         <p className="text-sm text-gray-500">Team assignment pending</p>
                         <p className="text-xs text-gray-400 mt-1">You'll be notified once teams are formed and approved</p>
-                    </div>
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-         {/* Q&A Chat */}
-{team && eventId && (
-  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-    <QAChat
-      eventId={eventId}
-      teamId={team.id}
-      senderName={participant.name}
-      senderRole="team"
-      onNewMessage={(msg) => setQaNotification(msg)}
-      disabled={team.submission_status !== 'Submitted'}
-    />
-  </div>
-)}
-              
+            {/* Q&A Chat */}
+            {team && eventId && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <QAChat
+                  eventId={eventId}
+                  teamId={team.id}
+                  senderName={participant.name}
+                  senderRole="team"
+                  onNewMessage={(msg) => setQaNotification(msg)}
+                  disabled={team.submission_status !== 'Submitted'}
+                />
+              </div>
+            )}
+
             {/* Lower Dashboard Row */}
             {isPhase3 && team && team.final_score !== null && team.final_score !== undefined ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
@@ -990,7 +989,7 @@ export const ParticipantPortal: React.FC = () => {
                   </div>
                   <h3 className="text-sm font-bold text-gray-700 mb-2">Gallery Locked</h3>
                   <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
-                    Project gallery and peer voting will open once the submission deadline passes and the event enters the <strong>Scoring Pipeline</strong> phase.
+                    Project gallery and peer voting will only open in the <strong>Scoring</strong> Phase.
                   </p>
                   <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-gray-400">
                     <Clock size={12} />
@@ -1062,7 +1061,7 @@ export const ParticipantPortal: React.FC = () => {
                     You must be assigned to a team by the organizers before you can submit links.
                   </p>
                 </div>
-              ) : !submission_portal_active && team.submission_status !== 'Submitted'  ? (
+              ) : !submission_portal_active && team.submission_status !== 'Submitted' ? (
                 <div className="text-center py-16 px-4">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                     <Lock size={24} className="text-gray-300" />
@@ -1188,41 +1187,41 @@ export const ParticipantPortal: React.FC = () => {
                       </p>
                     )}
 
-                  {!submission_portal_active && team.submission_status === 'Submitted' ? (
-  <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
-    <CheckCircle size={16} className="text-blue-600 flex-shrink-0" />
-    <span>Your submission is locked and currently under review. No further changes can be made.</span>
-  </div>
-) : isClosed ? (
-  <div className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
-    <Lock size={16} className="text-gray-400 flex-shrink-0" />
-    <span>Submissions are closed because the event has advanced to the Results phase.</span>
-  </div>
-) : team.submission_status !== "Submitted" ? (
-  <div className="flex gap-3 pt-2">
-    <button
-      id="save-draft-button"
-      onClick={handleSaveDraft}
-      disabled={submissionSaving}
-      className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
-    >
-      Save Draft
-    </button>
-    <button
-      id="lock-submission-button"
-      onClick={() => setShowConfirmModal(true)}
-      disabled={submissionSaving}
-      className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-60"
-    >
-      Final Submit
-    </button>
-  </div>
-) : (
-  <div className="bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
-    <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
-    <span>🎉 Submission Complete! Your project has been securely locked.</span>
-  </div>
-)}
+                    {!submission_portal_active && team.submission_status === 'Submitted' ? (
+                      <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+                        <CheckCircle size={16} className="text-blue-600 flex-shrink-0" />
+                        <span>Your submission is locked and currently under review. No further changes can be made.</span>
+                      </div>
+                    ) : isClosed ? (
+                      <div className="bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+                        <Lock size={16} className="text-gray-400 flex-shrink-0" />
+                        <span>Submissions are closed because the event has advanced to the Results phase.</span>
+                      </div>
+                    ) : team.submission_status !== "Submitted" ? (
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          id="save-draft-button"
+                          onClick={handleSaveDraft}
+                          disabled={submissionSaving}
+                          className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-60"
+                        >
+                          Save Draft
+                        </button>
+                        <button
+                          id="lock-submission-button"
+                          onClick={() => setShowConfirmModal(true)}
+                          disabled={submissionSaving}
+                          className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-60"
+                        >
+                          Final Submit
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="bg-green-50 border border-green-200 text-green-800 text-xs font-medium px-4 py-3 rounded-lg flex items-center gap-2 mt-2">
+                        <CheckCircle size={16} className="text-green-600 flex-shrink-0" />
+                        <span>🎉 Submission Complete! Your project has been securely locked.</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Info Card */}
@@ -1276,7 +1275,7 @@ export const ParticipantPortal: React.FC = () => {
               </div>
               <h3 className="font-extrabold text-base text-gray-900">Lock Submission Permanently?</h3>
             </div>
-            
+
             <p className="text-xs text-gray-600 leading-relaxed">
               Are you sure you want to finalize your submission? This will lock your project details (Title, Description, GitHub, Video, and Presentation links) and prevent any future changes.
             </p>
@@ -1305,10 +1304,10 @@ export const ParticipantPortal: React.FC = () => {
         </div>
       )}
       {/* Q&A Notification Popup */}
-<QANotificationPopup
-  message={qaNotification}
-  onClose={() => setQaNotification(null)}
-/>
+      <QANotificationPopup
+        message={qaNotification}
+        onClose={() => setQaNotification(null)}
+      />
 
       {/* Floating AI Companion Trigger */}
       {eventId && token && (
