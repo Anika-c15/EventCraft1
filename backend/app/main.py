@@ -115,6 +115,21 @@ def _migrate_db():
                     except Exception as col_err:
                         print(f"⚠️ Could not add {col} to agent_messages: {col_err}")
 
+        # ── pipeline_stages table migrations ─────────────────────────────────
+        if "pipeline_stages" in existing_tables:
+            columns_stages = [col["name"] for col in inspector.get_columns("pipeline_stages")]
+            for col, col_type in [
+                ("allows_submission", "BOOLEAN DEFAULT FALSE"),
+                ("is_evaluation",     "BOOLEAN DEFAULT FALSE"),
+            ]:
+                if col not in columns_stages:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text(f"ALTER TABLE pipeline_stages ADD COLUMN {col} {col_type}"))
+                        print(f"🚀 Migrated: added {col} to pipeline_stages")
+                    except Exception as col_err:
+                        print(f"⚠️ Could not add column {col} to pipeline_stages: {col_err}")
+
     except Exception as e:
         print(f"⚠️ Migration error: {e}")
 
@@ -163,11 +178,12 @@ def _seed_db():
 
 
 DEMO_STAGES = [
-    {"name": "Participant Intake", "description": "Register and verify all participants, collect skill declarations and institutional affiliations.", "tasks": ["Open registration portal", "Collect participant profiles", "Verify institutional affiliations", "Approve participant roster"]},
-    {"name": "Team Formation", "description": "AI-powered team formation based on skill complementarity, institution diversity, and experience levels.", "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve team compositions"]},
-    {"name": "Evaluation", "description": "Judges evaluate team projects across innovation, execution, presentation, and impact dimensions.", "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"]},
-    {"name": "Results", "description": "Compile final rankings, generate certificates, and prepare announcement materials.", "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"]},
-    {"name": "Progression", "description": "Advance qualifying participants and teams to the next round or final event.", "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"]},
+    {"name": "Participant Intake", "description": "Register and verify all participants, collect skill declarations and institutional affiliations.", "tasks": ["Open registration portal", "Collect participant profiles", "Verify institutional affiliations", "Approve participant roster"], "allows_submission": False, "is_evaluation": False},
+    {"name": "Team Formation", "description": "AI-powered team formation based on skill complementarity, institution diversity, and experience levels.", "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve team compositions"], "allows_submission": False, "is_evaluation": False},
+    {"name": "Hacking", "description": "Teams work on their AI/ML projects.", "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"], "allows_submission": True, "is_evaluation": False},
+    {"name": "Evaluation", "description": "Judges evaluate team projects across innovation, execution, presentation, and impact dimensions.", "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"], "allows_submission": False, "is_evaluation": True},
+    {"name": "Results", "description": "Compile final rankings, generate certificates, and prepare announcement materials.", "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"], "allows_submission": False, "is_evaluation": False},
+    {"name": "Progression", "description": "Advance qualifying participants and teams to the next round or final event.", "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"], "allows_submission": False, "is_evaluation": False},
 ]
 
 DEMO_PARTICIPANTS = [
@@ -215,6 +231,8 @@ def _seed_demo_event(db):
             order_index=i,
             status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
             tasks=s["tasks"],
+            allows_submission=s.get("allows_submission", False),
+            is_evaluation=s.get("is_evaluation", False),
         )
         db.add(stage)
 

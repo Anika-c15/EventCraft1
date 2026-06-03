@@ -15,30 +15,47 @@ DEFAULT_STAGES = [
         "description": "Register and verify all participants, collect skill declarations.",
         "tasks": ["Open registration portal", "Collect participant profiles",
                   "Verify institutional affiliations", "Approve participant roster"],
+        "allows_submission": False,
+        "is_evaluation": False,
     },
     {
         "name": "Team Formation",
         "description": "AI-powered team formation based on configured rules.",
         "tasks": ["Configure formation rules", "Run AI team formation",
                   "Review proposed teams", "Approve team compositions"],
+        "allows_submission": False,
+        "is_evaluation": False,
+    },
+    {
+        "name": "Hacking",
+        "description": "Teams work on their AI/ML projects.",
+        "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"],
+        "allows_submission": True,
+        "is_evaluation": False,
     },
     {
         "name": "Evaluation",
         "description": "Judges evaluate teams across all scoring criteria.",
         "tasks": ["Open evaluation portal", "Collect judge scores",
                   "Aggregate scores", "Flag anomalies for review"],
+        "allows_submission": False,
+        "is_evaluation": True,
     },
     {
         "name": "Results",
         "description": "Compile final rankings and prepare announcements.",
         "tasks": ["Calculate final rankings", "Generate result reports",
                   "Prepare certificates", "Draft announcement communications"],
+        "allows_submission": False,
+        "is_evaluation": False,
     },
     {
         "name": "Progression",
         "description": "Advance qualifying teams to the next round.",
         "tasks": ["Identify qualifying teams", "Send progression notifications",
                   "Update participant statuses", "Archive event data"],
+        "allows_submission": False,
+        "is_evaluation": False,
     },
 ]
 
@@ -76,6 +93,8 @@ def create_event(
             order_index=i,
             status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
             tasks=stage_data["tasks"],
+            allows_submission=stage_data.get("allows_submission", False),
+            is_evaluation=stage_data.get("is_evaluation", False),
         )
         db.add(stage)
 
@@ -196,14 +215,29 @@ def get_dashboard(
         .count()
     )
 
-    current_stage = (
+    stages = (
         db.query(models.PipelineStage)
-        .filter(
-            models.PipelineStage.event_id == event_id,
-            models.PipelineStage.status == models.StageStatus.active,
-        )
-        .first()
+        .filter(models.PipelineStage.event_id == event_id)
+        .order_by(models.PipelineStage.order_index)
+        .all()
     )
+    current_stage = next((s for s in stages if s.status == models.StageStatus.active), None)
+
+    is_evaluation_unlocked = False
+    is_evaluation_closed = False
+
+    eval_stages = [s for s in stages if s.is_evaluation]
+    if not eval_stages:
+        eval_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("eval", "judg", "scor", "peer", "review", "voting"))]
+
+    if eval_stages and current_stage:
+        first_eval_idx = min(s.order_index for s in eval_stages)
+        last_eval_idx = max(s.order_index for s in eval_stages)
+        is_evaluation_unlocked = current_stage.order_index >= first_eval_idx
+        is_evaluation_closed = current_stage.order_index > last_eval_idx
+    elif current_stage:
+        is_evaluation_unlocked = event.current_stage_index >= 3
+        is_evaluation_closed = current_stage.name.lower() in ("results", "progression")
 
     return DashboardStats(
         total_participants=total_p,
@@ -213,6 +247,8 @@ def get_dashboard(
         anomaly_flags=anomalies,
         current_stage=current_stage.name if current_stage else None,
         current_stage_index=event.current_stage_index,
+        is_evaluation_unlocked=is_evaluation_unlocked,
+        is_evaluation_closed=is_evaluation_closed,
     )
 
 

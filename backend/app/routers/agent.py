@@ -134,6 +134,8 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             order_index=i,
             status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
             tasks=stage_def.get("tasks", []),
+            allows_submission=stage_def.get("allows_submission", False),
+            is_evaluation=stage_def.get("is_evaluation", False),
         ))
 
     event.current_stage_index = 0

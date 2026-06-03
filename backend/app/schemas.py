@@ -58,6 +58,8 @@ class StageOut(BaseModel):
     order_index: int
     status: StageStatus
     tasks: Optional[List[str]]
+    allows_submission: bool = False
+    is_evaluation: bool = False
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
 
@@ -348,6 +350,8 @@ class DashboardStats(BaseModel):
     anomaly_flags: int
     current_stage: Optional[str]
     current_stage_index: int
+    is_evaluation_unlocked: bool = False
+    is_evaluation_closed: bool = False
 
 
 # ── CSV Import ─────────────────────────────────────────────────────────────────

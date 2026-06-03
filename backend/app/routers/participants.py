@@ -300,17 +300,13 @@ def get_portal(
             progression_eligible = team.id in [t.id for t in top_half]
 
     # ── Scoring Phase Detection ──────────────────────────────────────────────
-    # Phase is "active" when the current stage name contains scoring/eval keywords
-    # OR when stage index >= 2 (configurable) — this means past Team Formation.
-    SCORING_KEYWORDS = ("intake", "scor", "eval", "judg", "peer", "review", "voting")
+    from ..llm import check_stage_is_evaluation_phase
     scoring_phase_active = False
     if current_stage:
-        stage_lower = current_stage.name.lower()
-        scoring_phase_active = any(kw in stage_lower for kw in SCORING_KEYWORDS)
-    # Fallback: if at least 2 stages have been completed, unlock the showroom
-    if not scoring_phase_active:
-        completed_count = sum(1 for s in stages if s.status == models.StageStatus.completed)
-        scoring_phase_active = completed_count >= 2
+        if getattr(current_stage, "is_evaluation", False):
+            scoring_phase_active = True
+        else:
+            scoring_phase_active = check_stage_is_evaluation_phase(current_stage.name, current_stage.description or "")
 
     # ── Showroom Teams (only populated when scoring phase is active) ─────────
     showroom_teams = []
@@ -391,7 +387,10 @@ def get_portal(
     submission_portal_active = False
     results_phase_active = False
     if current_stage:
-        submission_portal_active = check_stage_allows_submission(current_stage.name, current_stage.description or "")
+        if getattr(current_stage, "allows_submission", False):
+            submission_portal_active = True
+        else:
+            submission_portal_active = check_stage_allows_submission(current_stage.name, current_stage.description or "")
         results_phase_active = check_stage_is_results_phase(current_stage.name, current_stage.description or "")
 
     # Only return the real leaderboard to participants if the results phase is active
