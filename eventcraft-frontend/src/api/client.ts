@@ -166,7 +166,7 @@ export const teamsApi = {
     request<any>(`/api/events/${eventId}/teams/clear`, { method: 'DELETE' }),
   leaderboard: (eventId: string) => request<any[]>(`/api/events/${eventId}/teams/leaderboard`),
   publicLeaderboard: (eventId: string) =>
-    request<any[]>(`/api/events/${eventId}/teams/leaderboard/public`, {}, true),
+    request<{ event_name: string; teams: any[] }>(`/api/events/${eventId}/teams/leaderboard/public`, {}, true),
 
   renameTeam: (token: string, name: string) =>
     request<{ message: string; name: string; name_locked: boolean }>(
