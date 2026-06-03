@@ -10,6 +10,7 @@ import {
 import { Badge } from '../components/ui/Badge'
 import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
+import logoImage from '../assets/logo.png'
 import { useAppContext } from '../context/AppContext'
 import { QAChat, QANotificationPopup } from '../components/QAChat'
 import { OmniAgentSidebar } from '../components/OmniAgentSidebar'
@@ -368,7 +369,7 @@ export const ParticipantPortal: React.FC = () => {
             <div className="flex items-center gap-2.5 px-1 py-1">
              
               <div className="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden">
-                <img src="/src/assets/logo.png" alt="EventCraft" className="w-full h-full object-cover" />
+                <img src={logoImage} alt="EventCraft" className="w-full h-full object-contain" />
               </div>
               <div>
                 <div className="text-xs font-black text-gray-900 dark:text-white tracking-wider">EventCraft</div>
