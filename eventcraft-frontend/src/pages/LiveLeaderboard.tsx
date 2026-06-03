@@ -108,7 +108,7 @@ function useLeaderboardTheme() {
 }
 
 export const LiveLeaderboard: React.FC = () => {
-  const { theme, toggleTheme, isDark } = useLeaderboardTheme()
+  const { toggleTheme, isDark } = useLeaderboardTheme()
 
   const [eventId, setEventId] = useState<string | null>(null)
   const [eventName, setEventName] = useState('EventCraft')
