@@ -136,6 +136,7 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             tasks=stage_def.get("tasks", []),
             allows_submission=stage_def.get("allows_submission", False),
             is_evaluation=stage_def.get("is_evaluation", False),
+            portal_description=stage_def.get("portal_description", None),
         ))
 
     event.current_stage_index = 0

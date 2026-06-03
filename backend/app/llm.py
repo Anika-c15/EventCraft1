@@ -587,42 +587,48 @@ When ready, respond with a brief summary of your assumptions, then EXACTLY this 
       "description": "Register and verify all participants, collect skill declarations.",
       "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"],
       "allows_submission": false,
-      "is_evaluation": false
+      "is_evaluation": false,
+      "portal_description": "Registration is open. Your profile has been received."
     },
     {
       "name": "Team Formation",
       "description": "Form balanced teams based on skills and institutional diversity.",
       "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"],
       "allows_submission": false,
-      "is_evaluation": false
+      "is_evaluation": false,
+      "portal_description": "Teams are being formed. You'll receive an email once your team assignment is confirmed."
     },
     {
       "name": "Hacking",
       "description": "Teams work on their AI/ML projects.",
       "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"],
       "allows_submission": true,
-      "is_evaluation": false
+      "is_evaluation": false,
+      "portal_description": "Hacking is in progress! Build your project and submit it using the My Submission Hub."
     },
     {
       "name": "Evaluation",
       "description": "Judges evaluate team submissions across defined criteria.",
       "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"],
       "allows_submission": false,
-      "is_evaluation": true
+      "is_evaluation": true,
+      "portal_description": "Evaluation is underway. Judges are reviewing all team submissions."
     },
     {
       "name": "Results",
       "description": "Compile final rankings and announce winners.",
       "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"],
       "allows_submission": false,
-      "is_evaluation": false
+      "is_evaluation": false,
+      "portal_description": "Results are being compiled. Final rankings will be announced soon."
     },
     {
       "name": "Progression",
       "description": "Advance qualifying participants to the next round or finale.",
       "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"],
       "allows_submission": false,
-      "is_evaluation": false
+      "is_evaluation": false,
+      "portal_description": "Qualifying teams are being notified for the next round."
     }
   ],
   "formation_rules": {
@@ -663,6 +669,7 @@ Adapt ALL fields based on the user's description:
 For each stage in your stages list, you MUST explicitly set:
 - "allows_submission": true if teams/participants build and submit their project, code, slides, or presentation during this stage, false otherwise.
 - "is_evaluation": true if this is the evaluation, judging, or peer review stage where judges/peers rate and score the projects, false otherwise.
+- "portal_description": A friendly, participant-facing status message to be displayed on their portal during this stage (e.g. "Hacking is in progress! Build your project and submit it using the My Submission Hub" or "Evaluation is underway. Judges are reviewing all team submissions.").
 
 Always make scoring_weights sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info."""
 

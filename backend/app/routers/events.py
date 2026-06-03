@@ -17,6 +17,7 @@ DEFAULT_STAGES = [
                   "Verify institutional affiliations", "Approve participant roster"],
         "allows_submission": False,
         "is_evaluation": False,
+        "portal_description": "Registration is open. Your profile has been received.",
     },
     {
         "name": "Team Formation",
@@ -25,6 +26,7 @@ DEFAULT_STAGES = [
                   "Review proposed teams", "Approve team compositions"],
         "allows_submission": False,
         "is_evaluation": False,
+        "portal_description": "Teams are being formed. You'll receive an email once your team assignment is confirmed.",
     },
     {
         "name": "Hacking",
@@ -32,6 +34,7 @@ DEFAULT_STAGES = [
         "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"],
         "allows_submission": True,
         "is_evaluation": False,
+        "portal_description": "Hacking is in progress! Build your project and submit it using the My Submission Hub.",
     },
     {
         "name": "Evaluation",
@@ -40,6 +43,7 @@ DEFAULT_STAGES = [
                   "Aggregate scores", "Flag anomalies for review"],
         "allows_submission": False,
         "is_evaluation": True,
+        "portal_description": "Evaluation is underway. Judges are reviewing all team submissions.",
     },
     {
         "name": "Results",
@@ -48,6 +52,7 @@ DEFAULT_STAGES = [
                   "Prepare certificates", "Draft announcement communications"],
         "allows_submission": False,
         "is_evaluation": False,
+        "portal_description": "Results are being compiled. Final rankings will be announced soon.",
     },
     {
         "name": "Progression",
@@ -56,6 +61,7 @@ DEFAULT_STAGES = [
                   "Update participant statuses", "Archive event data"],
         "allows_submission": False,
         "is_evaluation": False,
+        "portal_description": "Qualifying teams are being notified for the next round.",
     },
 ]
 
@@ -95,6 +101,7 @@ def create_event(
             tasks=stage_data["tasks"],
             allows_submission=stage_data.get("allows_submission", False),
             is_evaluation=stage_data.get("is_evaluation", False),
+            portal_description=stage_data.get("portal_description", None),
         )
         db.add(stage)
 

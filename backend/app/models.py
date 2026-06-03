@@ -126,6 +126,7 @@ class PipelineStage(Base):
     tasks = Column(JSON, nullable=True)  # list of task strings
     allows_submission = Column(Boolean, default=False, server_default="0")
     is_evaluation = Column(Boolean, default=False, server_default="0")
+    portal_description = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
 

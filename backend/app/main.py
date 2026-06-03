@@ -121,6 +121,7 @@ def _migrate_db():
             for col, col_type in [
                 ("allows_submission", "BOOLEAN DEFAULT FALSE"),
                 ("is_evaluation",     "BOOLEAN DEFAULT FALSE"),
+                ("portal_description", "TEXT"),
             ]:
                 if col not in columns_stages:
                     try:
@@ -178,12 +179,12 @@ def _seed_db():
 
 
 DEMO_STAGES = [
-    {"name": "Participant Intake", "description": "Register and verify all participants, collect skill declarations and institutional affiliations.", "tasks": ["Open registration portal", "Collect participant profiles", "Verify institutional affiliations", "Approve participant roster"], "allows_submission": False, "is_evaluation": False},
-    {"name": "Team Formation", "description": "AI-powered team formation based on skill complementarity, institution diversity, and experience levels.", "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve team compositions"], "allows_submission": False, "is_evaluation": False},
-    {"name": "Hacking", "description": "Teams work on their AI/ML projects.", "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"], "allows_submission": True, "is_evaluation": False},
-    {"name": "Evaluation", "description": "Judges evaluate team projects across innovation, execution, presentation, and impact dimensions.", "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"], "allows_submission": False, "is_evaluation": True},
-    {"name": "Results", "description": "Compile final rankings, generate certificates, and prepare announcement materials.", "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"], "allows_submission": False, "is_evaluation": False},
-    {"name": "Progression", "description": "Advance qualifying participants and teams to the next round or final event.", "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"], "allows_submission": False, "is_evaluation": False},
+    {"name": "Participant Intake", "description": "Register and verify all participants, collect skill declarations and institutional affiliations.", "tasks": ["Open registration portal", "Collect participant profiles", "Verify institutional affiliations", "Approve participant roster"], "allows_submission": False, "is_evaluation": False, "portal_description": "Registration is open. Your profile has been received."},
+    {"name": "Team Formation", "description": "AI-powered team formation based on skill complementarity, institution diversity, and experience levels.", "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve team compositions"], "allows_submission": False, "is_evaluation": False, "portal_description": "Teams are being formed. You'll receive an email once your team assignment is confirmed."},
+    {"name": "Hacking", "description": "Teams work on their AI/ML projects.", "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"], "allows_submission": True, "is_evaluation": False, "portal_description": "Hacking is in progress! Build your project and submit it using the My Submission Hub."},
+    {"name": "Evaluation", "description": "Judges evaluate team projects across innovation, execution, presentation, and impact dimensions.", "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"], "allows_submission": False, "is_evaluation": True, "portal_description": "Evaluation is underway. Judges are reviewing all team submissions."},
+    {"name": "Results", "description": "Compile final rankings, generate certificates, and prepare announcement materials.", "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"], "allows_submission": False, "is_evaluation": False, "portal_description": "Results are being compiled. Final rankings will be announced soon."},
+    {"name": "Progression", "description": "Advance qualifying participants and teams to the next round or final event.", "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"], "allows_submission": False, "is_evaluation": False, "portal_description": "Qualifying teams are being notified for the next round."},
 ]
 
 DEMO_PARTICIPANTS = [
@@ -233,6 +234,7 @@ def _seed_demo_event(db):
             tasks=s["tasks"],
             allows_submission=s.get("allows_submission", False),
             is_evaluation=s.get("is_evaluation", False),
+            portal_description=s.get("portal_description", None),
         )
         db.add(stage)
 
