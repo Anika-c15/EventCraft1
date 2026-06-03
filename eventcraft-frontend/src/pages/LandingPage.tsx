@@ -323,14 +323,14 @@ export const LandingPage: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen font-sans selection:bg-orange-500 selection:text-white relative overflow-x-hidden transition-colors duration-300 ${theme === 'light' ? 'text-slate-800' : 'bg-gradient-to-br from-slate-955 via-slate-900 to-slate-955 text-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950'}`}
-      style={theme === 'light' ? { background: 'linear-gradient(to bottom, #FFFFFF 0%, #FFF5EF 30%, #FEF0E8 65%, #FDE8D8 100%)' } : {}}
+      className={`min-h-screen font-sans selection:bg-orange-500 selection:text-white relative overflow-x-hidden transition-colors duration-300 ${theme === 'light' ? 'text-slate-800' : 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950'}`}
+      style={theme === 'light' ? { background: 'linear-gradient(to bottom, #FCD5C5 0%, #FCE7DC 30%, #FFF1EB 60%, #FEF5F0 100%)' } : {}}
     >
 
       {/* Background Fluid Waves & Grid */}
       {theme === 'light' ? (
         <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="absolute inset-0 bg-white" />
+          <div className="absolute inset-0 bg-transparent" />
           <div
             className="absolute inset-0 opacity-50"
             style={{
@@ -345,24 +345,23 @@ export const LandingPage: React.FC = () => {
             }}
           />
           <div className="absolute top-[-10%] right-[-10%] w-[80%] h-[60%] rounded-full bg-gradient-to-br from-orange-200/10 via-amber-100/10 to-red-100/5 blur-[130px]" />
-          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.12] mix-blend-multiply pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
+          <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.25] mix-blend-multiply pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-1)" />
-            <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-2)" opacity="0.2" />
+            <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-2)" opacity="0.45" />
             <defs>
               <linearGradient id="fluid-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#FEF0EB" />
-                <stop offset="40%" stopColor="#FDD8CC" />
-                <stop offset="80%" stopColor="#FAB199" />
-                <stop offset="100%" stopColor="#FEF0EB" />
+                <stop offset="0%" stopColor="#FEECE5" />
+                <stop offset="40%" stopColor="#FCD1C0" />
+                <stop offset="80%" stopColor="#FAA687" />
+                <stop offset="100%" stopColor="#FEECE5" />
               </linearGradient>
               <linearGradient id="fluid-grad-2" x1="100%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#FEF0EB" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#FDD8CC" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#FAB199" stopOpacity="0.5" />
+                <stop offset="0%" stopColor="#FEECE5" stopOpacity="0.8" />
+                <stop offset="50%" stopColor="#FCD1C0" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#FAA687" stopOpacity="0.5" />
               </linearGradient>
             </defs>
           </svg>
-          <div className="absolute top-[450px] left-0 right-0 h-[300px] pointer-events-none bg-gradient-to-b from-transparent to-white" />
           <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_0.5px,transparent_0.5px)] [background-size:16px_16px] opacity-40" />
         </div>
       ) : (
@@ -371,17 +370,17 @@ export const LandingPage: React.FC = () => {
             className="absolute inset-0 opacity-40"
             style={{
               backgroundImage: `
-                radial-gradient(circle at 80% 10%, rgba(232, 69, 10, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 20% 25%, rgba(244, 99, 51, 0.1) 0%, transparent 45%),
-                radial-gradient(circle at 50% -5%, rgba(253, 110, 50, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 90% 45%, rgba(251, 146, 60, 0.12) 0%, transparent 50%),
-                radial-gradient(circle at 10% 60%, rgba(232, 69, 10, 0.12) 0%, transparent 40%),
-                radial-gradient(circle at 60% 30%, rgba(251, 146, 60, 0.08) 0%, transparent 60%)
+                radial-gradient(circle at 80% 10%, rgba(124, 45, 18, 0.10) 0%, transparent 50%),
+                radial-gradient(circle at 20% 25%, rgba(154, 52, 18, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 50% -5%, rgba(124, 45, 18, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 90% 45%, rgba(154, 52, 18, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 10% 60%, rgba(124, 45, 18, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 60% 30%, rgba(154, 52, 18, 0.06) 0%, transparent 60%)
               `
             }}
           />
-          <div className="absolute top-[-20%] right-[-10%] w-[70%] h-[60%] rounded-full bg-gradient-to-br from-orange-500/15 via-amber-500/10 to-transparent blur-[140px]" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[50%] rounded-full bg-gradient-to-tr from-red-500/10 via-orange-500/15 to-transparent blur-[120px]" />
+          <div className="absolute top-[-20%] right-[-10%] w-[70%] h-[60%] rounded-full bg-gradient-to-br from-orange-600/10 via-amber-600/5 to-transparent blur-[140px]" />
+          <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[50%] rounded-full bg-gradient-to-tr from-red-600/5 via-orange-600/5 to-transparent blur-[120px]" />
           <svg className="absolute top-0 left-0 w-full h-[750px] opacity-[0.22] mix-blend-screen pointer-events-none" viewBox="0 0 1440 750" fill="none" preserveAspectRatio="none">
             <path d="M0,0 L1440,0 L1440,350 C1300,480 1100,300 850,400 C600,500 350,310 0,480 Z" fill="url(#fluid-grad-dark-1)" />
             <path d="M0,0 L1440,0 L1440,280 C1200,410 950,260 700,370 C450,480 200,330 0,420 Z" fill="url(#fluid-grad-dark-2)" opacity="0.6" />
@@ -389,12 +388,12 @@ export const LandingPage: React.FC = () => {
               <linearGradient id="fluid-grad-dark-1" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#7c2d12" />
                 <stop offset="40%" stopColor="#9a3412" />
-                <stop offset="80%" stopColor="#ea580c" />
+                <stop offset="80%" stopColor="#c2410c" />
                 <stop offset="100%" stopColor="#7c2d12" />
               </linearGradient>
               <linearGradient id="fluid-grad-dark-2" x1="100%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#9a3412" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#c2410c" stopOpacity="0.9" />
+                <stop offset="50%" stopColor="#9a3412" stopOpacity="0.9" />
                 <stop offset="100%" stopColor="#7c2d12" stopOpacity="0.5" />
               </linearGradient>
             </defs>
@@ -732,8 +731,7 @@ export const LandingPage: React.FC = () => {
         </div>
 
         {/* Event Journey Section */}
-        <section id="journey" className={`py-20 border-t mt-20 space-y-12 transition-all duration-300 ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'
-          }`}>
+        <section id="journey" className="py-20 mt-20 space-y-12 transition-all duration-300">
           {/* Header Title */}
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${theme === 'light'
@@ -1013,8 +1011,7 @@ export const LandingPage: React.FC = () => {
         </section>
 
         {/* Features Section */}
-        <section id="features" className={`py-20 border-t mt-20 space-y-12 transition-all ${theme === 'light' ? 'border-slate-100' : 'border-slate-900'
-          }`}>
+        <section id="features" className="py-20 mt-20 space-y-12 transition-all">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${theme === 'light'
               ? 'bg-orange-50 text-orange-600 border border-orange-100/55'
@@ -1087,8 +1084,7 @@ export const LandingPage: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className={`border-t py-8 relative z-10 text-center transition-all ${theme === 'light' ? 'border-slate-100 bg-white/70' : 'border-slate-900 bg-slate-950/80'
-        }`}>
+      <footer className="py-8 relative z-10 text-center transition-all bg-transparent">
         <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-600'}`}>
           &copy; {new Date().getFullYear()} EventCraft Orchestration System. All rights reserved.
         </p>
