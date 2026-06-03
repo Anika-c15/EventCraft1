@@ -109,7 +109,7 @@ function useLeaderboardTheme() {
 }
 
 export const LiveLeaderboard: React.FC = () => {
-  const { theme, toggleTheme, isDark } = useLeaderboardTheme()
+  const { toggleTheme, isDark } = useLeaderboardTheme()
   const [searchParams] = useSearchParams()
 
   const [eventId, setEventId] = useState<string | null>(null)

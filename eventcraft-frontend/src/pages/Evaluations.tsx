@@ -26,18 +26,8 @@ const emptyForm = {
 export const Evaluations: React.FC = () => {
   const { eventId, loadApprovals, loadDashboard, dashboardStats } = useAppContext()
 
-  const activeStage = dashboardStats?.current_stage?.toLowerCase() || ''
-  const isClosed = activeStage.includes('result') || activeStage.includes('progression')
-  const isEvaluationPhase = !dashboardStats || 
-    activeStage.includes('eval') || 
-    activeStage.includes('result') || 
-    activeStage.includes('progression') || 
-    activeStage.includes('finale') || 
-    activeStage.includes('submission') || 
-    activeStage.includes('presentation') || 
-    activeStage.includes('pitch') || 
-    activeStage.includes('project') || 
-    dashboardStats.current_stage_index >= 2
+  const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
+  const isClosed = dashboardStats?.is_evaluation_closed ?? false
 
   const [scores, setScores]           = useState<any[]>([])
   const [teams, setTeams]             = useState<any[]>([])

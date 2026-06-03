@@ -63,14 +63,35 @@ def _recompute_combined_public(team: models.Team, db: Session) -> None:
         team.public_vote_score = round(social, 2)
 
 
+def _enforce_evaluations_active(event_id: str, db: Session):
+    stages = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).order_by(models.PipelineStage.order_index).all()
+
+    active_stage = next((s for s in stages if s.status == models.StageStatus.active), None)
+    if not active_stage:
+        raise HTTPException(400, "No active stage found for this event")
+
+    eval_stages = [s for s in stages if s.is_evaluation]
+    if not eval_stages:
+        eval_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("eval", "judg", "scor", "peer", "review", "voting"))]
+
+    if eval_stages:
+        first_eval_idx = min(s.order_index for s in eval_stages)
+        last_eval_idx = max(s.order_index for s in eval_stages)
+
+        if active_stage.order_index < first_eval_idx:
+            raise HTTPException(400, f"Evaluations are not open yet. Current stage is '{active_stage.name}'.")
+        elif active_stage.order_index > last_eval_idx:
+            raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase.")
+    else:
+        if active_stage.name.lower() in ("results", "progression"):
+            raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase.")
+
+
 def _save_score(event_id: str, payload: ScoreSubmit, db: Session, background_tasks: BackgroundTasks):
     """Core score-saving logic shared by committee and judge endpoints."""
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+    _enforce_evaluations_active(event_id, db)
 
     team = db.query(models.Team).filter(
         models.Team.id == payload.team_id,
@@ -273,12 +294,7 @@ async def invite_judge(
         raise HTTPException(404, "Event not found")
     event_name = event.name if event else "the event"
 
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+    _enforce_evaluations_active(event_id, db)
 
     # Create stateful judge invitation record
     invitation = models.JudgeInvitation(
@@ -362,12 +378,7 @@ def get_judge_portal(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+    _enforce_evaluations_active(event_id, db)
 
     teams = db.query(models.Team).filter(
         models.Team.event_id == event_id,
@@ -512,12 +523,7 @@ def update_public_vote(
     After saving, the combined public_vote_score is recomputed:
         combined = avg(social_vote_score, peer_avg)
     """
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+    _enforce_evaluations_active(event_id, db)
 
     team = db.query(models.Team).filter(
         models.Team.id == team_id,
@@ -637,12 +643,7 @@ async def lock_composite_score(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    if active_stage and active_stage.name.lower() in ("results", "progression"):
-        raise HTTPException(400, "Evaluations are closed because the event has advanced past the Evaluation phase")
+    _enforce_evaluations_active(event_id, db)
 
     team = db.query(models.Team).filter(
         models.Team.id == team_id,

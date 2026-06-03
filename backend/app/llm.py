@@ -152,6 +152,38 @@ def check_stage_is_results_phase(stage_name: str, stage_description: str) -> boo
     return is_results
 
 
+@lru_cache(maxsize=128)
+def check_stage_is_evaluation_phase(stage_name: str, stage_description: str) -> bool:
+    """
+    Use Groq LLM to dynamically classify if a pipeline stage is an evaluation, scoring, or judging phase.
+    Falls back to keyword matching if LLM is not configured or fails.
+    """
+    client = _get_client()
+    if client is not None:
+        try:
+            prompt = f"""Analyze if the following event pipeline stage is an evaluation, judging, scoring, peer review, or grading phase where judges or peers assess the submitted projects.
+            
+            Stage Name: {stage_name}
+            Stage Description: {stage_description}
+            
+            Respond with EXACTLY 'true' or 'false' and nothing else."""
+            
+            system = "You are an AI classifier. Determine if the stage is an evaluation/judging phase. Respond with only 'true' or 'false'."
+            res = _call(prompt, system=system).strip().lower()
+            if "true" in res:
+                return True
+            if "false" in res:
+                return False
+        except Exception as e:
+            print(f"⚠️ Groq stage classification error: {e}")
+
+    # Fallback to keyword heuristics
+    keywords = ("eval", "judg", "scor", "peer", "review", "grade", "assessment", "rating", "vote")
+    name_lower = stage_name.lower()
+    desc_lower = stage_description.lower() if stage_description else ""
+    return any(kw in name_lower for kw in keywords) or any(kw in desc_lower for kw in keywords)
+
+
 def _extract_json(text: str) -> Any:
     """Extract JSON from LLM response that may contain markdown fences."""
     match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
@@ -525,27 +557,44 @@ When ready, respond with a brief summary of your assumptions, then EXACTLY this 
     {
       "name": "Participant Intake",
       "description": "Register and verify all participants, collect skill declarations.",
-      "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"]
+      "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"],
+      "allows_submission": false,
+      "is_evaluation": false
     },
     {
       "name": "Team Formation",
       "description": "Form balanced teams based on skills and institutional diversity.",
-      "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"]
+      "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"],
+      "allows_submission": false,
+      "is_evaluation": false
+    },
+    {
+      "name": "Hacking",
+      "description": "Teams work on their AI/ML projects.",
+      "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"],
+      "allows_submission": true,
+      "is_evaluation": false
     },
     {
       "name": "Evaluation",
       "description": "Judges evaluate team submissions across defined criteria.",
-      "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"]
+      "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"],
+      "allows_submission": false,
+      "is_evaluation": true
     },
     {
       "name": "Results",
       "description": "Compile final rankings and announce winners.",
-      "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"]
+      "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"],
+      "allows_submission": false,
+      "is_evaluation": false
     },
     {
       "name": "Progression",
       "description": "Advance qualifying participants to the next round or finale.",
-      "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"]
+      "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"],
+      "allows_submission": false,
+      "is_evaluation": false
     }
   ],
   "formation_rules": {
@@ -582,6 +631,10 @@ Adapt ALL fields based on the user's description:
 - Case competition → stages: Registration, Submission, Presentation, Final Pitch, Results
 - Individual event → team_size: 1, skip Team Formation stage
 - Custom event → infer appropriate stages from the description
+
+For each stage in your stages list, you MUST explicitly set:
+- "allows_submission": true if teams/participants build and submit their project, code, slides, or presentation during this stage, false otherwise.
+- "is_evaluation": true if this is the evaluation, judging, or peer review stage where judges/peers rate and score the projects, false otherwise.
 
 Always make scoring_weights sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info."""
 
