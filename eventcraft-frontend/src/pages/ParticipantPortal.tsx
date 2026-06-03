@@ -921,27 +921,31 @@ export const ParticipantPortal: React.FC = () => {
               </Link>
             </div>
 
-            {/* Live Leaderboard — only when results are out */}
-            {isPhase3 && (
+            {/* Live Leaderboard — available from evaluation phase onwards */}
+            {(isPhase2 || isPhase3) && (
               <a
                 href="/live-leaderboard"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-gradient-to-r from-yellow-500/10 to-amber-500/5 border border-yellow-500/30 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm hover:border-yellow-500/50 transition-colors"
+                className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm hover:shadow-md hover:border-primary/30 dark:hover:border-primary/40 transition-all"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Trophy size={20} className="text-yellow-500" />
+                  <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Trophy size={20} className="text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
                       Live Leaderboard
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Final rankings are live — see where your team stands!</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                      {isPhase3
+                        ? 'Final rankings are live — see where your team stands!'
+                        : 'Scores are coming in — watch the live rankings update in real time!'}
+                    </p>
                   </div>
                 </div>
-                <span className="flex-shrink-0 flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-bold px-5 py-2.5 rounded-lg transition-colors shadow-sm">
+                <span className="flex-shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-white text-xs font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm">
                   <Trophy size={13} />
                   View Rankings
                 </span>

@@ -50,9 +50,9 @@ const confirmLogout = () => {
   navigate('/')
 }
 
-  // Show Live Leaderboard only when event is in Results or Progression phase (scores fully locked)
+  // Show Live Leaderboard from the Evaluation phase onwards (scores actively being submitted)
   const stage = dashboardStats?.current_stage?.toLowerCase() || ''
-  const scoresLocked = stage.includes('result') || stage.includes('progression')
+  const scoresLocked = stage.includes('eval') || stage.includes('result') || stage.includes('progression') || stage.includes('finale') || stage.includes('submission') || stage.includes('presentation') || stage.includes('pitch') || (dashboardStats?.current_stage_index !== undefined && dashboardStats.current_stage_index >= 2)
 
   return (
     <>
