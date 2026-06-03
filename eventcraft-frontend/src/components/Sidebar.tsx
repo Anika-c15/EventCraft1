@@ -185,7 +185,7 @@ const confirmLogout = () => {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5">
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map(({ path, label, icon: Icon, exact }) => (
           <NavLink
             key={path}
@@ -237,7 +237,7 @@ const confirmLogout = () => {
       </nav>
 
       {/* User + Collapse */}
-      <div className="px-2 py-3 border-t border-gray-100 dark:border-slate-800 space-y-1">
+      <div className="px-2 py-3 border-t border-gray-100 dark:border-slate-800 space-y-1 flex-shrink-0">
         {!collapsed && user && (
           <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-950/40 mb-1">
             <p className="text-xs font-semibold text-gray-700 dark:text-slate-350 truncate">{user.name}</p>
