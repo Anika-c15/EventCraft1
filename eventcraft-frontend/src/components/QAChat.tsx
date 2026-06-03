@@ -107,11 +107,15 @@ export const QAChat: React.FC<Props> = ({ eventId, teamId, senderName, senderRol
   }
 
   const formatTime = (iso: string) => {
-  const date = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', hour12: true
-  })
-}
+    if (!iso) return ''
+    // SQLite stores UTC without timezone suffix — append Z to force UTC parsing
+    const normalized = iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z'
+    const date = new Date(normalized)
+    if (isNaN(date.getTime())) return ''
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true
+    })
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col h-96 relative">
