@@ -1,4 +1,5 @@
-# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+# Vercel deployment files
+.vercel/
 backend/.env
 eventcraft-frontend/.env
 .env
