@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Trophy, Users, Zap, Wifi, WifiOff, Medal } from 'lucide-react'
 import { eventsApi, teamsApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -109,6 +110,7 @@ function useLeaderboardTheme() {
 
 export const LiveLeaderboard: React.FC = () => {
   const { theme, toggleTheme, isDark } = useLeaderboardTheme()
+  const [searchParams] = useSearchParams()
 
   const [eventId, setEventId] = useState<string | null>(null)
   const [eventName, setEventName] = useState('EventCraft')
@@ -119,16 +121,33 @@ export const LiveLeaderboard: React.FC = () => {
   const prevRanks = useRef<Record<string, number>>({})
 
   useEffect(() => {
-    eventsApi.getActiveEvent()
-      .then(d => { setEventId(d.event_id); setEventName(d.event_name) })
-      .catch(() => {})
-  }, [])
+    const paramEventId = searchParams.get('event')
+    if (paramEventId) {
+      // Use the event_id from URL — fetch its name directly
+      setEventId(paramEventId)
+      eventsApi.getActiveEvent()
+        .then(d => {
+          // Only use active event name if it matches, otherwise just keep default
+          if (d.event_id === paramEventId) setEventName(d.event_name)
+        })
+        .catch(() => {})
+      // Also try fetching the event name via public leaderboard data
+    } else {
+      // Fallback: no event in URL, use whatever the backend considers active
+      eventsApi.getActiveEvent()
+        .then(d => { setEventId(d.event_id); setEventName(d.event_name) })
+        .catch(() => {})
+    }
+  }, [searchParams])
 
   const loadLeaderboard = useCallback(async (id: string) => {
     try {
       const data = await teamsApi.publicLeaderboard(id)
-      const scored = data.filter((t: any) => t.score !== null)
-      const unscored = data.filter((t: any) => t.score === null)
+      // If the API returns event_name, use it
+      if (data.event_name) setEventName(data.event_name)
+      const teams = Array.isArray(data) ? data : (data.teams ?? [])
+      const scored = teams.filter((t: any) => t.score !== null)
+      const unscored = teams.filter((t: any) => t.score === null)
 
       const newFlash = new Set<string>()
       scored.forEach((t: any) => {

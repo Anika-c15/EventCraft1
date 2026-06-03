@@ -219,7 +219,7 @@ const confirmLogout = () => {
         {/* Live Leaderboard — only when scores are locked */}
         {scoresLocked && (
           <a
-            href="/live-leaderboard"
+            href={`/live-leaderboard${eventId ? `?event=${eventId}` : ''}`}
             target="_blank"
             rel="noopener noreferrer"
             title={collapsed ? 'Live Leaderboard' : undefined}

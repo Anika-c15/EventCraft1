@@ -924,7 +924,7 @@ export const ParticipantPortal: React.FC = () => {
             {/* Live Leaderboard — available from evaluation phase onwards */}
             {(isPhase2 || isPhase3) && (
               <a
-                href="/live-leaderboard"
+                href={`/live-leaderboard${eventId ? `?event=${eventId}` : ''}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm hover:shadow-md hover:border-primary/30 dark:hover:border-primary/40 transition-all"

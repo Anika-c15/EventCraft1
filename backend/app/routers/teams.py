@@ -215,7 +215,8 @@ def get_leaderboard(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    return _build_leaderboard(event_id, db)
+    data = _build_leaderboard(event_id, db)
+    return data["teams"]  # admin endpoint keeps returning a plain list
 
 
 @router.get("/leaderboard/public")
@@ -224,10 +225,13 @@ def get_public_leaderboard(
     db: Session = Depends(get_db),
 ):
     """Public endpoint — no auth required. Used by the live leaderboard page."""
-    return _build_leaderboard(event_id, db)
+    return _build_leaderboard(event_id, db)  # returns { event_name, teams }
 
 
 def _build_leaderboard(event_id: str, db: Session):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    event_name = event.name if event else "EventCraft"
+
     teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
     result = []
 
@@ -264,7 +268,7 @@ def _build_leaderboard(event_id: str, db: Session):
     for i, item in enumerate(result):
         item["rank"] = i + 1
 
-    return result
+    return {"event_name": event_name, "teams": result}
 
 
 from urllib.parse import urlparse
