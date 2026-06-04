@@ -91,6 +91,13 @@ async def _send_via_smtp(
         msg.attach(MIMEText(plain, "plain"))
         msg.attach(MIMEText(final_html, "html"))
 
+        tls_context = None
+        if settings.SMTP_SKIP_TLS_VERIFY:
+            import ssl
+            tls_context = ssl.create_default_context()
+            tls_context.check_hostname = False
+            tls_context.verify_mode = ssl.CERT_NONE
+
         await aiosmtplib.send(
             msg,
             hostname=settings.SMTP_HOST,
@@ -98,6 +105,7 @@ async def _send_via_smtp(
             username=settings.SMTP_USER,
             password=settings.SMTP_PASSWORD,
             start_tls=True,
+            tls_context=tls_context,
         )
         logger.info(f"[SMTP] Sent to {to_email}: {subject}")
         print(f"[SMTP] ✅ Sent to {to_email}: {subject}")

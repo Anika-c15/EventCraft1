@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_SKIP_TLS_VERIFY: bool = True
     EMAIL_FROM: str = "EventCraft <noreply@eventcraft.com>"
     EMAIL_FROM_NAME: str = "EventCraft"
 
