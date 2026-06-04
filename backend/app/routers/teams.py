@@ -33,6 +33,16 @@ def list_teams(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    # Proactively clean up any empty teams (0 members) to fix database state issues
+    all_teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
+    has_empty = False
+    for t in all_teams:
+        if len(t.members) == 0:
+            db.delete(t)
+            has_empty = True
+    if has_empty:
+        db.commit()
+
     teams = (
         db.query(models.Team)
         .filter(models.Team.event_id == event_id)
@@ -71,6 +81,7 @@ def form_teams_endpoint(
         .filter(
             models.Participant.event_id == event_id,
             models.Participant.status == models.ParticipantStatus.active,
+            models.Participant.team_id.is_(None),
         )
         .all()
     )

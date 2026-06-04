@@ -229,6 +229,7 @@ def _execute_action(action_type: str, event_id: str, db: Session) -> Dict[str, A
             .filter(
                 models.Participant.event_id == event_id,
                 models.Participant.status == models.ParticipantStatus.active,
+                models.Participant.team_id.is_(None),
             )
             .all()
         )
