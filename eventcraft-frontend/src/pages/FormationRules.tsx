@@ -304,8 +304,8 @@ export const FormationRules: React.FC = () => {
             <RangeSlider min={2} max={50} value={rules.maxTeams} onChange={(v) => setRules({ ...rules, maxTeams: v })} />
             <div className="flex justify-between text-[10px] font-bold mt-2">
               <span className="text-gray-300 dark:text-slate-600">2</span>
-              <span className="text-gray-300 dark:text-slate-600">10</span>
-              <span className="text-gray-300 dark:text-slate-600">20</span>
+              <span className="text-gray-300 dark:text-slate-600">25</span>
+              <span className="text-gray-300 dark:text-slate-600">50</span>
             </div>
           </SectionCard>
         </div>
