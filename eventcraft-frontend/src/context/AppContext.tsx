@@ -28,7 +28,7 @@ interface AppContextType {
   approvals: any[]
   loadApprovals: () => Promise<void>
   resolveApproval: (id: string, status: 'approved' | 'rejected') => Promise<void>
-  addApproval: (approval: { type: string; description: string; status?: string; payload?: any }) => Promise<void>
+  addApproval: (approval: { type: string; description: string; status?: string; payload?: any }, targetEventId?: string) => Promise<void>
 
   dashboardStats: any | null
   loadDashboard: () => Promise<void>
@@ -109,6 +109,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   const handleWsMessage = useCallback((msg: any) => {
     switch (msg.type) {
+      case 'event_updated':
+        loadEventsList(); break
       case 'approval_resolved':
       case 'approval_created':
         loadApprovals(); loadDashboard(); break
@@ -157,6 +159,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const list = await eventsApi.list()
       setEventsList(list)
+      const currentId = localStorage.getItem('ec_event_id')
+      if (currentId) {
+        const currentEvent = list.find((e: any) => e.id === currentId)
+        if (currentEvent) {
+          setEventName(currentEvent.name)
+        }
+      }
       return list
     } catch (e: any) {
       setError(e.message || 'Failed to load events list')
@@ -177,7 +186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const events = await eventsApi.list()
       setEventsList(events)
       if (events.length > 0) {
-        let activeEvent = events.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+        let activeEvent = events.find((e: any) => e.name.toLowerCase().includes('eventcraft'))
         if (!activeEvent) {
           const savedId = localStorage.getItem('ec_event_id')
           activeEvent = events.find((e: any) => e.id === savedId) || events[0]
@@ -225,7 +234,7 @@ const logout = () => {
         if (list && list.length > 0) {
           let activeEvent = null
           if (user?.role === 'admin') {
-            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft'))
           }
           if (!activeEvent) {
             activeEvent = list[0]
@@ -281,8 +290,8 @@ const logout = () => {
     } catch (e: any) { setError(e.message); throw e }
   }
 
-  const addApproval = async (approval: { type: string; description: string; status?: string; payload?: any }) => {
-    let evId = eventId
+  const addApproval = async (approval: { type: string; description: string; status?: string; payload?: any }, targetEventId?: string) => {
+    let evId = targetEventId || eventId
     if (!evId) {
       try {
         const events = await eventsApi.list()
@@ -328,7 +337,7 @@ const logout = () => {
           const currentId = localStorage.getItem('ec_event_id')
           let activeEvent = list.find((e: any) => e.id === currentId)
           if (!activeEvent) {
-            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft hackathon 2026') || e.name.toLowerCase().includes('eventcraft hackathon'))
+            activeEvent = list.find((e: any) => e.name.toLowerCase().includes('eventcraft'))
             if (!activeEvent) {
               activeEvent = list[0]
             }

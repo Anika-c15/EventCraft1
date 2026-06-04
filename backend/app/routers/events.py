@@ -151,11 +151,35 @@ def get_public_demo_portal(
 @router.get("/public/active-event")
 def get_public_active_event(db: Session = Depends(get_db)):
     """Public — returns the most recent active event id and name."""
-    event = db.query(models.Event).filter(models.Event.is_active == True).order_by(models.Event.created_at.desc()).first()
+    # Prioritize active event containing 'eventcraft' (case-insensitive)
+    event = db.query(models.Event).filter(
+        models.Event.is_active == True,
+        models.Event.name.ilike("%eventcraft%")
+    ).first()
+    if not event:
+        event = db.query(models.Event).filter(models.Event.is_active == True).order_by(models.Event.created_at.desc()).first()
     if not event:
         event = db.query(models.Event).order_by(models.Event.created_at.desc()).first()
     if not event:
         raise HTTPException(404, "No events found")
+    return {"event_id": event.id, "event_name": event.name}
+
+
+@router.get("/public/verify-name")
+def verify_event_name(name: str, db: Session = Depends(get_db)):
+    """Public — checks if an event name matches any registered event (case-insensitive) and returns its ID and name."""
+    clean_name = name.strip().lower()
+    
+    # Try exact match first
+    event = db.query(models.Event).filter(models.Event.name.ilike(clean_name)).first()
+    
+    # If not found, try a substring match
+    if not event:
+        event = db.query(models.Event).filter(models.Event.name.ilike(f"%{clean_name}%")).first()
+        
+    if not event:
+        raise HTTPException(404, "No matching event found")
+        
     return {"event_id": event.id, "event_name": event.name}
 
 
@@ -271,6 +295,9 @@ def update_formation_rules(
         raise HTTPException(404, "Event not found")
 
     event.formation_rules = payload.model_dump()
+    if payload.event_name:
+        event.name = payload.event_name
+
     log = models.ActivityLog(
         event_id=event_id,
         message="Formation rules updated",
@@ -278,6 +305,14 @@ def update_formation_rules(
     )
     db.add(log)
     db.commit()
+
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_updated", "event_name": event.name})
+    except Exception as ws_err:
+        # Don't fail the request if WS broadcast fails
+        pass
+
     return {"message": "Formation rules updated", "rules": event.formation_rules}
 
 

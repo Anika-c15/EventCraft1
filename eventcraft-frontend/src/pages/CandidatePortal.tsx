@@ -86,7 +86,7 @@ export const CandidatePortal: React.FC = () => {
     extracted ? (setProfile(extracted), setPageState('review')) : setPageState('error')
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = (targetEventId?: string) => {
     if (!profile.name || !profile.email) return
     addApproval({
       type: 'Candidate Registration',
@@ -104,27 +104,23 @@ export const CandidatePortal: React.FC = () => {
         strengths: profile.strengths,
         flags: profile.flags,
       },
-    })
+    }, targetEventId)
     setPageState('submitted')
   }
 
-  const handleVerifyAndSubmit = () => {
+  const handleVerifyAndSubmit = async () => {
     setVerifyError('')
-    if (!activeEvent) {
-      // Fallback if events failed to load
-      handleSubmit()
+    const input = verifyInput.trim()
+    if (!input) return
+
+    try {
+      const res = await eventsApi.verifyEventName(input)
+      handleSubmit(res.event_id)
       setShowVerifyModal(false)
-      return
-    }
-
-    if (verifyInput.trim().toLowerCase() !== activeEvent.name.trim().toLowerCase()) {
+      setVerifyInput('')
+    } catch (err: any) {
       setVerifyError('The event name does not match. Please verify the event name you are registering for.')
-      return
     }
-
-    handleSubmit()
-    setShowVerifyModal(false)
-    setVerifyInput('')
   }
 
   const levelColors: Record<ParticipantLevel, string> = {

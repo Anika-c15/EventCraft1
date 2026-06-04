@@ -73,7 +73,7 @@ const AVATAR_COLORS = [
 ]
 
 export const FormationRules: React.FC = () => {
-  const { eventId } = useAppContext()
+  const { eventId, loadEventsList } = useAppContext()
   const toast = useToast()
   const [rules, setRules] = useState<FormationRulesType>({
     eventName: 'EventCraft Hackathon 2025',
@@ -129,6 +129,7 @@ export const FormationRules: React.FC = () => {
         experience_level_grouping: rules.experienceLevelGrouping,
         max_teams: rules.maxTeams,
       })
+      await loadEventsList().catch(() => {})
       setSaved(true)
       toast.success('Formation rules saved successfully!')
       setTimeout(() => setSaved(false), 3000)
