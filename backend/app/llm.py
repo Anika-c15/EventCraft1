@@ -124,7 +124,46 @@ def _call_gemini_api(
 
 
 def _call(prompt: str, system: Optional[str] = None) -> str:
-    """Single-turn Groq/Gemini call."""
+    """Single-turn call, trying Groq first, with fallback to Gemini."""
+    groq_client = _get_client()
+    
+    # Try Groq if key is configured
+    if groq_client is not None:
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+
+            response = _chat_completion_with_fallback(
+                client=groq_client,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as groq_err:
+            print(f"[LLM Fallback] Groq call failed: {groq_err}. Trying Gemini...")
+            # If Groq fails, fall back to Gemini if configured
+            if _use_gemini():
+                try:
+                    messages = []
+                    if system:
+                        messages.append({"role": "system", "content": system})
+                    messages.append({"role": "user", "content": prompt})
+                    return _call_gemini_api(messages)
+                except Exception as gemini_err:
+                    return f"[Gemini Fallback Error: {gemini_err} (Groq error was: {groq_err})]"
+            
+            # If Gemini not configured, handle original Groq error
+            if _is_rate_limit_error(groq_err):
+                return "[Groq rate limit hit — wait a moment and try again]"
+            if _is_auth_error(groq_err):
+                _reset_client()
+                return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
+            return f"[LLM Error: {groq_err}]"
+
+    # If Groq client is not configured, try Gemini directly
     if _use_gemini():
         try:
             messages = []
@@ -135,29 +174,7 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
         except Exception as e:
             return f"[Gemini Error: {e}]"
 
-    client = _get_client()
-    if client is None:
-        return "[LLM not configured — add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)]"
-    try:
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
-
-        response = _chat_completion_with_fallback(
-            client=client,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=2048,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        if _is_rate_limit_error(e):
-            return "[Groq rate limit hit — wait a moment and try again]"
-        if _is_auth_error(e):
-            _reset_client()
-            return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
-        return f"[LLM Error: {e}]"
+    return "[LLM not configured — add GROQ_API_KEY or GEMINI_API_KEY to backend/.env]"
 
 
 @lru_cache(maxsize=128)
@@ -727,7 +744,116 @@ def agent_chat(
     history: List[Dict[str, str]],
     new_message: str,
 ) -> Dict[str, Any]:
-    """Multi-turn conversation with the event config agent using Groq/Gemini."""
+    """Multi-turn conversation with the event config agent, trying Groq first, falling back to Gemini."""
+    groq_client = _get_client()
+
+    # 1. Try Groq first if client is configured
+    if groq_client is not None:
+        try:
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "assistant"
+                messages.append({"role": role, "content": msg["parts"]})
+
+            messages.append({"role": "user", "content": new_message})
+
+            response = _chat_completion_with_fallback(
+                client=groq_client,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=4096,
+            )
+            reply = response.choices[0].message.content.strip()
+
+            # Try to extract pipeline config
+            pipeline_config = None
+            pipeline_ready = False
+
+            json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
+            if json_match:
+                try:
+                    config = json.loads(json_match.group(1))
+                    if config.get("pipeline_ready"):
+                        pipeline_config = config
+                        pipeline_ready = True
+                except Exception:
+                    pass
+
+            needs_clarification = not pipeline_ready and any(
+                c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
+            )
+
+            return {
+                "reply": reply,
+                "pipeline_config": pipeline_config,
+                "pipeline_ready": pipeline_ready,
+                "needs_clarification": needs_clarification,
+            }
+        except Exception as groq_err:
+            print(f"[Agent Fallback] Groq agent chat failed: {groq_err}. Trying Gemini...")
+            
+            # Fall back to Gemini if configured
+            if _use_gemini():
+                try:
+                    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+                    for msg in history:
+                        role = "user" if msg["role"] == "user" else "assistant"
+                        messages.append({"role": role, "content": msg["parts"]})
+
+                    messages.append({"role": "user", "content": new_message})
+
+                    reply = _call_gemini_api(messages, max_tokens=4096)
+
+                    # Try to extract pipeline config
+                    pipeline_config = None
+                    pipeline_ready = False
+
+                    json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
+                    if json_match:
+                        try:
+                            config = json.loads(json_match.group(1))
+                            if config.get("pipeline_ready"):
+                                pipeline_config = config
+                                pipeline_ready = True
+                        except Exception:
+                            pass
+
+                    needs_clarification = not pipeline_ready and any(
+                        c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
+                    )
+
+                    return {
+                        "reply": reply,
+                        "pipeline_config": pipeline_config,
+                        "pipeline_ready": pipeline_ready,
+                        "needs_clarification": needs_clarification,
+                    }
+                except Exception as gemini_err:
+                    return {
+                        "reply": f"Both Groq and Gemini failed. Groq: {groq_err}. Gemini: {gemini_err}",
+                        "pipeline_config": None,
+                        "pipeline_ready": False,
+                        "needs_clarification": False,
+                    }
+
+            # If Gemini not configured, handle original Groq error
+            if _is_rate_limit_error(groq_err):
+                msg = "Groq rate limit hit — wait a moment and try again."
+            elif _is_auth_error(groq_err):
+                _reset_client()
+                msg = "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
+            else:
+                msg = f"I encountered an error: {groq_err}. Please check your Groq API key in backend/.env"
+            return {
+                "reply": msg,
+                "pipeline_config": None,
+                "pipeline_ready": False,
+                "needs_clarification": False,
+            }
+
+    # 2. Try Gemini directly if Groq key is not set but Gemini key is
     if _use_gemini():
         try:
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -772,71 +898,13 @@ def agent_chat(
                 "needs_clarification": False,
             }
 
-    client = _get_client()
-    if client is None:
-        return {
-            "reply": "Groq API key not configured. Please add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)",
-            "pipeline_config": None,
-            "pipeline_ready": False,
-            "needs_clarification": False,
-        }
-
-    try:
-        # Build messages array for Groq chat completions
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-        for msg in history:
-            role = "user" if msg["role"] == "user" else "assistant"
-            messages.append({"role": role, "content": msg["parts"]})
-
-        messages.append({"role": "user", "content": new_message})
-
-        response = _chat_completion_with_fallback(
-            client=client,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=4096,
-        )
-        reply = response.choices[0].message.content.strip()
-
-        # Try to extract pipeline config
-        pipeline_config = None
-        pipeline_ready = False
-
-        json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
-        if json_match:
-            try:
-                config = json.loads(json_match.group(1))
-                if config.get("pipeline_ready"):
-                    pipeline_config = config
-                    pipeline_ready = True
-            except Exception:
-                pass
-
-        needs_clarification = not pipeline_ready and any(
-            c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
-        )
-
-        return {
-            "reply": reply,
-            "pipeline_config": pipeline_config,
-            "pipeline_ready": pipeline_ready,
-            "needs_clarification": needs_clarification,
-        }
-    except Exception as e:
-        if _is_rate_limit_error(e):
-            msg = "Groq rate limit hit — wait a moment and try again."
-        elif _is_auth_error(e):
-            _reset_client()
-            msg = "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
-        else:
-            msg = f"I encountered an error: {e}. Please check your Groq API key in backend/.env"
-        return {
-            "reply": msg,
-            "pipeline_config": None,
-            "pipeline_ready": False,
-            "needs_clarification": False,
-        }
+    # 3. Neither configured
+    return {
+        "reply": "Neither Groq nor Gemini API keys are configured. Please add GROQ_API_KEY or GEMINI_API_KEY to backend/.env",
+        "pipeline_config": None,
+        "pipeline_ready": False,
+        "needs_clarification": False,
+    }
 
 
 # ── Results Summary ────────────────────────────────────────────────────────────
