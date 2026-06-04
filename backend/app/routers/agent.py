@@ -41,56 +41,52 @@ def chat(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
-    try:
-        event = db.query(models.Event).filter(models.Event.id == event_id).first()
-        if not event:
-            raise HTTPException(404, "Event not found")
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
 
-        # Load chat history
-        history_records = (
-            db.query(models.AgentMessage)
-            .filter(models.AgentMessage.event_id == event_id)
-            .order_by(models.AgentMessage.created_at)
-            .all()
-        )
+    # Load chat history
+    history_records = (
+        db.query(models.AgentMessage)
+        .filter(models.AgentMessage.event_id == event_id)
+        .order_by(models.AgentMessage.created_at)
+        .all()
+    )
 
-        chat_history = [
-            {"role": "user" if m.role == "user" else "assistant", "parts": m.content}
-            for m in history_records
-        ]
+    chat_history = [
+        {"role": "user" if m.role == "user" else "assistant", "parts": m.content}
+        for m in history_records
+    ]
 
-        # Call LLM
-        result = llm.agent_chat(chat_history, payload.content)
+    # Call LLM
+    result = llm.agent_chat(chat_history, payload.content)
 
-        # Save messages
-        db.add(models.AgentMessage(event_id=event_id, role="user", content=payload.content))
-        assistant_msg = models.AgentMessage(
-            event_id=event_id, role="assistant", content=result["reply"]
-        )
-        db.add(assistant_msg)
+    # Save messages
+    db.add(models.AgentMessage(event_id=event_id, role="user", content=payload.content))
+    assistant_msg = models.AgentMessage(
+        event_id=event_id, role="assistant", content=result["reply"]
+    )
+    db.add(assistant_msg)
 
-        # ── Apply full configuration when pipeline is ready ────────────────────────
-        if result["pipeline_ready"] and result["pipeline_config"]:
-            config = result["pipeline_config"]
-            _apply_full_config(event, config, db)
+    # ── Apply full configuration when pipeline is ready ────────────────────────
+    if result["pipeline_ready"] and result["pipeline_config"]:
+        config = result["pipeline_config"]
+        _apply_full_config(event, config, db)
 
-        db.commit()
-        db.refresh(assistant_msg)
+    db.commit()
+    db.refresh(assistant_msg)
 
-        return AgentChatResponse(
-            message=AgentMessageOut(
-                id=assistant_msg.id,
-                role=assistant_msg.role,
-                content=assistant_msg.content,
-                created_at=assistant_msg.created_at,
-            ),
-            pipeline_configured=result["pipeline_ready"],
-            pipeline_config=result.get("pipeline_config"),
-            needs_clarification=result["needs_clarification"],
-        )
-    except Exception as e:
-        import traceback
-        raise HTTPException(status_code=400, detail=f"Diagnostic Traceback:\n{traceback.format_exc()}")
+    return AgentChatResponse(
+        message=AgentMessageOut(
+            id=assistant_msg.id,
+            role=assistant_msg.role,
+            content=assistant_msg.content,
+            created_at=assistant_msg.created_at,
+        ),
+        pipeline_configured=result["pipeline_ready"],
+        pipeline_config=result.get("pipeline_config"),
+        needs_clarification=result["needs_clarification"],
+    )
 
 
 def _apply_full_config(event: models.Event, config: dict, db: Session):

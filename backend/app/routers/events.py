@@ -486,6 +486,10 @@ def clear_event_teams_and_submissions(event_id: str, db: Session):
         models.Participant.event_id == event_id
     ).update({models.Participant.team_id: None})
     
+    db.query(models.QAMessage).filter(
+        models.QAMessage.event_id == event_id
+    ).delete()
+    
     db.query(models.PeerReview).filter(
         models.PeerReview.event_id == event_id
     ).delete()
