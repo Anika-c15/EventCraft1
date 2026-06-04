@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
     GROQ_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/0"

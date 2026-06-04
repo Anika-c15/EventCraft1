@@ -72,8 +72,69 @@ def _chat_completion_with_fallback(
     )
 
 
+def _use_gemini() -> bool:
+    return bool((settings.GEMINI_API_KEY or "").strip())
+
+
+def _call_gemini_api(
+    messages: List[Dict[str, Any]],
+    temperature: float = 0.7,
+    max_tokens: int = 2048
+) -> str:
+    import httpx
+    key = (settings.GEMINI_API_KEY or "").strip()
+    if not key:
+        raise ValueError("GEMINI_API_KEY not configured")
+
+    system_instruction = None
+    contents = []
+
+    for msg in messages:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "system":
+            system_instruction = {"parts": [{"text": content}]}
+        else:
+            gemini_role = "user" if role == "user" else "model"
+            contents.append({
+                "role": gemini_role,
+                "parts": [{"text": content}]
+            })
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens
+        }
+    }
+    if system_instruction:
+        payload["systemInstruction"] = system_instruction
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        
+        try:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError):
+            raise ValueError(f"Unexpected response format from Gemini: {data}")
+
+
 def _call(prompt: str, system: Optional[str] = None) -> str:
-    """Single-turn Groq call."""
+    """Single-turn Groq/Gemini call."""
+    if _use_gemini():
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            return _call_gemini_api(messages)
+        except Exception as e:
+            return f"[Gemini Error: {e}]"
+
     client = _get_client()
     if client is None:
         return "[LLM not configured — add GROQ_API_KEY to backend/.env (get a free key at https://console.groq.com)]"
@@ -666,7 +727,51 @@ def agent_chat(
     history: List[Dict[str, str]],
     new_message: str,
 ) -> Dict[str, Any]:
-    """Multi-turn conversation with the event config agent using Groq."""
+    """Multi-turn conversation with the event config agent using Groq/Gemini."""
+    if _use_gemini():
+        try:
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "assistant"
+                messages.append({"role": role, "content": msg["parts"]})
+
+            messages.append({"role": "user", "content": new_message})
+
+            reply = _call_gemini_api(messages, max_tokens=4096)
+
+            # Try to extract pipeline config
+            pipeline_config = None
+            pipeline_ready = False
+
+            json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
+            if json_match:
+                try:
+                    config = json.loads(json_match.group(1))
+                    if config.get("pipeline_ready"):
+                        pipeline_config = config
+                        pipeline_ready = True
+                except Exception:
+                    pass
+
+            needs_clarification = not pipeline_ready and any(
+                c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
+            )
+
+            return {
+                "reply": reply,
+                "pipeline_config": pipeline_config,
+                "pipeline_ready": pipeline_ready,
+                "needs_clarification": needs_clarification,
+            }
+        except Exception as e:
+            return {
+                "reply": f"Gemini encountered an error: {e}. Please check your GEMINI_API_KEY in backend/.env",
+                "pipeline_config": None,
+                "pipeline_ready": False,
+                "needs_clarification": False,
+            }
+
     client = _get_client()
     if client is None:
         return {
