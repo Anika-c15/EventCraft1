@@ -101,7 +101,7 @@ def _call_gemini_api(
                 "parts": [{"text": content}]
             })
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={key}"
     payload = {
         "contents": contents,
         "generationConfig": {
