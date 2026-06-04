@@ -18,11 +18,10 @@ const Toggle: React.FC<{
     </div>
     <button
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none flex-shrink-0 ${
-        checked
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none flex-shrink-0 ${checked
           ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-md shadow-orange-500/30'
           : 'bg-gray-200 dark:bg-slate-700'
-      }`}
+        }`}
       role="switch"
       aria-checked={checked}
     >
@@ -92,7 +91,7 @@ export const FormationRules: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
-      teamsApi.list(eventId).then(setRealTeams).catch(() => {})
+      teamsApi.list(eventId).then(setRealTeams).catch(() => { })
     }
   }, [eventId])
 
@@ -112,7 +111,7 @@ export const FormationRules: React.FC = () => {
             maxTeams: r.max_teams ?? 6,
           })
         }
-      }).catch(() => {})
+      }).catch(() => { })
     }
   }, [eventId])
 
@@ -159,19 +158,19 @@ export const FormationRules: React.FC = () => {
 
   const displayTeams = hasRealTeams
     ? realTeams.slice(0, 3).map((t) => ({
-        name: t.name,
-        members: (t.members || []).slice(0, rules.teamSize).map((m: any, idx: number) => ({
-          initials: m.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?',
-          color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-          fullName: m.name || '',
-        })),
-        total: (t.members || []).length,
-      }))
+      name: t.name,
+      members: (t.members || []).slice(0, rules.teamSize).map((m: any, idx: number) => ({
+        initials: m.name?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '?',
+        color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+        fullName: m.name || '',
+      })),
+      total: (t.members || []).length,
+    }))
     : mockPreviewTeams.map((members, i) => ({
-        name: `Team ${i + 1}`,
-        members,
-        total: members.length,
-      }))
+      name: `Team ${i + 1}`,
+      members,
+      total: members.length,
+    }))
 
   const teamsCount = hasRealTeams ? realTeams.length : estimatedTeams
 
@@ -193,11 +192,10 @@ export const FormationRules: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={loading}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-md cursor-pointer ${
-            saved
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-md cursor-pointer ${saved
               ? 'bg-green-500 text-white shadow-green-500/30'
               : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-orange-500/30 hover:-translate-y-0.5'
-          }`}
+            }`}
         >
           {saved ? <><CheckCircle size={15} /> Saved!</> : <><Save size={15} /> {loading ? 'Saving…' : 'Save Rules'}</>}
         </button>
@@ -283,11 +281,10 @@ export const FormationRules: React.FC = () => {
                   <button
                     key={opt.value}
                     onClick={() => setRules({ ...rules, experienceLevelGrouping: opt.value as any })}
-                    className={`py-3 px-2 rounded-xl border-2 text-center transition-all duration-200 cursor-pointer ${
-                      rules.experienceLevelGrouping === opt.value
+                    className={`py-3 px-2 rounded-xl border-2 text-center transition-all duration-200 cursor-pointer ${rules.experienceLevelGrouping === opt.value
                         ? 'border-orange-400 bg-orange-50 dark:bg-orange-500/10'
                         : 'border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600'
-                    }`}
+                      }`}
                   >
                     <div className="text-lg mb-1">{opt.emoji}</div>
                     <div className={`text-xs font-bold ${rules.experienceLevelGrouping === opt.value ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -304,7 +301,7 @@ export const FormationRules: React.FC = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400">Maximum teams to form</p>
               <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-green-500">{rules.maxTeams}</span>
             </div>
-            <RangeSlider min={2} max={20} value={rules.maxTeams} onChange={(v) => setRules({ ...rules, maxTeams: v })} />
+            <RangeSlider min={2} max={50} value={rules.maxTeams} onChange={(v) => setRules({ ...rules, maxTeams: v })} />
             <div className="flex justify-between text-[10px] font-bold mt-2">
               <span className="text-gray-300 dark:text-slate-600">2</span>
               <span className="text-gray-300 dark:text-slate-600">10</span>
