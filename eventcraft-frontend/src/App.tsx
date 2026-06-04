@@ -28,10 +28,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   // While the initial session check is in flight, show nothing (prevents flash)
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background dark:bg-slate-950 flex items-center justify-center transition-colors duration-0">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-400">Loading EventCraft...</p>
+          <p className="text-sm text-gray-400 dark:text-slate-500">Loading EventCraft...</p>
         </div>
       </div>
     )
@@ -41,9 +41,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 }
 
 const PageLoader: React.FC = () => (
-  <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-3">
-    <div className="w-10 h-10 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-    <p className="text-sm text-gray-400">Loading page...</p>
+  <div className="min-h-screen bg-background dark:bg-slate-950 flex flex-col items-center justify-center gap-3 transition-colors duration-0">
+    <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <p className="text-sm text-gray-400 dark:text-slate-500">Loading page...</p>
   </div>
 )
 

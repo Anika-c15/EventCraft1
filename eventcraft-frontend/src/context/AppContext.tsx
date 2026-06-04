@@ -55,8 +55,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [eventId, setEventIdState]    = useState<string | null>(localStorage.getItem('ec_event_id'))
   const [eventsList, setEventsList]   = useState<any[]>([])
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    // Read from the html element — already set by the blocking script in index.html
+    // This prevents any flash since the class is applied before React renders
+    if (document.documentElement.classList.contains('dark')) return 'dark'
     const saved = localStorage.getItem('ec_theme')
-    if (saved) return saved as 'light' | 'dark'
+    if (saved === 'dark' || saved === 'light') return saved
     const hour = new Date().getHours()
     return hour >= 18 || hour < 6 ? 'dark' : 'light'
   })

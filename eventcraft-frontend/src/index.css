@@ -17,6 +17,14 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* Ensure bg-background respects dark mode */
+  .bg-background {
+    background-color: #F5F4F0;
+  }
+  .dark .bg-background {
+    background-color: #020617; /* slate-950 */
+  }
 }
 
 @layer components {
