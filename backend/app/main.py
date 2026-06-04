@@ -76,7 +76,7 @@ def _migrate_db():
                             from_team_id TEXT NOT NULL REFERENCES teams(id),
                             to_team_id  TEXT NOT NULL REFERENCES teams(id),
                             score       FLOAT NOT NULL,
-                            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """))
                 print("🚀 Migrated: created peer_reviews table")
@@ -93,7 +93,7 @@ def _migrate_db():
                             name          TEXT NOT NULL,
                             email         TEXT NOT NULL UNIQUE,
                             notified      BOOLEAN DEFAULT FALSE,
-                            subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """))
                 print("🚀 Migrated: created subscribers table")
