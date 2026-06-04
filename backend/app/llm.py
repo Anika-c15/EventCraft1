@@ -63,25 +63,13 @@ def _chat_completion_with_fallback(
     max_tokens: int = 2048,
     model: str = MODEL
 ) -> Any:
-    """Calls Groq chat completions, falling back to llama-3.1-8b-instant if llama-3.3-70b-versatile gets rate-limited."""
-    try:
-        return client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-    except Exception as e:
-        if _is_rate_limit_error(e) and model == MODEL:
-            fallback_model = "llama-3.1-8b-instant"
-            print(f"⚠️ Groq rate limit hit for {MODEL}. Falling back to {fallback_model}...")
-            return client.chat.completions.create(
-                model=fallback_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-        raise e
+    """Calls Groq chat completions."""
+    return client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
 
 def _call(prompt: str, system: Optional[str] = None) -> str:
