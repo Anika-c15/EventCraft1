@@ -1274,26 +1274,26 @@ export const ParticipantPortal: React.FC = () => {
       {/* Confirmation Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-gray-100 space-y-4 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl max-w-md w-full p-6 shadow-xl border border-gray-100 dark:border-slate-800 space-y-4 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center gap-3 text-orange-600">
-              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
                 <Lock size={20} />
               </div>
-              <h3 className="font-extrabold text-base text-gray-900">Lock Submission Permanently?</h3>
+              <h3 className="font-extrabold text-base text-gray-900 dark:text-white">Lock Submission Permanently?</h3>
             </div>
 
-            <p className="text-xs text-gray-600 leading-relaxed">
+            <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
               Are you sure you want to finalize your submission? This will lock your project details (Title, Description, GitHub, Video, and Presentation links) and prevent any future changes.
             </p>
 
-            <div className="bg-orange-50/50 rounded-lg p-3 border border-orange-100/50 text-[10px] text-orange-800 leading-relaxed font-medium">
+            <div className="bg-orange-50 dark:bg-orange-950/20 rounded-lg p-3 border border-orange-100 dark:border-orange-900/30 text-[10px] text-orange-800 dark:text-orange-400 leading-relaxed font-medium">
               ⚠️ Once submitted, you cannot modify your project description or links under any circumstances.
             </div>
 
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowConfirmModal(false)}
-                className="flex-1 bg-white border border-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-xs font-semibold py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>

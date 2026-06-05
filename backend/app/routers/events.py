@@ -259,7 +259,8 @@ def get_dashboard(
 
     eval_stages = [s for s in stages if s.is_evaluation]
     if not eval_stages:
-        eval_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("eval", "judg", "scor", "peer", "review", "voting"))]
+        # Only match stages that are clearly evaluation/judging — not hacking/submission stages
+        eval_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("eval", "judg", "scor", "peer review", "voting"))]
 
     if eval_stages and current_stage:
         first_eval_idx = min(s.order_index for s in eval_stages)
@@ -267,7 +268,7 @@ def get_dashboard(
         is_evaluation_unlocked = current_stage.order_index >= first_eval_idx
         is_evaluation_closed = current_stage.order_index > last_eval_idx
     elif current_stage:
-        is_evaluation_unlocked = event.current_stage_index >= 3
+        is_evaluation_unlocked = event.current_stage_index >= 2  # index 2 = Evaluation in default pipeline
         is_evaluation_closed = current_stage.name.lower() in ("results", "progression")
 
     return DashboardStats(

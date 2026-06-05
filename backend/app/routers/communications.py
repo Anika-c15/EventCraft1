@@ -137,10 +137,22 @@ async def send_communication(
             for p in participants
         ]
     elif "judge" in recipient_lower:
+        # Pull judges from both invitations AND submitted scores
+        seen = set()
+        # First: all invited judges (have a portal link)
+        invitations = db.query(models.JudgeInvitation).filter(
+            models.JudgeInvitation.event_id == event_id,
+            models.JudgeInvitation.is_revoked == False,
+        ).all()
+        for inv in invitations:
+            if inv.judge_email not in seen:
+                recipients.append({"email": inv.judge_email, "name": inv.judge_name,
+                                    "vars": {"participant_name": inv.judge_name}})
+                seen.add(inv.judge_email)
+        # Also include any judges who submitted scores but may not have an invitation record
         scores = db.query(models.EvaluationScore).filter(
             models.EvaluationScore.event_id == event_id
         ).all()
-        seen = set()
         for s in scores:
             if s.judge_email not in seen:
                 recipients.append({"email": s.judge_email, "name": s.judge_name,

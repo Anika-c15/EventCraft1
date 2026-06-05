@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, BookOpen, Sliders, RefreshCw, Link2, Copy, CheckCircle, Github, Youtube, BarChart2 } from 'lucide-react'
+import { Plus, Sliders, RefreshCw, Link2, Copy, CheckCircle, Github, Youtube, BarChart2, BookOpen } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
@@ -35,8 +35,6 @@ export const Evaluations: React.FC = () => {
   const [showInvite, setShowInvite]   = useState(false)
   const [form, setForm]               = useState(emptyForm)
   const [loading, setLoading]         = useState(false)
-  const [guide, setGuide]             = useState<string | null>(null)
-  const [loadingGuide, setLoadingGuide] = useState(false)
 
   // Judge invite state
   const [inviteName, setInviteName]   = useState('')
@@ -189,17 +187,6 @@ export const Evaluations: React.FC = () => {
     }
   }
 
-  const loadGuide = async (teamId: string) => {
-    if (!eventId || !teamId) return
-    setLoadingGuide(true)
-    setGuide(null)
-    try {
-      const res = await evaluationsApi.assessmentGuide(eventId, teamId)
-      setGuide(res.guide)
-    } catch { setGuide('Could not generate guide.') }
-    finally { setLoadingGuide(false) }
-  }
-
   const getTeamName = (id: string) => teams.find((t) => t.id === id)?.name ?? id
 
   return (
@@ -226,10 +213,10 @@ export const Evaluations: React.FC = () => {
       </div>
 
       {!isEvaluationPhase ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center max-w-2xl mx-auto my-12 shadow-sm">
-          <BookOpen size={36} className="text-gray-300 /30 mx-auto mb-3" />
-          <h3 className="font-bold text-gray-700 mb-1">Evaluation Panel Locked</h3>
-          <p className="text-sm text-gray-500">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-8 text-center max-w-2xl mx-auto my-12 shadow-sm">
+          <BookOpen size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Evaluation Panel Locked</h3>
+          <p className="text-sm text-gray-500 dark:text-slate-400">
             Evaluation panel will unlock once the event transitions to the Evaluation phase.
           </p>
         </div>
@@ -256,26 +243,6 @@ export const Evaluations: React.FC = () => {
                       </div>
                     </div>
                   ))}
-
-                  {teams.length > 0 && (
-                    <div className="pt-2 border-t border-gray-100">
-                      <p className="text-xs font-semibold text-gray-500 mb-2">AI Assessment Guide</p>
-                      <select
-                        onChange={(e) => e.target.value && loadGuide(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 mb-2"
-                        defaultValue=""
-                      >
-                        <option value="">Select team for guide...</option>
-                        {teams.filter(t => t.submission_status === 'Submitted').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
-                      {loadingGuide && <p className="text-xs text-gray-400">Generating guide...</p>}
-                      {guide && (
-                        <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
-                          <p className="text-xs text-orange-800 leading-relaxed whitespace-pre-wrap">{guide}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </Card>
             </div>
