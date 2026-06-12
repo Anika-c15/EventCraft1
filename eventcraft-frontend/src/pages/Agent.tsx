@@ -266,13 +266,15 @@ export const Agent: React.FC = () => {
           )}
 
           {messages.map((msg) => {
-            // Strip the JSON code block and the "Here is the JSON configuration" line from assistant messages
+            // Strip the JSON code block and transition lines from assistant messages
             const displayContent = msg.role === 'assistant'
               ? msg.content
                   .replace(/```json[\s\S]*?```/g, '')
                   .replace(/```[\s\S]*?```/g, '')
                   .replace(/here is the (event configuration|json configuration|configuration|pipeline configuration)[:\s]*/gi, '')
                   .replace(/here('s| is) the.*?configuration.*?:/gi, '')
+                  .replace(/here is a (brief |detailed )?summary.*?:/gi, '')
+                  .replace(/here('s| is) a (brief |detailed )?summary.*?:/gi, '')
                   .trim()
               : msg.content
 
