@@ -18,9 +18,18 @@ const criteriaConfig = [
   { key: 'impact',       label: 'Impact',        description: 'Real-world potential and scalability' },
 ]
 
-const emptyForm = {
-  judgeName: '', judgeEmail: '', teamId: '',
-  innovation: 7, execution: 5, presentation: 7, impact: 6, notes: '',
+const defaultForm = (cList: any[]) => {
+  const scores: Record<string, number> = {}
+  cList.forEach((c) => {
+    scores[c.key] = 7 // Default score
+  })
+  return {
+    judgeName: '',
+    judgeEmail: '',
+    teamId: '',
+    notes: '',
+    ...scores,
+  }
 }
 
 export const Evaluations: React.FC = () => {
@@ -29,11 +38,12 @@ export const Evaluations: React.FC = () => {
   const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
   const isClosed = dashboardStats?.is_evaluation_closed ?? false
 
+  const [criteriaList, setCriteriaList] = useState<any[]>(criteriaConfig)
   const [scores, setScores]           = useState<any[]>([])
   const [teams, setTeams]             = useState<any[]>([])
   const [showModal, setShowModal]     = useState(false)
   const [showInvite, setShowInvite]   = useState(false)
-  const [form, setForm]               = useState(emptyForm)
+  const [form, setForm]               = useState<any>({ judgeName: '', judgeEmail: '', teamId: '', notes: '' })
   const [loading, setLoading]         = useState(false)
 
   // Judge invite state
@@ -90,6 +100,30 @@ export const Evaluations: React.FC = () => {
         }
         setScoringWeights(weights)
         setTempWeights(weights)
+      }
+      if (e.pipeline_config?.evaluation_criteria) {
+        const mapped = e.pipeline_config.evaluation_criteria.map((c: string) => {
+          const norm = c.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const descriptions: Record<string, string> = {
+            innovation: 'Originality and creativity of the solution',
+            execution: 'Technical implementation and code quality',
+            presentation: 'Clarity of demo and communication',
+            impact: 'Real-world potential and scalability',
+            pitch: 'Quality and delivery of the final pitch',
+            usability: 'User interface design and ease of use',
+            technicaldepth: 'Complexity and soundness of the technical solution',
+            designpitch: 'Clarity, aesthetics, and delivery of the design presentation',
+            codequality: 'Technical implementation and code quality',
+          }
+          return {
+            key: norm,
+            label: c,
+            description: descriptions[norm] || `Evaluation of ${c}`
+          }
+        })
+        setCriteriaList(mapped)
+      } else {
+        setCriteriaList(criteriaConfig)
       }
     } catch (err) {
       console.error('Error loading event weights:', err)
@@ -165,6 +199,10 @@ export const Evaluations: React.FC = () => {
     }
   }, [eventId])
 
+  useEffect(() => {
+    setForm(defaultForm(criteriaList))
+  }, [criteriaList])
+
   const loadScores = async () => {
     if (!eventId) return
     setLoading(true)
@@ -173,23 +211,28 @@ export const Evaluations: React.FC = () => {
     finally { setLoading(false) }
   }
 
-  const avg = ((form.innovation + form.execution + form.presentation + form.impact) / 4).toFixed(2)
+  const avg = (() => {
+    if (!criteriaList || criteriaList.length === 0) return '0.00'
+    const sum = criteriaList.reduce((acc, c) => acc + (form[c.key] !== undefined ? form[c.key] : 7), 0)
+    return (sum / criteriaList.length).toFixed(2)
+  })()
   const selectedTeam = teams.find((t) => t.id === form.teamId)
 
   const handleSubmit = async () => {
     if (!form.judgeName || !form.judgeEmail || !form.teamId || !eventId) return
     try {
+      const dynamicScores: Record<string, number> = {}
+      criteriaList.forEach(c => {
+        dynamicScores[c.key] = form[c.key] !== undefined ? form[c.key] : 7
+      })
       await evaluationsApi.submit(eventId, {
         team_id: form.teamId,
         judge_name: form.judgeName,
         judge_email: form.judgeEmail,
-        scores: {
-          innovation: form.innovation, execution: form.execution,
-          presentation: form.presentation, impact: form.impact,
-        },
+        scores: dynamicScores,
         notes: form.notes || undefined,
       })
-      setForm(emptyForm)
+      setForm(defaultForm(criteriaList))
       setShowModal(false)
       await loadScores()
       await loadApprovals()
@@ -253,7 +296,7 @@ export const Evaluations: React.FC = () => {
             <Button variant="secondary" onClick={() => { setInviteResult(null); setInviteName(''); setInviteEmail(''); setShowInvite(true) }} disabled={isClosed}>
               <Link2 size={15} /> Invite Judge
             </Button>
-            <Button variant="primary" onClick={() => setShowModal(true)} disabled={isClosed}>
+            <Button variant="primary" onClick={() => { setForm(defaultForm(criteriaList)); setShowModal(true); }} disabled={isClosed}>
               <Plus size={15} /> Submit Score
             </Button>
           </div>
@@ -280,9 +323,9 @@ export const Evaluations: React.FC = () => {
                 </CardHeader>
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 leading-relaxed">
-                    Evaluate each team across four key dimensions. Scores range from 0–10.
+                    Evaluate each team across the {criteriaList.length} configured dimensions. Scores range from 0–10.
                   </p>
-                  {criteriaConfig.map((c) => (
+                  {criteriaList.map((c) => (
                     <div key={c.key} className="flex items-start gap-3">
                       <div className="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 bg-primary" />
                       <div>
@@ -317,11 +360,14 @@ export const Evaluations: React.FC = () => {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-100 bg-gray-50">
-                          {['Judge', 'Team', 'Innovation', 'Execution', 'Presentation', 'Impact', 'Avg'].map((h) => (
-                            <th key={h} className={`text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 ${h === 'Avg' ? 'text-right' : 'text-left'}`}>
-                              {h}
+                          <th className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 text-left">Judge</th>
+                          <th className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 text-left">Team</th>
+                          {criteriaList.map((c) => (
+                            <th key={c.key} className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 text-left">
+                              {c.label}
                             </th>
                           ))}
+                          <th className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3 text-right">Avg</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -332,10 +378,11 @@ export const Evaluations: React.FC = () => {
                               <div className="text-xs text-gray-400">{s.judge_email}</div>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-700">{getTeamName(s.team_id)}</td>
-                            <td className="px-4 py-3 text-center text-sm">{s.scores_json?.innovation ?? '—'}</td>
-                            <td className="px-4 py-3 text-center text-sm">{s.scores_json?.execution ?? '—'}</td>
-                            <td className="px-4 py-3 text-center text-sm">{s.scores_json?.presentation ?? '—'}</td>
-                            <td className="px-4 py-3 text-center text-sm">{s.scores_json?.impact ?? '—'}</td>
+                            {criteriaList.map((c) => (
+                              <td key={c.key} className="px-4 py-3 text-center text-sm">
+                                {s.scores_json?.[c.key] ?? '—'}
+                              </td>
+                            ))}
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 {s.is_anomaly && <span title="Score anomaly detected">⚠️</span>}
@@ -359,7 +406,7 @@ export const Evaluations: React.FC = () => {
             scores.forEach((s: any) => {
               const name = getTeamName(s.team_id)
               if (!teamMap[s.team_id]) teamMap[s.team_id] = { name, counts: {}, sums: {} }
-              criteriaConfig.forEach(c => {
+              criteriaList.forEach(c => {
                 const val = s.scores_json?.[c.key]
                 if (val !== undefined && val !== null) {
                   teamMap[s.team_id].sums[c.key] = (teamMap[s.team_id].sums[c.key] || 0) + val
@@ -377,13 +424,13 @@ export const Evaluations: React.FC = () => {
                     <BarChart2 size={18} className="text-primary" />
                     <div>
                       <h2 className="text-base font-bold text-gray-900">Scoring Analytics — Radar Charts</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">Average judge scores per team across all four criteria</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Average judge scores per team across all configured criteria</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
                     {teamEntries.map(([teamId, td]) => {
-                      const chartScores = criteriaConfig.map(c => ({
+                      const chartScores = criteriaList.map(c => ({
                         label: c.label,
                         value: td.counts[c.key]
                           ? parseFloat((td.sums[c.key] / td.counts[c.key]).toFixed(2))
@@ -870,7 +917,7 @@ export const Evaluations: React.FC = () => {
               <span className="text-sm font-bold text-primary">Avg: {avg}/10</span>
             </div>
             <div className="space-y-4">
-              {criteriaConfig.map((c) => (
+              {criteriaList.map((c) => (
                 <div key={c.key}>
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">

@@ -20,11 +20,20 @@ import logoImage from '../assets/logo.png'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const CRITERIA_DESCRIPTIONS: Record<string, string> = {
-  Innovation: 'Originality and creativity of the solution',
-  Execution: 'Technical implementation and code quality',
-  Presentation: 'Clarity of demo and communication',
-  Impact: 'Real-world potential and scalability',
+const getCriteriaDescription = (criterion: string): string => {
+  const norm = criterion.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const descriptions: Record<string, string> = {
+    innovation: 'Originality and creativity of the solution',
+    execution: 'Technical implementation and code quality',
+    presentation: 'Clarity of demo and communication',
+    impact: 'Real-world potential and scalability',
+    pitch: 'Quality and delivery of the final pitch',
+    usability: 'User interface design and ease of use',
+    technicaldepth: 'Complexity and soundness of the technical solution',
+    designpitch: 'Clarity, aesthetics, and delivery of the design presentation',
+    codequality: 'Technical implementation and code quality',
+  }
+  return descriptions[norm] || `Evaluation of ${criterion}`
 }
 
 export const JudgePortal: React.FC = () => {
@@ -220,7 +229,7 @@ export const JudgePortal: React.FC = () => {
                 <Star size={14} className="text-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-gray-800 dark:text-slate-200">{c}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{CRITERIA_DESCRIPTIONS[c] || 'Score 0–10'}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{getCriteriaDescription(c)}</p>
                 </div>
               </div>
             ))}
@@ -431,7 +440,7 @@ export const JudgePortal: React.FC = () => {
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{criterion}</span>
-                          <span className="text-xs text-gray-400 dark:text-slate-500">{CRITERIA_DESCRIPTIONS[criterion] || ''}</span>
+                          <span className="text-xs text-gray-400 dark:text-slate-500">{getCriteriaDescription(criterion)}</span>
                         </div>
                         <span className="text-sm font-bold text-gray-900 dark:text-white w-8 text-right">{val}</span>
                       </div>
