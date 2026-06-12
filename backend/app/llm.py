@@ -642,7 +642,7 @@ IMPORTANT RULES:
 - communication_stages must be a list of objects with "stage" and "recipient_type" fields.
 - recipient_type must be one of: "all_participants", "judges", "winners".
 
-When ready, respond with a brief summary of your assumptions, then EXACTLY this JSON block:
+When ready, respond with a brief summary of your assumptions, then output the JSON block with no additional text after it.
 
 ```json
 {

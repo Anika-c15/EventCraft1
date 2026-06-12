@@ -265,7 +265,18 @@ export const Agent: React.FC = () => {
             </div>
           )}
 
-          {messages.map((msg) => (
+          {messages.map((msg) => {
+            // Strip the JSON code block and the "Here is the JSON configuration" line from assistant messages
+            const displayContent = msg.role === 'assistant'
+              ? msg.content
+                  .replace(/```json[\s\S]*?```/g, '')
+                  .replace(/```[\s\S]*?```/g, '')
+                  .replace(/here is the (event configuration|json configuration|configuration|pipeline configuration)[:\s]*/gi, '')
+                  .replace(/here('s| is) the.*?configuration.*?:/gi, '')
+                  .trim()
+              : msg.content
+
+            return (
             <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -285,10 +296,11 @@ export const Agent: React.FC = () => {
                     : 'bg-gray-50 text-gray-800 rounded-tl-sm border border-gray-100'
                 }`}
               >
-                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                <p className="whitespace-pre-wrap">{displayContent}</p>
               </div>
             </div>
-          ))}
+            )
+          })}
 
           {loading && (
             <div className="flex gap-3">
