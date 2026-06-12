@@ -8,7 +8,8 @@ from ..auth import require_committee
 from ..schemas import (
     EventCreate, EventOut, StageOut, DashboardStats, 
     FormationRulesUpdate, StageSetPayload,
-    CommitteeInviteCreate, CommitteeInviteOut
+    CommitteeInviteCreate, CommitteeInviteOut,
+    ScoringWeightsUpdate
 )
 from .. import models
 from ..email_service import send_email
@@ -91,6 +92,11 @@ def create_event(
             "max_per_institution": 1,
             "experience_level_grouping": "mixed",
             "max_teams": 10,
+        },
+        scoring_weights={
+            "judge": 0.70,
+            "peer": 0.15,
+            "social": 0.15,
         },
     )
     db.add(event)
@@ -332,6 +338,44 @@ def update_formation_rules(
         pass
 
     return {"message": "Formation rules updated", "rules": event.formation_rules}
+
+
+@router.put("/{event_id}/scoring-weights")
+def update_scoring_weights(
+    event_id: str,
+    payload: ScoringWeightsUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    total_weight = payload.judge + payload.peer + payload.social
+    if abs(total_weight - 100.0) > 0.01:
+        raise HTTPException(400, f"Scoring weights must sum to exactly 100%. Currently they sum to {total_weight:.1f}%.")
+
+    event.scoring_weights = {
+        "judge": round(payload.judge / 100.0, 4),
+        "peer": round(payload.peer / 100.0, 4),
+        "social": round(payload.social / 100.0, 4)
+    }
+
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Scoring weights updated: Judge {payload.judge:.0f}%, Peer {payload.peer:.0f}%, Social {payload.social:.0f}%",
+        log_type="info",
+    )
+    db.add(log)
+    db.commit()
+
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_updated", "event_name": event.name})
+    except Exception:
+        pass
+
+    return {"message": "Scoring weights updated", "scoring_weights": event.scoring_weights}
 
 
 @router.post("/{event_id}/advance-stage")

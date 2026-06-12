@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
-import { evaluationsApi, teamsApi } from '../api/client'
+import { evaluationsApi, teamsApi, eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import { RadarChart } from '../components/RadarChart'
 
@@ -72,6 +72,50 @@ export const Evaluations: React.FC = () => {
   const [publicScores, setPublicScores] = useState<{ [key: string]: string }>({})
   const [customScores, setCustomScores] = useState<{ [key: string]: string }>({})
 
+  // Dynamic Scoring Weights State
+  const [scoringWeights, setScoringWeights] = useState<{ judge: number; peer: number; social: number }>({ judge: 70, peer: 15, social: 15 })
+  const [tempWeights, setTempWeights] = useState<{ judge: number; peer: number; social: number }>({ judge: 70, peer: 15, social: 15 })
+  const [isSavingWeights, setIsSavingWeights] = useState(false)
+  const [showWeightsConfig, setShowWeightsConfig] = useState(false)
+
+  const loadEventWeights = async () => {
+    if (!eventId) return
+    try {
+      const e = await eventsApi.get(eventId)
+      if (e.scoring_weights) {
+        const weights = {
+          judge: Math.round(e.scoring_weights.judge * 100),
+          peer: Math.round(e.scoring_weights.peer * 100),
+          social: Math.round(e.scoring_weights.social * 100),
+        }
+        setScoringWeights(weights)
+        setTempWeights(weights)
+      }
+    } catch (err) {
+      console.error('Error loading event weights:', err)
+    }
+  }
+
+  const handleSaveWeights = async () => {
+    const sum = tempWeights.judge + tempWeights.peer + tempWeights.social
+    if (sum !== 100) {
+      alert(`Scoring weights must sum to exactly 100%. Currently they sum to ${sum}%.`)
+      return
+    }
+    setIsSavingWeights(true)
+    try {
+      await eventsApi.updateScoringWeights(eventId!, tempWeights)
+      setScoringWeights(tempWeights)
+      setShowWeightsConfig(false)
+      await loadBiasMitigation()
+      await loadDashboard()
+    } catch (e: any) {
+      alert(e.message || 'Error updating scoring weights')
+    } finally {
+      setIsSavingWeights(false)
+    }
+  }
+
   const loadBiasMitigation = async () => {
     if (!eventId) return
     try {
@@ -117,6 +161,7 @@ export const Evaluations: React.FC = () => {
       loadBiasMitigation()
       loadDashboard()
       loadInvitations()
+      loadEventWeights()
     }
   }, [eventId])
 
@@ -199,6 +244,9 @@ export const Evaluations: React.FC = () => {
         </div>
         {isEvaluationPhase && dashboardStats && (
           <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => { setTempWeights(scoringWeights); setShowWeightsConfig(true) }} disabled={isClosed}>
+              <Sliders size={15} /> Configure Scoring
+            </Button>
             <Button variant="secondary" onClick={handleConsolidate}>
               <RefreshCw size={15} /> Consolidate Scores
             </Button>
@@ -377,7 +425,7 @@ export const Evaluations: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Score: Audience & Judge Balance</h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    70% expert judge average · 30% combined public (social scrape + peer review average)
+                    {scoringWeights.judge}% expert judge average · {scoringWeights.peer}% peer review average · {scoringWeights.social}% social scrape average
                   </p>
                 </div>
                 <Badge variant="purple" className="font-bold">AI Active</Badge>
@@ -420,16 +468,16 @@ export const Evaluations: React.FC = () => {
 
                           {/* Three score blocks */}
                           <div className="grid grid-cols-3 gap-2 mb-3">
-                            {/* JUDGES 70% */}
+                            {/* JUDGES */}
                             <div className="bg-white p-2.5 rounded-lg border border-gray-100 text-center">
-                              <span className="text-[9px] text-gray-400 block uppercase tracking-wide font-semibold">Judges (70%)</span>
+                              <span className="text-[9px] text-gray-400 block uppercase tracking-wide font-semibold">Judges ({scoringWeights.judge}%)</span>
                               <span className="text-sm font-bold text-gray-800 block mt-0.5">{m.judge_avg.toFixed(2)}</span>
                               <span className="text-[9px] text-gray-400">/ 10</span>
                             </div>
 
-                            {/* PUBLIC 30% — combined social + peer */}
+                            {/* PUBLIC — combined social + peer */}
                             <div className="bg-white p-2.5 rounded-lg border border-indigo-100 text-center">
-                              <span className="text-[9px] text-indigo-500 block uppercase tracking-wide font-semibold">Public (30%)</span>
+                              <span className="text-[9px] text-indigo-500 block uppercase tracking-wide font-semibold">Public ({scoringWeights.peer + scoringWeights.social}%)</span>
                               <span className="text-sm font-bold text-indigo-700 block mt-0.5">
                                 {hasPublic ? m.public_vote_score.toFixed(2) : '—'}
                               </span>
@@ -661,6 +709,99 @@ export const Evaluations: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Configure Scoring Weights Modal ── */}
+      <Modal
+        isOpen={showWeightsConfig}
+        onClose={() => setShowWeightsConfig(false)}
+        title="Configure Scoring Engine"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-6">
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+            <p className="text-xs text-blue-700 leading-relaxed">
+              Adjust the weight distribution of the scoring engine. Weights across Judges, Peer reviews, and Social scrape <strong>must sum to exactly 100%</strong>.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Judge Weight Slider */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Expert Judges</label>
+                <span className="text-sm font-bold text-gray-900">{tempWeights.judge}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={tempWeights.judge}
+                onChange={(e) => setTempWeights({ ...tempWeights, judge: parseInt(e.target.value) })}
+                className="w-full"
+                style={{ background: `linear-gradient(to right, #E8450A ${tempWeights.judge}%, #e5e7eb ${tempWeights.judge}%)` }}
+              />
+            </div>
+
+            {/* Peer Weight Slider */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Peer Reviews</label>
+                <span className="text-sm font-bold text-gray-900">{tempWeights.peer}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={tempWeights.peer}
+                onChange={(e) => setTempWeights({ ...tempWeights, peer: parseInt(e.target.value) })}
+                className="w-full"
+                style={{ background: `linear-gradient(to right, #E8450A ${tempWeights.peer}%, #e5e7eb ${tempWeights.peer}%)` }}
+              />
+            </div>
+
+            {/* Social Weight Slider */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Social Scrape</label>
+                <span className="text-sm font-bold text-gray-900">{tempWeights.social}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={tempWeights.social}
+                onChange={(e) => setTempWeights({ ...tempWeights, social: parseInt(e.target.value) })}
+                className="w-full"
+                style={{ background: `linear-gradient(to right, #E8450A ${tempWeights.social}%, #e5e7eb ${tempWeights.social}%)` }}
+              />
+            </div>
+          </div>
+
+          {/* Sum Check Indicator */}
+          <div className="flex items-center justify-between border-t border-gray-150 pt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium">Total:</span>
+              <Badge variant={tempWeights.judge + tempWeights.peer + tempWeights.social === 100 ? 'success' : 'danger'}>
+                {tempWeights.judge + tempWeights.peer + tempWeights.social}%
+              </Badge>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowWeightsConfig(false)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveWeights}
+                disabled={isSavingWeights || (tempWeights.judge + tempWeights.peer + tempWeights.social !== 100)}
+              >
+                {isSavingWeights ? 'Saving...' : 'Save Weights'}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

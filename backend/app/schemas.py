@@ -40,10 +40,17 @@ class EventOut(BaseModel):
     is_active: bool
     pipeline_config: Optional[Any]
     formation_rules: Optional[Any]
+    scoring_weights: Optional[Dict[str, float]] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ScoringWeightsUpdate(BaseModel):
+    judge: float = Field(..., ge=0.0, le=100.0)
+    peer: float = Field(..., ge=0.0, le=100.0)
+    social: float = Field(..., ge=0.0, le=100.0)
 
 
 # ── Pipeline Stage ─────────────────────────────────────────────────────────────
@@ -378,6 +385,7 @@ class PortalData(BaseModel):
     results_phase_active: bool = False # True when event is in results/announce phase
     showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
     leaderboard: List[Dict[str, Any]] = []
+    scoring_weights: Optional[Dict[str, float]] = None
 
 
 class StageSetPayload(BaseModel):

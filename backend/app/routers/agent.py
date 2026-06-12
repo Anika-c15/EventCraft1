@@ -117,6 +117,20 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             "max_teams": fr.get("max_teams", 10),
         }
 
+    # 2.5. Update scoring weights balance
+    if "scoring_balance" in config:
+        sb = config["scoring_balance"]
+        j = sb.get("judge", 0.70)
+        p = sb.get("peer", 0.15)
+        s = sb.get("social", 0.15)
+        total = j + p + s
+        if total > 0:
+            event.scoring_weights = {
+                "judge": round(j / total, 4),
+                "peer": round(p / total, 4),
+                "social": round(s / total, 4),
+            }
+
     # 3. Rebuild pipeline stages
     existing = db.query(models.PipelineStage).filter(
         models.PipelineStage.event_id == event_id

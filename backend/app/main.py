@@ -64,6 +64,13 @@ def _migrate_db():
                     print("🚀 Migrated: added owner_id to events")
                 except Exception as col_err:
                     print(f"⚠️ Could not add owner_id to events: {col_err}")
+            if "scoring_weights" not in columns_events:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE events ADD COLUMN scoring_weights JSON"))
+                    print("🚀 Migrated: added scoring_weights to events")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add scoring_weights to events: {col_err}")
 
         # ── peer_reviews table ──────────────────────────────────────────────
         if "peer_reviews" not in existing_tables:

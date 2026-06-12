@@ -78,6 +78,11 @@ export const eventsApi = {
       method: 'PUT',
       body: JSON.stringify(rules),
     }),
+  updateScoringWeights: (id: string, weights: { judge: number; peer: number; social: number }) =>
+    request<any>(`/api/events/${id}/scoring-weights`, {
+      method: 'PUT',
+      body: JSON.stringify(weights),
+    }),
   advanceStage: (id: string) =>
     request<any>(`/api/events/${id}/advance-stage`, { method: 'POST' }),
   setStageDirect: (id: string, stageName: string) =>

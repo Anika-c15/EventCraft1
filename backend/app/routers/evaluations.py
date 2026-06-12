@@ -551,6 +551,15 @@ def get_bias_mitigation(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    weights = event.scoring_weights or {"judge": 0.70, "peer": 0.15, "social": 0.15}
+    w_judge = weights.get("judge", 0.70)
+    w_peer = weights.get("peer", 0.15)
+    w_social = weights.get("social", 0.15)
+
     # Only evaluate teams in active/approved status
     teams = db.query(models.Team).filter(
         models.Team.event_id == event_id,
@@ -563,7 +572,7 @@ def get_bias_mitigation(
             models.EvaluationScore.team_id == team.id
         ).all()
 
-        # --- Judge average (70%) ---
+        # --- Judge average ---
         judge_avg = 0.0
         if scores:
             judge_avg = round(sum(s.average or 0 for s in scores) / len(scores), 2)
@@ -577,7 +586,7 @@ def get_bias_mitigation(
         if peer_reviews:
             peer_avg = round(sum(r.score for r in peer_reviews) / len(peer_reviews), 2)
 
-        # --- Combined public score (30%): avg(social, peer) ---
+        # --- Combined public score (30% fallback for backward compatibility): avg(social, peer) ---
         social = team.social_vote_score
         if social is not None and peer_avg is not None:
             combined_public = round((social + peer_avg) / 2, 2)
@@ -592,23 +601,47 @@ def get_bias_mitigation(
         if combined_public != team.public_vote_score:
             team.public_vote_score = combined_public
 
-        # --- AI Proposed Fair Score: 70% Judge + 30% Combined Public ---
+        # --- AI Proposed Fair Score with dynamic weights & redistribution ---
+        active_judge_weight = w_judge
+        active_peer_weight = w_peer if peer_avg is not None else 0.0
+        active_social_weight = w_social if social is not None else 0.0
+        
+        total_active_weight = active_judge_weight + active_peer_weight + active_social_weight
+        
         ai_proposed = None
-        if combined_public is not None:
-            ai_proposed = round(0.70 * judge_avg + 0.30 * combined_public, 2)
+        if total_active_weight > 0:
+            weighted_sum = (
+                active_judge_weight * judge_avg + 
+                active_peer_weight * (peer_avg or 0.0) + 
+                active_social_weight * (social or 0.0)
+            )
+            ai_proposed = round(weighted_sum / total_active_weight, 2)
             team.ai_proposed_score = ai_proposed
 
-            # Flag deviation and generate rationale if needed
-            deviation = abs(judge_avg - combined_public)
-            if deviation > 2.0:
-                if not team.bias_rationale:
-                    rationale = llm.generate_bias_mitigation_rationale(
-                        team_name=team.name,
-                        judge_score=judge_avg,
-                        public_score=combined_public,
-                        deviation=deviation,
-                    )
-                    team.bias_rationale = rationale
+            # Calculate weighted public score for deviation checking
+            public_components = []
+            public_weight_sum = 0.0
+            if peer_avg is not None and w_peer > 0:
+                public_components.append(w_peer * peer_avg)
+                public_weight_sum += w_peer
+            if social is not None and w_social > 0:
+                public_components.append(w_social * social)
+                public_weight_sum += w_social
+
+            if public_weight_sum > 0:
+                weighted_public = sum(public_components) / public_weight_sum
+                deviation = abs(judge_avg - weighted_public)
+                if deviation > 2.0:
+                    if not team.bias_rationale:
+                        rationale = llm.generate_bias_mitigation_rationale(
+                            team_name=team.name,
+                            judge_score=judge_avg,
+                            public_score=weighted_public,
+                            deviation=deviation,
+                        )
+                        team.bias_rationale = rationale
+                else:
+                    team.bias_rationale = None
             else:
                 team.bias_rationale = None
         else:
@@ -625,7 +658,7 @@ def get_bias_mitigation(
             "social_vote_score": social,
             "peer_avg": peer_avg,
             "peer_review_count": len(peer_reviews),
-            "public_vote_score": team.public_vote_score,  # the combined 30% block
+            "public_vote_score": team.public_vote_score,  # combined block
             "ai_proposed_score": team.ai_proposed_score or ai_proposed,
             "bias_rationale": team.bias_rationale,
             "final_score": team.final_score,

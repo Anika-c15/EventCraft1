@@ -801,10 +801,13 @@ export const ParticipantPortal: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
                 {/* Final Scoring & Rationale Card */}
                 {(() => {
+                  const weights = data?.scoring_weights || { judge: 0.70, peer: 0.15, social: 0.15 }
+                  const judgeWeight = weights.judge
+                  const publicWeight = weights.peer + weights.social
                   const publicVote = team.public_vote_score
                   let judgeAvg = team.judge_avg_score ?? team.final_score
-                  if (!team.judge_avg_score && publicVote !== null && publicVote !== undefined) {
-                    judgeAvg = (team.final_score - 0.30 * publicVote) / 0.70
+                  if (!team.judge_avg_score && publicVote !== null && publicVote !== undefined && judgeWeight > 0) {
+                    judgeAvg = (team.final_score - publicWeight * publicVote) / judgeWeight
                   }
                   return (
                     <div className="bg-purple-50 border border-purple-100 rounded-xl p-5 shadow-sm flex flex-col justify-between h-full">
@@ -817,23 +820,23 @@ export const ParticipantPortal: React.FC = () => {
                             </Badge>
                           )}
                         </div>
-
+ 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                           <div className="bg-white rounded-lg p-3 border border-purple-100/50 shadow-xs text-center">
-                            <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Judges (70%)</span>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Judges ({Math.round(judgeWeight * 100)}%)</span>
                             <span className="text-base font-extrabold text-purple-950">{judgeAvg.toFixed(2)}</span>
                             <span className="text-xs text-gray-400"> / 10</span>
                           </div>
-
+ 
                           <div className="bg-white rounded-lg p-3 border border-purple-100/50 shadow-xs text-center">
-                            <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Public (30%)</span>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-medium">Public ({Math.round(publicWeight * 100)}%)</span>
                             <span className="text-[9px] text-gray-300 block">Social + Peer Avg</span>
                             <span className="text-base font-extrabold text-purple-950">
                               {publicVote !== null && publicVote !== undefined ? publicVote.toFixed(2) : '—'}
                             </span>
                             <span className="text-xs text-gray-400"> / 10</span>
                           </div>
-
+ 
                           <div className="bg-purple-600 rounded-lg p-3 text-white shadow-xs text-center">
                             <span className="text-[10px] opacity-80 uppercase tracking-wider block font-medium">Final Score</span>
                             <span className="text-base font-black">{team.final_score.toFixed(2)}</span>
