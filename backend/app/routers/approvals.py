@@ -100,6 +100,22 @@ async def resolve_approval(
 def _handle_approval_side_effects(approval: models.Approval, db: Session):
     payload = approval.payload or {}
 
+    if approval.type == models.ApprovalType.rule_change:
+        # Pipeline reconfigured by agent — clear all old draft comms that don't
+        # belong to the new pipeline stages
+        pipeline_config = payload.get("pipeline_config", {})
+        new_stage_names = {s["name"] for s in pipeline_config.get("stages", [])}
+        if new_stage_names:
+            # Delete drafts whose stage is NOT in the new pipeline
+            old_drafts = db.query(models.Communication).filter(
+                models.Communication.event_id == approval.event_id,
+                models.Communication.status == models.CommStatus.draft,
+            ).all()
+            for comm in old_drafts:
+                if comm.stage not in new_stage_names:
+                    db.delete(comm)
+            db.flush()
+
     if approval.type == models.ApprovalType.progression:
         to_index = payload.get("to_index")
         if to_index is not None:

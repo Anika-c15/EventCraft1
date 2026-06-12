@@ -145,10 +145,11 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
     clear_event_teams_and_submissions(event_id, db)
 
     # 4. Auto-generate draft communications for each stage
-    # Remove old agent-generated comms first
+    # Remove ALL old draft communications for this event — new pipeline = fresh comms
+    # Keep only already-sent communications so history is preserved
     db.query(models.Communication).filter(
         models.Communication.event_id == event_id,
-        models.Communication.stage.in_([s["name"] for s in stages]),
+        models.Communication.status == models.CommStatus.draft,
     ).delete(synchronize_session=False)
     db.flush()
 
