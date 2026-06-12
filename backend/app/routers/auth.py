@@ -1,4 +1,7 @@
 import time
+import random
+import string
+from pydantic import BaseModel, EmailStr
 from collections import defaultdict
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -8,9 +11,14 @@ from ..database import get_db
 from ..auth import verify_password, create_access_token, get_current_user, hash_password
 from ..schemas import LoginRequest, TokenResponse, RegisterRequest
 from .. import models
+from datetime import datetime, timedelta
+from ..email_service import send_email
+from ..models import OTPVerification
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+def generate_otp() -> str:
+    return ''.join(random.choices(string.digits, k=6))
 
 class LoginRateLimiter:
     def __init__(self, limit: int, window: int):
@@ -29,37 +37,126 @@ class LoginRateLimiter:
 
 limiter = LoginRateLimiter(limit=5, window=60)
 
+class SendOTPRequest(BaseModel):
+    email: EmailStr
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+@router.post("/send-otp")
+async def send_otp(
+    payload: SendOTPRequest,
+    db: Session = Depends(get_db)
+):
+    # delete existing OTPs for this email
+    db.query(OTPVerification).filter(
+        OTPVerification.email == payload.email
+    ).delete()
+
+    # generate new OTP
+    otp = generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    otp_record = OTPVerification(
+        email=payload.email,
+        otp=otp,
+        expires_at=expires_at,
+    )
+    db.add(otp_record)
+    db.commit()
+
+    # send email
+    await send_email(
+        to_email=payload.email,
+        subject="EventCraft — Your OTP Verification Code",
+        body=f"""Hi,
+
+Your OTP for EventCraft registration is:
+
+🔐 {otp}
+
+This code is valid for 10 minutes.
+Do not share this code with anyone.
+
+If you did not request this, please ignore this email.
+
+Regards,
+EventCraft Team"""
+    )
+
+    return {"message": f"OTP sent to {payload.email}"}
+
+
+@router.post("/verify-otp")
+def verify_otp(
+    payload: VerifyOTPRequest,
+    db: Session = Depends(get_db)
+):
+    record = db.query(OTPVerification).filter(
+        OTPVerification.email == payload.email,
+        OTPVerification.is_verified == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+
+    if not record:
+        raise HTTPException(400, "No OTP found for this email")
+
+    # check expiry
+    if datetime.utcnow() > record.expires_at.replace(tzinfo=None):
+        raise HTTPException(400, "OTP has expired. Please request a new one")
+
+    # check OTP
+    if record.otp != payload.otp:
+        raise HTTPException(400, "Invalid OTP")
+
+    # mark verified
+    record.is_verified = True
+    db.commit()
+
+    return {"message": "Email verified successfully", "verified": True}
+
+
 
 @router.post("/login", response_model=TokenResponse)
-def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
-    ip = request.client.host if request.client else "unknown"
-    if limiter.is_rate_limited(ip):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please try again in a minute.",
-        )
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+    if limiter.is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
 
     user = db.query(models.User).filter(models.User.email == payload.email).first()
+
     if not user or not user.hashed_password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(401, "Invalid credentials")
     if not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(401, "Invalid credentials")
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account disabled")
+        raise HTTPException(403, "Account disabled")
+
+    # Auto-accept any pending invites for this email
+    db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == payload.email
+    ).update({"is_accepted": True})
+    db.commit()
 
     token = create_access_token({"sub": user.id})
-    return TokenResponse(
-        access_token=token,
-        user_id=user.id,
-        name=user.name,
-        role=user.role.value,
-    )
+    return TokenResponse(access_token=token, user_id=user.id, name=user.name, role=user.role.value)
+
 
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    otp_verified = db.query(OTPVerification).filter(
+        OTPVerification.email == payload.email,
+        OTPVerification.is_verified == True
+    ).first()
+    
+    if not otp_verified:
+        raise HTTPException(status_code=403, detail="Email not verified. Please verify your email via OTP first.")
+
     user = models.User(
         email=payload.email,
         name=payload.name,
@@ -70,56 +167,17 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
-    # Auto-create a brand new default event space for the registered committee user
-    event_name = f"{payload.org_name} Hackathon 2026"
-    event = models.Event(
-        name=event_name,
-        description=f"AI-Powered event space for {payload.org_name}.",
-        owner_id=user.id,
-        formation_rules={
-            "event_name": event_name,
-            "team_size": 3,
-            "allow_incomplete_teams": False,
-            "skill_balance": True,
-            "institution_diversity": True,
-            "max_per_institution": 1,
-            "experience_level_grouping": "mixed",
-            "max_teams": 10,
-        },
-    )
-    db.add(event)
-    db.flush()
-
-    # Create default pipeline stages
-    from .events import DEFAULT_STAGES
-    for i, stage_data in enumerate(DEFAULT_STAGES):
-        stage = models.PipelineStage(
-            event_id=event.id,
-            name=stage_data["name"],
-            description=stage_data["description"],
-            order_index=i,
-            status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
-            tasks=stage_data["tasks"],
-        )
-        db.add(stage)
-
-    # Initial activity log
-    log = models.ActivityLog(
-        event_id=event.id,
-        message=f"Event '{event_name}' created",
-        log_type="success",
-    )
-    db.add(log)
-
+    # Auto-accept any pending invites for this email
+    db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == payload.email
+    ).update({"is_accepted": True})
+    
     db.commit()
     db.refresh(user)
+    
     token = create_access_token({"sub": user.id})
-    return TokenResponse(
-        access_token=token,
-        user_id=user.id,
-        name=user.name,
-        role=user.role.value,
-    )
+    return TokenResponse(access_token=token, user_id=user.id, name=user.name, role=user.role.value)
+
 
 @router.get("/me")
 def get_me(current_user: models.User = Depends(get_current_user)):

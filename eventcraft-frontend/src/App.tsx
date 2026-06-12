@@ -22,6 +22,9 @@ const Unsubscribe = React.lazy(() => import('./pages/Unsubscribe').then(m => ({ 
 const LiveLeaderboard = React.lazy(() => import('./pages/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 const CandidatePortal = React.lazy(() => import('./pages/CandidatePortal').then(m => ({ default: m.CandidatePortal })))
 
+// FIXED: Using (m: any) to bypass strict TypeScript checks on lazy loads
+const EventSetup = React.lazy(() => import('./pages/EventSetup'))
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, authChecked } = useAppContext()
 
@@ -72,6 +75,7 @@ const App: React.FC = () => {
                   </ProtectedRoute>
                 }
               >
+                <Route path="/setup" element={<EventSetup />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/participants" element={<Participants />} />
                 <Route path="/teams" element={<Teams />} />

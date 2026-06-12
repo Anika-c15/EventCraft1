@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
+import os
 
 from ..database import get_db
 from ..auth import require_committee
-from ..schemas import EventCreate, EventOut, StageOut, DashboardStats, FormationRulesUpdate, StageSetPayload
+from ..schemas import (
+    EventCreate, EventOut, StageOut, DashboardStats, 
+    FormationRulesUpdate, StageSetPayload,
+    CommitteeInviteCreate, CommitteeInviteOut
+)
 from .. import models
+from ..email_service import send_email
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -125,7 +131,16 @@ def list_events(
     if current_user.role == models.UserRole.admin:
         return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
     
-    return db.query(models.Event).filter(models.Event.owner_id == current_user.id).order_by(models.Event.created_at.desc()).all()
+    # Get events owned by user OR events they accepted an invite to
+    my_invites = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == current_user.email, 
+        models.CommitteeInvitation.is_accepted == True
+    ).all()
+    invited_event_ids = [inv.event_id for inv in my_invites]
+    
+    return db.query(models.Event).filter(
+        (models.Event.owner_id == current_user.id) | (models.Event.id.in_(invited_event_ids))
+    ).order_by(models.Event.created_at.desc()).all()
 
 
 @router.get("/public/demo-portal")
@@ -561,3 +576,73 @@ def delete_event(
     db.commit()
     return {"message": "Event deleted successfully"}
 
+
+# --- Admin Invites Logic ---
+
+@router.get("/{event_id}/invites", response_model=List[CommitteeInviteOut])
+def get_invites(
+    event_id: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    return db.query(models.CommitteeInvitation).filter(models.CommitteeInvitation.event_id == event_id).all()
+
+
+@router.post("/{event_id}/invites", response_model=CommitteeInviteOut)
+async def create_invite(
+    event_id: str, 
+    payload: CommitteeInviteCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event: 
+        raise HTTPException(404, "Event not found")
+    
+    existing = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.event_id == event_id, 
+        models.CommitteeInvitation.email == payload.email
+    ).first()
+    if existing: 
+        raise HTTPException(400, "User already invited")
+
+    # Check if they are already a registered user to mark accepted immediately
+    user_exists = db.query(models.User).filter(models.User.email == payload.email).first()
+    
+    invite = models.CommitteeInvitation(
+        event_id=event_id,
+        email=payload.email,
+        is_accepted=bool(user_exists)
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    # Send magic link email
+    frontend_url = os.getenv("VITE_FRONTEND_URL", "http://localhost:5173")
+    
+    await send_email(
+        to_email=payload.email,
+        subject=f"You've been invited to co-manage {event.name} on EventCraft",
+        body=f"Hi,\n\nYou have been invited to be an administrator for '{event.name}'.\n\nTo accept the invitation and access the dashboard, please register or login here:\n{frontend_url}\n\nRegards,\nEventCraft Team"
+    )
+
+    return invite
+
+
+@router.delete("/{event_id}/invites/{invite_id}")
+def delete_invite(
+    event_id: str, 
+    invite_id: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id, 
+        models.CommitteeInvitation.event_id == event_id
+    ).first()
+    if not invite: 
+        raise HTTPException(404, "Invite not found")
+    db.delete(invite)
+    db.commit()
+    return {"message": "Invite removed"}

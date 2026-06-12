@@ -18,6 +18,7 @@ import {
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
 import { Header } from '../components/Header'
+
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface JourneyStep {
@@ -32,145 +33,25 @@ interface JourneyStep {
 
 const JOURNEY_DATA: Record<'participant' | 'judge' | 'organizer', JourneyStep[]> = {
   participant: [
-    {
-      phase: "01",
-      title: "Secure Onboarding",
-      shortLabel: "Onboarding",
-      subtitle: "Passwordless magic link login",
-      description: "Log in securely via a one-click magic link sent to your registered email. No password needed.",
-      icon: Mail,
-      actions: ["Enter registered email", "Retrieve magic link", "One-click secure portal access"]
-    },
-    {
-      phase: "02",
-      title: "Smart Team Formation",
-      shortLabel: "Team Matching",
-      subtitle: "AI matching engine coordination",
-      description: "AI groups you into balanced teams based on skills and experience. View your teammates instantly.",
-      icon: Users,
-      actions: ["Inspect assigned teammates", "Check dynamic matchmaking logs", "View collective team skill tags"]
-    },
-    {
-      phase: "03",
-      title: "Hacking & Submission",
-      shortLabel: "Submission",
-      subtitle: "Workspace details & dynamic deliverables",
-      description: "Submit repository links and demo videos in the Submission Hub before the deadline.",
-      icon: Zap,
-      actions: ["Submit repository & link details", "Modify deliverables before deadline", "Track live timeline progression"]
-    },
-    {
-      phase: "04",
-      title: "Peer Evaluation",
-      shortLabel: "Peer Review",
-      subtitle: "Dynamic project showroom",
-      description: "Explore other submissions and cast peer votes using the interactive scoring panel.",
-      icon: Shield,
-      actions: ["Browse submitted projects showroom", "Cast peer scoring parameters", "Ensure consensus evaluation alignment"]
-    },
-    {
-      phase: "05",
-      title: "Leaderboard & Results",
-      shortLabel: "Live Board",
-      subtitle: "Real-time consensus scoring",
-      description: "Track real-time rankings and see final results once scores are locked.",
-      icon: Sparkles,
-      actions: ["Track live consensus leaderboard", "View certificate declarations", "Celebrate event outcomes"]
-    }
+    { phase: "01", title: "Secure Onboarding", shortLabel: "Onboarding", subtitle: "Passwordless magic link login", description: "Log in securely via a one-click magic link sent to your registered email. No password needed.", icon: Mail, actions: ["Enter registered email", "Retrieve magic link", "One-click secure portal access"] },
+    { phase: "02", title: "Smart Team Formation", shortLabel: "Team Matching", subtitle: "AI matching engine coordination", description: "AI groups you into balanced teams based on skills and experience. View your teammates instantly.", icon: Users, actions: ["Inspect assigned teammates", "Check dynamic matchmaking logs", "View collective team skill tags"] },
+    { phase: "03", title: "Hacking & Submission", shortLabel: "Submission", subtitle: "Workspace details & dynamic deliverables", description: "Submit repository links and demo videos in the Submission Hub before the deadline.", icon: Zap, actions: ["Submit repository & link details", "Modify deliverables before deadline", "Track live timeline progression"] },
+    { phase: "04", title: "Peer Evaluation", shortLabel: "Peer Review", subtitle: "Dynamic project showroom", description: "Explore other submissions and cast peer votes using the interactive scoring panel.", icon: Shield, actions: ["Browse submitted projects showroom", "Cast peer scoring parameters", "Ensure consensus evaluation alignment"] },
+    { phase: "05", title: "Leaderboard & Results", shortLabel: "Live Board", subtitle: "Real-time consensus scoring", description: "Track real-time rankings and see final results once scores are locked.", icon: Sparkles, actions: ["Track live consensus leaderboard", "View certificate declarations", "Celebrate event outcomes"] }
   ],
   judge: [
-    {
-      phase: "01",
-      title: "Invitation Intake",
-      shortLabel: "Invitation",
-      subtitle: "Secure registration link",
-      description: "Receive a secure invite to join the review panel and access your dashboard.",
-      icon: Mail,
-      actions: ["Receive email invitation", "Open judge portal dashboard", "Confirm evaluation capacity"]
-    },
-    {
-      phase: "02",
-      title: "Secure Panel Entry",
-      shortLabel: "Portal Access",
-      subtitle: "Dedicated reviewer interface",
-      description: "Access the reviewer console to view assigned teams and review instructions.",
-      icon: Shield,
-      actions: ["Click secure reviewer magic link", "Access team evaluation list", "Read judging overview instructions"]
-    },
-    {
-      phase: "03",
-      title: "AI Rubric Guidance",
-      shortLabel: "AI Rubrics",
-      subtitle: "Dynamic team-specific instructions",
-      description: "Get personalized AI guidelines tailored to each team's project description and tech stack.",
-      icon: Cpu,
-      actions: ["Open team scoring modal", "Read custom AI scoring prompt guidelines", "Consult standardized grading scale"]
-    },
-    {
-      phase: "04",
-      title: "Interactive Evaluation",
-      shortLabel: "Scoring",
-      subtitle: "Continuous slider scoring",
-      description: "Grade projects and leave feedback to update rankings in real time.",
-      icon: Sparkles,
-      actions: ["Adjust scoring parameters on sliders", "Provide qualitative comments", "Submit secure evaluations to consensus pool"]
-    },
-    {
-      phase: "05",
-      title: "Consensus Locking",
-      shortLabel: "Sign-off",
-      subtitle: "Finalizing peer & judge results",
-      description: "Submit your final evaluation batch to lock consolidated rankings.",
-      icon: Lock,
-      actions: ["Mark evaluation batch as completed", "Review final aggregated scores", "Sign-off on rankings"]
-    }
+    { phase: "01", title: "Invitation Intake", shortLabel: "Invitation", subtitle: "Secure registration link", description: "Receive a secure invite to join the review panel and access your dashboard.", icon: Mail, actions: ["Receive email invitation", "Open judge portal dashboard", "Confirm evaluation capacity"] },
+    { phase: "02", title: "Secure Panel Entry", shortLabel: "Portal Access", subtitle: "Dedicated reviewer interface", description: "Access the reviewer console to view assigned teams and review instructions.", icon: Shield, actions: ["Click secure reviewer magic link", "Access team evaluation list", "Read judging overview instructions"] },
+    { phase: "03", title: "AI Rubric Guidance", shortLabel: "AI Rubrics", subtitle: "Dynamic team-specific instructions", description: "Get personalized AI guidelines tailored to each team's project description and tech stack.", icon: Cpu, actions: ["Open team scoring modal", "Read custom AI scoring prompt guidelines", "Consult standardized grading scale"] },
+    { phase: "04", title: "Interactive Evaluation", shortLabel: "Scoring", subtitle: "Continuous slider scoring", description: "Grade projects and leave feedback to update rankings in real time.", icon: Sparkles, actions: ["Adjust scoring parameters on sliders", "Provide qualitative comments", "Submit secure evaluations to consensus pool"] },
+    { phase: "05", title: "Consensus Locking", shortLabel: "Sign-off", subtitle: "Finalizing peer & judge results", description: "Submit your final evaluation batch to lock consolidated rankings.", icon: Lock, actions: ["Mark evaluation batch as completed", "Review final aggregated scores", "Sign-off on rankings"] }
   ],
   organizer: [
-    {
-      phase: "01",
-      title: "Roster Setup & Import",
-      shortLabel: "Roster Intake",
-      subtitle: "Intake synchronization",
-      description: "Import participants via CSV and auto-generate passwordless dashboard links.",
-      icon: Building,
-      actions: ["Upload roster CSV in admin console", "Configure custom pipeline stages", "Broadcast passwordless portal invites"]
-    },
-    {
-      phase: "02",
-      title: "AI Matchmaking Engine",
-      shortLabel: "Team Formation",
-      subtitle: "Explainable multi-factor grouping",
-      description: "Run the AI matching engine with custom rules to form balanced teams automatically.",
-      icon: Users,
-      actions: ["Adjust diversity matching rules", "Execute AI matchmaking algorithms", "Review and adjust formed teams manually"]
-    },
-    {
-      phase: "03",
-      title: "AI Assessment Setup",
-      shortLabel: "Assessment",
-      subtitle: "Dynamic rubric compilation",
-      description: "Let the AI agent auto-compile customized evaluation guides for each team.",
-      icon: Cpu,
-      actions: ["Analyze team deliverables using AI", "Auto-compile specific rubric sheets", "Preview custom judge criteria guidelines"]
-    },
-    {
-      phase: "04",
-      title: "Bias Mitigation Panel",
-      shortLabel: "Bias Check",
-      subtitle: "Real-time score anomaly flagger",
-      description: "Monitor live scoring; the system automatically flags judge score divergences.",
-      icon: AlertCircle,
-      actions: ["Monitor live evaluations feed", "Inspect flagged score divergences", "Initiate judge consensus review"]
-    },
-    {
-      phase: "05",
-      title: "Leaderboard & Publishing",
-      shortLabel: "Reveal",
-      subtitle: "Linear ranking reveal",
-      description: "Lock rankings, publish the live leaderboard, and distribute certificates.",
-      icon: Zap,
-      actions: ["Validate and lock composite scoring", "Publish final rankings to live board", "Export event results analytics"]
-    }
+    { phase: "01", title: "Roster Setup & Import", shortLabel: "Roster Intake", subtitle: "Intake synchronization", description: "Import participants via CSV and auto-generate passwordless dashboard links.", icon: Building, actions: ["Upload roster CSV in admin console", "Configure custom pipeline stages", "Broadcast passwordless portal invites"] },
+    { phase: "02", title: "AI Matchmaking Engine", shortLabel: "Team Formation", subtitle: "Explainable multi-factor grouping", description: "Run the AI matching engine with custom rules to form balanced teams automatically.", icon: Users, actions: ["Adjust diversity matching rules", "Execute AI matchmaking algorithms", "Review and adjust formed teams manually"] },
+    { phase: "03", title: "AI Assessment Setup", shortLabel: "Assessment", subtitle: "Dynamic rubric compilation", description: "Let the AI agent auto-compile customized evaluation guides for each team.", icon: Cpu, actions: ["Analyze team deliverables using AI", "Auto-compile specific rubric sheets", "Preview custom judge criteria guidelines"] },
+    { phase: "04", title: "Bias Mitigation Panel", shortLabel: "Bias Check", subtitle: "Real-time score anomaly flagger", description: "Monitor live scoring; the system automatically flags judge score divergences.", icon: AlertCircle, actions: ["Monitor live evaluations feed", "Inspect flagged score divergences", "Initiate judge consensus review"] },
+    { phase: "05", title: "Leaderboard & Publishing", shortLabel: "Reveal", subtitle: "Linear ranking reveal", description: "Lock rankings, publish the live leaderboard, and distribute certificates.", icon: Zap, actions: ["Validate and lock composite scoring", "Publish final rankings to live board", "Export event results analytics"] }
   ]
 }
 
@@ -180,27 +61,33 @@ export const LandingPage: React.FC = () => {
   const theme = context?.theme || 'light'
   const { login } = useAppContext()
 
-  const [portalInput, setPortalInput] = useState('')
-  const [portalError, setPortalError] = useState('')
-  const [showEmailPopup, setShowEmailPopup] = useState(false)
+  const [portalInput, setPortalInput] = useState<string>('')
+  const [portalError, setPortalError] = useState<string>('')
+  const [showEmailPopup, setShowEmailPopup] = useState<boolean>(false)
 
   // Admin Login / Register state
   const [adminTab, setAdminTab] = useState<'login' | 'register'>('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [orgName, setOrgName] = useState('')
-  const [formError, setFormError] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [email, setEmail] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
+  const [confirmPassword, setConfirmPassword] = useState<string>('')
+  const [name, setName] = useState<string>('') // Updated from orgName
+  const [formError, setFormError] = useState<string>('')
+  const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false)
   const [activeRole, setActiveRole] = useState<'participant' | 'judge' | 'organizer'>('organizer')
-  const [activeStepIndex, setActiveStepIndex] = useState(0)
+  const [activeStepIndex, setActiveStepIndex] = useState<number>(0)
   const [activeSection, setActiveSection] = useState<'features' | 'journey' | 'portal-access' | null>(null)
+
+  const [registerStep, setRegisterStep] = useState<'form' | 'otp'>('form')
+  const [otpValue, setOtpValue] = useState<string>('')
+  const [otpLoading, setOtpLoading] = useState<boolean>(false)
+  
+  // Updated state type to match 'name' instead of 'orgName'
+  const [pendingRegisterData, setPendingRegisterData] = useState<{email: string, password: string, name: string} | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollPosition = window.scrollY + 160 // offset for fixed header
-
       const featuresEl = document.getElementById('features')
       const journeyEl = document.getElementById('journey')
       const portalEl = document.getElementById('portal-access')
@@ -221,36 +108,87 @@ export const LandingPage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
     if (!email || !password) { setFormError('Please fill in all fields.'); return }
     try {
       await login(email, password)
-      navigate('/dashboard')
+      
+      if (localStorage.getItem('ec_event_id')) {
+        navigate('/dashboard')
+      } else {
+        navigate('/setup')
+      }
     } catch (err: any) {
       setFormError(err.message || 'Login failed')
     }
   }
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
-    if (!email || !password || !orgName) { setFormError('Please fill in all fields.'); return }
+    if (!email || !password || !name) { setFormError('Please fill in all fields.'); return }
     if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
+    setOtpLoading(true)
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/register`, {
+      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name: orgName, org_name: orgName }),
+        body: JSON.stringify({ email }),
       })
-      const data = await res.json()
-      if (!res.ok) { setFormError(data.detail || 'Registration failed'); return }
-      await login(email, password)
-      navigate('/dashboard')
+      if (!res.ok) throw new Error('Failed to send OTP')
+      
+      setPendingRegisterData({ email, password, name })
+      setRegisterStep('otp')
     } catch (err: any) {
-      setFormError(err.message || 'Registration failed')
+      setFormError(err.message || 'Failed to send OTP')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!otpValue || !pendingRegisterData) return
+    setOtpLoading(true)
+    try {
+      // 1. Verify OTP
+      const verifyRes = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingRegisterData.email, otp: otpValue }),
+      })
+      if (!verifyRes.ok) {
+        const d = await verifyRes.json()
+        throw new Error(d.detail || 'Invalid OTP')
+      }
+
+      // 2. Register User
+      const regRes = await fetch(`${BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: pendingRegisterData.email, 
+          password: pendingRegisterData.password, 
+          name: pendingRegisterData.name 
+        }),
+      })
+      const regData = await regRes.json()
+      if (!regRes.ok) throw new Error(regData.detail || 'Registration failed')
+
+      // 3. Login and redirect to EventSetup instead of dashboard
+      await login(pendingRegisterData.email, pendingRegisterData.password)
+     if (localStorage.getItem('ec_event_id')) {
+        navigate('/dashboard')
+      } else {
+        navigate('/setup')
+      }
+    } catch (err: any) {
+      setFormError(err.message || 'Verification failed')
+    } finally {
+      setOtpLoading(false)
     }
   }
 
@@ -402,8 +340,6 @@ export const LandingPage: React.FC = () => {
         </div>
       )}
 
-
-
       {/* Floating Header */}
       <Header activeSection={activeSection} isLandingPage />
 
@@ -525,7 +461,8 @@ export const LandingPage: React.FC = () => {
                 {/* Tab Switcher */}
                 <div className={`flex rounded-2xl p-1 bg-slate-100/80 dark:bg-slate-950/50 border border-slate-200/40 dark:border-slate-800/50`}>
                   <button
-                    onClick={() => { setAdminTab('login'); setFormError('') }}
+                    type="button"
+                    onClick={() => { setAdminTab('login'); setRegisterStep('form'); setFormError('') }}
                     className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'login'
                       ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
                       : theme === 'light'
@@ -536,8 +473,10 @@ export const LandingPage: React.FC = () => {
                     Login
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setAdminTab('register'); setFormError('') }}
-                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'register'
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer  
+                      ${adminTab === 'register'
                       ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
                       : theme === 'light'
                         ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -611,106 +550,153 @@ export const LandingPage: React.FC = () => {
 
                 {/* Register Form */}
                 {adminTab === 'register' && (
-                  <form onSubmit={handleRegister} className="space-y-5">
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Organisation Name</label>
-                      <div className="relative group/input">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
-                          <Building size={16} />
+                  registerStep === 'otp' && pendingRegisterData ? (
+                    <form onSubmit={handleVerifyAndRegister} className="space-y-5">
+                      <div className="text-center space-y-2">
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${theme === 'light' ? 'bg-orange-50' : 'bg-orange-500/10'}`}>
+                          <Mail size={24} className="text-orange-500" />
                         </div>
+                        <p className={`text-sm font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Check your email</p>
+                        <p className={`text-xs ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
+                          We sent a 6-digit OTP to <span className="font-bold text-orange-500">{pendingRegisterData.email}</span>
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Enter OTP</label>
                         <input
                           type="text"
-                          value={orgName}
-                          onChange={(e) => setOrgName(e.target.value)}
-                          placeholder="e.g. IIT Bombay Techfest"
-                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
-                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                            }`}
+                          value={otpValue}
+                          onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="123456"
+                          maxLength={6}
+                           /* I removed 'text-sm' from this className string below! */
+                          className={`w-full border rounded-xl px-4 py-3 text-center font-mono text-lg tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all ${theme === 'light' ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500' : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'}`}
                         />
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
-                      <div className="relative group/input">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
-                          <Mail size={16} />
+                      {formError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                          <span className="font-semibold">{formError}</span>
                         </div>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="admin@organisation.com"
-                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
-                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                            }`}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
-                      <div className="relative group/input">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
-                          <Lock size={16} />
+                      )}
+                      <button 
+                        type="submit" 
+                        disabled={otpLoading || otpValue.length !== 6}
+                        className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        {otpLoading ? 'Verifying...' : 'Verify & Create Account'} <ArrowRight size={14} />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => { setRegisterStep('form'); setFormError(''); setOtpValue('') }}
+                        className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${theme === 'light' ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                      >
+                        ← Back
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleRegister} className="space-y-5">
+                      <div className="space-y-1.5">
+                        <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Full Name</label>
+                        <div className="relative group/input">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                            <Users size={16} />
+                          </div>
+                          <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Your Full Name"
+                            className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                              }`}
+                          />
                         </div>
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
-                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                            }`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
-                        >
-                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
-                      <div className="relative group/input">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
-                          <Lock size={16} />
+                      <div className="space-y-1.5">
+                        <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
+                        <div className="relative group/input">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                            <Mail size={16} />
+                          </div>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="admin@organisation.com"
+                            className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                              }`}
+                          />
                         </div>
-                        <input
-                          type={showConfirmPassword ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
-                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
-                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
-                            }`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
-                        >
-                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
                       </div>
-                    </div>
-                    {formError && (
-                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
-                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                        <span className="font-semibold">{formError}</span>
+                      <div className="space-y-1.5">
+                        <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+                        <div className="relative group/input">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                            <Lock size={16} />
+                          </div>
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                              }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    <button
-                      type="submit"
-                      className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-orange-500/10 hover:shadow-orange-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
-                    >
-                      Create Account <ArrowRight size={14} />
-                    </button>
-                  </form>
+                      <div className="space-y-1.5">
+                        <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
+                        <div className="relative group/input">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                            <Lock size={16} />
+                          </div>
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                              ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                              : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                              }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
+                          >
+                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                      {formError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                          <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                          <span className="font-semibold">{formError}</span>
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={otpLoading}
+                        className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-orange-500/10 hover:shadow-orange-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
+                      >
+                        {otpLoading ? 'Sending OTP...' : 'Send OTP'} <ArrowRight size={14} />
+                      </button>
+                    </form>
+                  )
                 )}
 
                 {/* Participant access link */}
@@ -718,6 +704,7 @@ export const LandingPage: React.FC = () => {
                   <p className={`text-xs ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
                     Are you a participant?{' '}
                     <button
+                      type="button"
                       onClick={() => setShowEmailPopup(true)}
                       className="text-orange-500 font-semibold hover:underline cursor-pointer bg-transparent border-none p-0"
                     >
@@ -752,6 +739,7 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto px-4">
             {/* Organizer Role Card */}
             <button
+              type="button"
               onClick={() => { setActiveRole('organizer'); setActiveStepIndex(0); }}
               className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'organizer'
                 ? theme === 'light'
@@ -780,6 +768,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Participant Role Card */}
             <button
+              type="button"
               onClick={() => { setActiveRole('participant'); setActiveStepIndex(0); }}
               className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'participant'
                 ? theme === 'light'
@@ -808,6 +797,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Judge Role Card */}
             <button
+              type="button"
               onClick={() => { setActiveRole('judge'); setActiveStepIndex(0); }}
               className={`flex items-center gap-4 border rounded-2xl p-5 text-left transition-all duration-300 group cursor-pointer ${activeRole === 'judge'
                 ? theme === 'light'
@@ -874,6 +864,7 @@ export const LandingPage: React.FC = () => {
                 return (
                   <div key={idx} className="flex flex-col items-center relative z-10">
                     <button
+                      type="button"
                       onClick={() => setActiveStepIndex(idx)}
                       className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-all duration-300 cursor-pointer ${nodeBorderColor} ${nodeBg} ${isSelected ? 'scale-110 ring-4' : 'hover:scale-105 hover:bg-slate-50 dark:hover:bg-slate-800'
                         } ${ringColor}`}
@@ -1142,6 +1133,7 @@ export const LandingPage: React.FC = () => {
           </form>
 
           <button
+            type="button"
             onClick={() => setShowEmailPopup(false)}
             className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${theme === 'light'
               ? 'border-slate-200 text-slate-500 hover:bg-slate-50'

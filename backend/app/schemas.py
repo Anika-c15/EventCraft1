@@ -8,17 +8,14 @@ from .models import (
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
-
 class LoginRequest(BaseModel):
     email: str
     password: str
 
-
 class RegisterRequest(BaseModel):
-    name: str
+    name: str  # Changed from org_name to just name
     email: str
     password: str
-    org_name: str
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -408,3 +405,17 @@ class SubscriberOut(BaseModel):
 class NotifySubscribersRequest(BaseModel):
     event_name: str
     description: Optional[str] = None
+
+    # ── Committee Invites ──────────────────────────────────────────────────────────
+class CommitteeInviteCreate(BaseModel):
+    email: EmailStr
+
+class CommitteeInviteOut(BaseModel):
+    id: str
+    event_id: str
+    email: str
+    is_accepted: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
