@@ -666,7 +666,7 @@ async def create_invite(
 
     # Send magic link email
     from ..config import settings
-    frontend_url = settings.VITE_FRONTEND_URL
+    frontend_url = settings.FRONTEND_URL
     
     await send_email(
         to_email=payload.email,
