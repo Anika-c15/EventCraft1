@@ -84,6 +84,11 @@ def create_event(
         description=payload.description,
         owner_id=current_user.id,
         formation_rules=None,
+        scoring_weights={
+            "judge": 0.70,
+            "peer": 0.15,
+            "social": 0.15,
+        },
     )
     db.add(event)
     db.flush()

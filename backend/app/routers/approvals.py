@@ -132,6 +132,20 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
             if event:
                 event.current_stage_index = 0
 
+                # Apply scoring weights from agent config if provided
+                sb = pipeline_config.get("scoring_balance", {})
+                if sb:
+                    j = sb.get("judge", 0.70)
+                    p = sb.get("peer", 0.15)
+                    s = sb.get("social", 0.15)
+                    total = j + p + s
+                    if total > 0:
+                        event.scoring_weights = {
+                            "judge": round(j / total, 4),
+                            "peer": round(p / total, 4),
+                            "social": round(s / total, 4),
+                        }
+
             from .events import clear_event_teams_and_submissions
             clear_event_teams_and_submissions(approval.event_id, db)
 
