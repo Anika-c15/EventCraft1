@@ -6,7 +6,7 @@ import os
 from ..database import get_db
 from ..auth import require_committee
 from ..schemas import (
-    EventCreate, EventOut, StageOut, DashboardStats, 
+    EventCreate, EventUpdate, EventOut, StageOut, DashboardStats, 
     FormationRulesUpdate, StageSetPayload,
     CommitteeInviteCreate, CommitteeInviteOut,
     ScoringWeightsUpdate
@@ -213,6 +213,29 @@ def get_event(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
+    return event
+
+
+@router.put("/{event_id}", response_model=EventOut)
+def update_event(
+    event_id: str,
+    payload: EventUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    # Authorize: Only the workspace creator/owner can edit
+    if event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the creator/owner of this event can update the description")
+
+    if payload.description is not None:
+        event.description = payload.description.strip()
+
+    db.commit()
+    db.refresh(event)
     return event
 
 
@@ -625,6 +648,56 @@ def delete_event(
 
 # --- Admin Invites Logic ---
 
+@router.get("/invitations/pending", response_model=List[CommitteeInviteOut])
+def get_pending_invitations(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Retrieve all pending invitations for the current user's email."""
+    return db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == current_user.email,
+        models.CommitteeInvitation.is_accepted == False
+    ).all()
+
+
+@router.post("/invitations/{invite_id}/accept")
+def accept_invitation(
+    invite_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Accept a pending invitation."""
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id,
+        models.CommitteeInvitation.email == current_user.email
+    ).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    invite.is_accepted = True
+    db.commit()
+    return {"message": "Invitation accepted successfully"}
+
+
+@router.post("/invitations/{invite_id}/decline")
+def decline_invitation(
+    invite_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Decline a pending invitation."""
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id,
+        models.CommitteeInvitation.email == current_user.email
+    ).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    db.delete(invite)
+    db.commit()
+    return {"message": "Invitation declined successfully"}
+
+
 @router.get("/{event_id}/invites", response_model=List[CommitteeInviteOut])
 def get_invites(
     event_id: str, 
@@ -645,6 +718,10 @@ async def create_invite(
     if not event: 
         raise HTTPException(404, "Event not found")
     
+    # Check if current user is the owner/creator of the event
+    if event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the admin who created this event can invite co-administrators")
+    
     existing = db.query(models.CommitteeInvitation).filter(
         models.CommitteeInvitation.event_id == event_id, 
         models.CommitteeInvitation.email == payload.email
@@ -652,13 +729,11 @@ async def create_invite(
     if existing: 
         raise HTTPException(400, "User already invited")
 
-    # Check if they are already a registered user to mark accepted immediately
-    user_exists = db.query(models.User).filter(models.User.email == payload.email).first()
-    
+    # Co-admin invitations always start as pending (is_accepted = False)
     invite = models.CommitteeInvitation(
         event_id=event_id,
         email=payload.email,
-        is_accepted=bool(user_exists)
+        is_accepted=False
     )
     db.add(invite)
     db.commit()
@@ -690,6 +765,12 @@ def delete_invite(
     ).first()
     if not invite: 
         raise HTTPException(404, "Invite not found")
+    
+    # Check if current user is the owner/creator of the event (or if they are deleting their own invite)
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if event and event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the event owner/creator can revoke invitations")
+        
     db.delete(invite)
     db.commit()
     return {"message": "Invite removed"}

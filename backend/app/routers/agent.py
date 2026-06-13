@@ -102,6 +102,8 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
 
     # 1. Save pipeline config
     event.pipeline_config = config
+    if "description" in config:
+        event.description = config["description"]
 
     # 2. Update formation rules
     if "formation_rules" in config:

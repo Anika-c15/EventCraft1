@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 import uuid
+from typing import Optional
 
 from .database import Base
 from datetime import datetime
@@ -103,6 +104,8 @@ class Event(Base):
     scoring_weights = Column(JSON, nullable=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
 
+    owner = relationship("User")
+
     stages = relationship("PipelineStage", back_populates="event", cascade="all, delete-orphan")
     participants = relationship("Participant", back_populates="event", cascade="all, delete-orphan")
     teams = relationship("Team", back_populates="event", cascade="all, delete-orphan")
@@ -111,6 +114,18 @@ class Event(Base):
     activity_logs = relationship("ActivityLog", back_populates="event", cascade="all, delete-orphan")
     agent_messages = relationship("AgentMessage", back_populates="event", cascade="all, delete-orphan")
     judge_invitations = relationship("JudgeInvitation", back_populates="event", cascade="all, delete-orphan")
+
+    @property
+    def current_stage(self) -> Optional[str]:
+        for stage in self.stages:
+            if stage.status == StageStatus.active:
+                return stage.name
+        return None
+
+    @property
+    def owner_name(self) -> Optional[str]:
+        return self.owner.name if self.owner else "System"
+
 
 
 class PipelineStage(Base):
@@ -335,3 +350,7 @@ class CommitteeInvitation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     event = relationship("Event")
+
+    @property
+    def event_name(self) -> Optional[str]:
+        return self.event.name if self.event else None

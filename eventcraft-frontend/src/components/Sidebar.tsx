@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
-  Shield, Settings, ChevronLeft, ChevronRight, Bot, LogOut,
-  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2, Mail, CheckCircle2
+  Shield, Settings, Sliders, ChevronLeft, ChevronRight, Bot, LogOut,
+  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import logoImage from '../assets/logo.png'
-
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const navItems = [
   { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard, exact: true },
@@ -18,7 +16,7 @@ const navItems = [
   { path: '/communications',  label: 'Communications',   icon: Send },
   { path: '/pipeline',        label: 'Pipeline',         icon: GitBranch },
   { path: '/approvals',       label: 'Approvals',        icon: Shield },
-  { path: '/formation-rules', label: 'Formation Rules',  icon: Settings },
+  { path: '/formation-rules', label: 'Formation Rules',  icon: Sliders },
   { path: '/agent',           label: 'AI Agent',         icon: Bot },
   { path: '/subscribers',     label: 'Subscribers',      icon: Bell },
 ]
@@ -39,8 +37,7 @@ export const Sidebar: React.FC = () => {
     eventsList, 
     eventId, 
     setEventId,
-    deleteEvent,
-    token
+    deleteEvent
   } = useAppContext()
   const navigate = useNavigate()
 
@@ -57,39 +54,7 @@ export const Sidebar: React.FC = () => {
   const stage = dashboardStats?.current_stage?.toLowerCase() || ''
   const scoresLocked = stage.includes('eval') || stage.includes('result') || stage.includes('progression') || (dashboardStats?.current_stage_index !== undefined && dashboardStats.current_stage_index >= 2)
 
-  const [invites, setInvites] = useState<any[]>([])
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
 
-  const loadInvites = async () => {
-    if (!eventId) return
-    const res = await fetch(`${BASE_URL}/api/events/${eventId}/invites`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (res.ok) setInvites(await res.json())
-  }
-
-  const handleInvite = async () => {
-    if (!inviteEmail || !eventId) return
-    await fetch(`${BASE_URL}/api/events/${eventId}/invites`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ email: inviteEmail })
-    })
-    setInviteEmail('')
-    setShowInviteModal(false)
-    loadInvites()
-  }
-
-  const handleRemoveInvite = async (inviteId: string) => {
-    await fetch(`${BASE_URL}/api/events/${eventId}/invites/${inviteId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    loadInvites()
-  }
-
-  useEffect(() => { loadInvites() }, [eventId])
 
   // If there is no active event (e.g. they are on the setup page), HIDE THE ENTIRE SIDEBAR
   if (!eventId) {
@@ -282,9 +247,11 @@ export const Sidebar: React.FC = () => {
         {/* User Badge */}
         {!collapsed && user && (
           <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-950/40 mb-2">
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-350 truncate">{user.name}</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
-            <div className="flex items-center gap-1.5 mt-1">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-gray-700 dark:text-slate-350 truncate">{user.name}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5 border-t border-gray-150 dark:border-slate-800 pt-1">
               <span className={`w-1.5 h-1.5 rounded-full ${!eventId ? 'bg-gray-300' : wsConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
               <span className="text-[10px] text-gray-400 dark:text-slate-500">
                 {!eventId ? 'No Active Event' : wsConnected ? 'Live' : 'Offline'}
@@ -293,17 +260,17 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {/* INVITE CO-ADMIN BUTTON */}
-        {(user?.role === 'admin' || user?.role === 'committee') && (
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-400 dark:hover:bg-orange-500/20 transition-all w-full cursor-pointer"
-            title={collapsed ? 'Invite Co-Admin' : undefined}
-          >
-            <Mail size={18} className="flex-shrink-0" />
-            {!collapsed && <span>Invite Co-Admin</span>}
-          </button>
-        )}
+        {/* Settings Button */}
+        <button
+          onClick={() => navigate('/settings')}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 transition-all w-full cursor-pointer"
+          title={collapsed ? 'Settings' : undefined}
+        >
+          <Settings size={18} className="flex-shrink-0 text-gray-400 dark:text-slate-500" />
+          {!collapsed && <span>Settings</span>}
+        </button>
+
+
         
         {/* Theme Toggle Button */}
         <button
@@ -351,66 +318,7 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {/* Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md shadow-xl flex flex-col max-h-[80vh]">
-            <h3 className="font-bold text-gray-900 dark:text-white mb-4">Invite Co-Admin</h3>
-            
-            <div className="flex gap-2 mb-6">
-              <input
-                type="email"
-                placeholder="colleague@email.com"
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                className="flex-1 border border-gray-200 dark:border-slate-700 bg-transparent dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <button
-                onClick={handleInvite}
-                disabled={!inviteEmail}
-                className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
-              >
-                Send
-              </button>
-            </div>
 
-            {invites.length > 0 && (
-              <div className="overflow-y-auto mb-6 border-t border-gray-100 dark:border-slate-800 pt-4 space-y-2">
-                <h4 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2">
-                  Invited Admins
-                </h4>
-                {invites.map(inv => (
-                  <div key={inv.id} className="flex items-center justify-between p-2.5 border border-gray-100 dark:border-slate-800 rounded-lg text-sm bg-gray-50/50 dark:bg-slate-800/50">
-                    <div className="flex items-center gap-2 truncate pr-2">
-                      <Mail size={14} className="text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                      <span className="truncate dark:text-slate-200">{inv.email}</span>
-                      {inv.is_accepted ? (
-                        <span className="text-[9px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 size={8}/> Joined</span>
-                      ) : (
-                        <span className="text-[9px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">Pending</span>
-                      )}
-                    </div>
-                    <button 
-                      onClick={() => handleRemoveInvite(inv.id)} 
-                      className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
-                      title="Remove Invite"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowInviteModal(false)}
-              className="w-full border border-gray-200 dark:border-slate-700 rounded-xl py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors mt-auto"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </aside>
        
       {/* Logout Confirmation Modal */}

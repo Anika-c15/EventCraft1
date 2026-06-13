@@ -18,6 +18,7 @@ const JudgePortal = React.lazy(() => import('./pages/JudgePortal').then(m => ({ 
 const Agent = React.lazy(() => import('./pages/Agent').then(m => ({ default: m.Agent })))
 const Subscribe = React.lazy(() => import('./pages/Subscribe').then(m => ({ default: m.Subscribe })))
 const Subscribers = React.lazy(() => import('./pages/Subscribers').then(m => ({ default: m.Subscribers })))
+const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
 const Unsubscribe = React.lazy(() => import('./pages/Unsubscribe').then(m => ({ default: m.Unsubscribe })))
 const LiveLeaderboard = React.lazy(() => import('./pages/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 const CandidatePortal = React.lazy(() => import('./pages/CandidatePortal').then(m => ({ default: m.CandidatePortal })))
@@ -86,6 +87,7 @@ const App: React.FC = () => {
                 <Route path="/formation-rules" element={<FormationRules />} />
                 <Route path="/agent" element={<Agent />} />
                 <Route path="/subscribers" element={<Subscribers />} />
+                <Route path="/settings" element={<Settings />} />
               </Route>
             </Routes>
           </Suspense>

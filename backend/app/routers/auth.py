@@ -133,12 +133,6 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     if not user.is_active:
         raise HTTPException(403, "Account disabled")
 
-    # Auto-accept any pending invites for this email
-    db.query(models.CommitteeInvitation).filter(
-        models.CommitteeInvitation.email == payload.email
-    ).update({"is_accepted": True})
-    db.commit()
-
     token = create_access_token({"sub": user.id})
     return TokenResponse(access_token=token, user_id=user.id, name=user.name, role=user.role.value)
 
@@ -167,11 +161,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
-    # Auto-accept any pending invites for this email
-    db.query(models.CommitteeInvitation).filter(
-        models.CommitteeInvitation.email == payload.email
-    ).update({"is_accepted": True})
-    
     db.commit()
     db.refresh(user)
     

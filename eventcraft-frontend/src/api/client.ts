@@ -71,6 +71,8 @@ export const eventsApi = {
   create: (name: string, description?: string) =>
     request<any>('/api/events', { method: 'POST', body: JSON.stringify({ name, description }) }),
   get: (id: string) => request<any>(`/api/events/${id}`),
+  update: (id: string, payload: { description?: string }) =>
+    request<any>(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   dashboard: (id: string) => request<any>(`/api/events/${id}/dashboard`),
   stages: (id: string) => request<any[]>(`/api/events/${id}/stages`),
   updateFormationRules: (id: string, rules: any) =>

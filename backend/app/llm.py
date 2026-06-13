@@ -632,6 +632,7 @@ When the user describes their event, extract ALL of the following:
 4. Communication touchpoints (which stages need emails, and to whom)
 5. Anomaly threshold for score divergence
 6. Scoring balance: percentage weights for the scoring engine (expert judges, peer review, social scrape) summing to exactly 1.0 (or 100%)
+7. A concise, professional 1-2 sentence description summarizing the event format and goals.
 
 CRITICAL RULES ABOUT WHEN TO ASK vs WHEN TO GENERATE:
 - If the user gives ONLY a vague description (e.g. "organize a hackathon", "plan an event", "set up a competition") WITHOUT specifying team size, judging criteria, number of participants, or duration — you MUST ask clarifying questions. Do NOT generate a config from vague input.
@@ -656,6 +657,7 @@ When ready, output the JSON block with no additional text after it.
 ```json
 {
   "pipeline_ready": true,
+  "description": "A 2-day AI/ML hackathon for top engineering students across India.",
   "stages": [
     {
       "name": "Participant Intake",

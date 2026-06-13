@@ -32,6 +32,10 @@ class EventCreate(BaseModel):
     description: Optional[str] = None
 
 
+class EventUpdate(BaseModel):
+    description: Optional[str] = None
+
+
 class EventOut(BaseModel):
     id: str
     name: str
@@ -42,6 +46,9 @@ class EventOut(BaseModel):
     formation_rules: Optional[Any]
     scoring_weights: Optional[Dict[str, float]] = None
     created_at: datetime
+    current_stage: Optional[str] = None
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -424,6 +431,7 @@ class CommitteeInviteOut(BaseModel):
     email: str
     is_accepted: bool
     created_at: datetime
+    event_name: Optional[str] = None
 
     class Config:
         from_attributes = True
