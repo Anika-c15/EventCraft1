@@ -665,7 +665,8 @@ async def create_invite(
     db.refresh(invite)
 
     # Send magic link email
-    frontend_url = os.getenv("VITE_FRONTEND_URL", "http://localhost:5173")
+    from ..config import settings
+    frontend_url = settings.VITE_FRONTEND_URL
     
     await send_email(
         to_email=payload.email,
