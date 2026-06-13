@@ -8,17 +8,14 @@ from .models import (
 
 
 # ── Auth ───────────────────────────────────────────────────────────────────────
-
 class LoginRequest(BaseModel):
     email: str
     password: str
 
-
 class RegisterRequest(BaseModel):
-    name: str
+    name: str  # Changed from org_name to just name
     email: str
     password: str
-    org_name: str
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -35,6 +32,10 @@ class EventCreate(BaseModel):
     description: Optional[str] = None
 
 
+class EventUpdate(BaseModel):
+    description: Optional[str] = None
+
+
 class EventOut(BaseModel):
     id: str
     name: str
@@ -43,10 +44,20 @@ class EventOut(BaseModel):
     is_active: bool
     pipeline_config: Optional[Any]
     formation_rules: Optional[Any]
+    scoring_weights: Optional[Dict[str, float]] = None
     created_at: datetime
+    current_stage: Optional[str] = None
+    owner_id: Optional[str] = None
+    owner_name: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class ScoringWeightsUpdate(BaseModel):
+    judge: float = Field(..., ge=0.0, le=100.0)
+    peer: float = Field(..., ge=0.0, le=100.0)
+    social: float = Field(..., ge=0.0, le=100.0)
 
 
 # ── Pipeline Stage ─────────────────────────────────────────────────────────────
@@ -381,6 +392,7 @@ class PortalData(BaseModel):
     results_phase_active: bool = False # True when event is in results/announce phase
     showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
     leaderboard: List[Dict[str, Any]] = []
+    scoring_weights: Optional[Dict[str, float]] = None
 
 
 class StageSetPayload(BaseModel):
@@ -408,3 +420,18 @@ class SubscriberOut(BaseModel):
 class NotifySubscribersRequest(BaseModel):
     event_name: str
     description: Optional[str] = None
+
+    # ── Committee Invites ──────────────────────────────────────────────────────────
+class CommitteeInviteCreate(BaseModel):
+    email: EmailStr
+
+class CommitteeInviteOut(BaseModel):
+    id: str
+    event_id: str
+    email: str
+    is_accepted: bool
+    created_at: datetime
+    event_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

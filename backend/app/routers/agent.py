@@ -99,6 +99,8 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
 
     # Save pipeline config preview on event (but don't create stages yet)
     event.pipeline_config = config
+    if "description" in config:
+        event.description = config["description"]
 
     # Update formation rules preview
     if "formation_rules" in config:

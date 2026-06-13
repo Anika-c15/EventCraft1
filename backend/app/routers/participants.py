@@ -409,6 +409,7 @@ def get_portal(
         results_phase_active=results_phase_active,
         showroom_teams=showroom_teams,
         leaderboard=final_leaderboard,
+        scoring_weights=event.scoring_weights,
     )
 
 

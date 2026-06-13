@@ -45,6 +45,7 @@ interface AppContextType {
 
   theme: 'light' | 'dark'
   toggleTheme: () => void
+  token: string | null
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -363,6 +364,8 @@ const logout = () => {
     }
   }, [eventId, user, loadApprovals, loadDashboard, loadActivityLog])
 
+  const token = localStorage.getItem('ec_token')
+
   return (
     <AppContext.Provider value={{
       user, isAuthenticated: !!user, authChecked,
@@ -374,7 +377,7 @@ const logout = () => {
       activityLog, loadActivityLog,
       wsConnected, lastWsMessage,
       loading, error, clearError: () => setError(null),
-      theme, toggleTheme,
+      theme, toggleTheme,token,
     }}>
       {children}
     </AppContext.Provider>

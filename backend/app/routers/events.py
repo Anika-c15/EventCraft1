@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
+import os
 
 from ..database import get_db
 from ..auth import require_committee
-from ..schemas import EventCreate, EventOut, StageOut, DashboardStats, FormationRulesUpdate, StageSetPayload
+from ..schemas import (
+    EventCreate, EventUpdate, EventOut, StageOut, DashboardStats, 
+    FormationRulesUpdate, StageSetPayload,
+    CommitteeInviteCreate, CommitteeInviteOut,
+    ScoringWeightsUpdate
+)
 from .. import models
+from ..email_service import send_email
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -102,7 +109,16 @@ def list_events(
     if current_user.role == models.UserRole.admin:
         return db.query(models.Event).order_by(models.Event.created_at.desc()).all()
     
-    return db.query(models.Event).filter(models.Event.owner_id == current_user.id).order_by(models.Event.created_at.desc()).all()
+    # Get events owned by user OR events they accepted an invite to
+    my_invites = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == current_user.email, 
+        models.CommitteeInvitation.is_accepted == True
+    ).all()
+    invited_event_ids = [inv.event_id for inv in my_invites]
+    
+    return db.query(models.Event).filter(
+        (models.Event.owner_id == current_user.id) | (models.Event.id.in_(invited_event_ids))
+    ).order_by(models.Event.created_at.desc()).all()
 
 
 @router.get("/public/demo-portal")
@@ -169,6 +185,29 @@ def get_event(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
+    return event
+
+
+@router.put("/{event_id}", response_model=EventOut)
+def update_event(
+    event_id: str,
+    payload: EventUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    # Authorize: Only the workspace creator/owner can edit
+    if event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the creator/owner of this event can update the description")
+
+    if payload.description is not None:
+        event.description = payload.description.strip()
+
+    db.commit()
+    db.refresh(event)
     return event
 
 
@@ -294,6 +333,44 @@ def update_formation_rules(
         pass
 
     return {"message": "Formation rules updated", "rules": event.formation_rules}
+
+
+@router.put("/{event_id}/scoring-weights")
+def update_scoring_weights(
+    event_id: str,
+    payload: ScoringWeightsUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    total_weight = payload.judge + payload.peer + payload.social
+    if abs(total_weight - 100.0) > 0.01:
+        raise HTTPException(400, f"Scoring weights must sum to exactly 100%. Currently they sum to {total_weight:.1f}%.")
+
+    event.scoring_weights = {
+        "judge": round(payload.judge / 100.0, 4),
+        "peer": round(payload.peer / 100.0, 4),
+        "social": round(payload.social / 100.0, 4)
+    }
+
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Scoring weights updated: Judge {payload.judge:.0f}%, Peer {payload.peer:.0f}%, Social {payload.social:.0f}%",
+        log_type="info",
+    )
+    db.add(log)
+    db.commit()
+
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_updated", "event_name": event.name})
+    except Exception:
+        pass
+
+    return {"message": "Scoring weights updated", "scoring_weights": event.scoring_weights}
 
 
 @router.post("/{event_id}/advance-stage")
@@ -540,3 +617,132 @@ def delete_event(
     db.commit()
     return {"message": "Event deleted successfully"}
 
+
+# --- Admin Invites Logic ---
+
+@router.get("/invitations/pending", response_model=List[CommitteeInviteOut])
+def get_pending_invitations(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Retrieve all pending invitations for the current user's email."""
+    return db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.email == current_user.email,
+        models.CommitteeInvitation.is_accepted == False
+    ).all()
+
+
+@router.post("/invitations/{invite_id}/accept")
+def accept_invitation(
+    invite_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Accept a pending invitation."""
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id,
+        models.CommitteeInvitation.email == current_user.email
+    ).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    invite.is_accepted = True
+    db.commit()
+    return {"message": "Invitation accepted successfully"}
+
+
+@router.post("/invitations/{invite_id}/decline")
+def decline_invitation(
+    invite_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    """Decline a pending invitation."""
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id,
+        models.CommitteeInvitation.email == current_user.email
+    ).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    db.delete(invite)
+    db.commit()
+    return {"message": "Invitation declined successfully"}
+
+
+@router.get("/{event_id}/invites", response_model=List[CommitteeInviteOut])
+def get_invites(
+    event_id: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    return db.query(models.CommitteeInvitation).filter(models.CommitteeInvitation.event_id == event_id).all()
+
+
+@router.post("/{event_id}/invites", response_model=CommitteeInviteOut)
+async def create_invite(
+    event_id: str, 
+    payload: CommitteeInviteCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event: 
+        raise HTTPException(404, "Event not found")
+    
+    # Check if current user is the owner/creator of the event
+    if event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the admin who created this event can invite co-administrators")
+    
+    existing = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.event_id == event_id, 
+        models.CommitteeInvitation.email == payload.email
+    ).first()
+    if existing: 
+        raise HTTPException(400, "User already invited")
+
+    # Co-admin invitations always start as pending (is_accepted = False)
+    invite = models.CommitteeInvitation(
+        event_id=event_id,
+        email=payload.email,
+        is_accepted=False
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    # Send magic link email
+    from ..config import settings
+    frontend_url = settings.FRONTEND_URL
+    
+    await send_email(
+        to_email=payload.email,
+        subject=f"You've been invited to co-manage {event.name} on EventCraft",
+        body=f"Hi,\n\nYou have been invited to be an administrator for '{event.name}'.\n\nTo accept the invitation and access the dashboard, please register or login here:\n{frontend_url}\n\nRegards,\nEventCraft Team"
+    )
+
+    return invite
+
+
+@router.delete("/{event_id}/invites/{invite_id}")
+def delete_invite(
+    event_id: str, 
+    invite_id: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.id == invite_id, 
+        models.CommitteeInvitation.event_id == event_id
+    ).first()
+    if not invite: 
+        raise HTTPException(404, "Invite not found")
+    
+    # Check if current user is the owner/creator of the event (or if they are deleting their own invite)
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if event and event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the event owner/creator can revoke invitations")
+        
+    db.delete(invite)
+    db.commit()
+    return {"message": "Invite removed"}

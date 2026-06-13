@@ -2,12 +2,11 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
-  Shield, Settings, ChevronLeft, ChevronRight, Bot, LogOut,
-  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2,
+  Shield, Settings, Sliders, ChevronLeft, ChevronRight, Bot, LogOut,
+  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import logoImage from '../assets/logo.png'
-
 
 const navItems = [
   { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard, exact: true },
@@ -17,7 +16,7 @@ const navItems = [
   { path: '/communications',  label: 'Communications',   icon: Send },
   { path: '/pipeline',        label: 'Pipeline',         icon: GitBranch },
   { path: '/approvals',       label: 'Approvals',        icon: Shield },
-  { path: '/formation-rules', label: 'Formation Rules',  icon: Settings },
+  { path: '/formation-rules', label: 'Formation Rules',  icon: Sliders },
   { path: '/agent',           label: 'AI Agent',         icon: Bot },
   { path: '/subscribers',     label: 'Subscribers',      icon: Bell },
 ]
@@ -27,6 +26,7 @@ export const Sidebar: React.FC = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false) 
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [eventToDelete, setEventToDelete] = useState<any | null>(null)
+  
   const { 
     user, 
     logout, 
@@ -42,17 +42,24 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate()
 
   const handleLogout = () => {
-  setShowLogoutModal(true)
-}
+    setShowLogoutModal(true)
+  }
 
-const confirmLogout = () => {
-  logout()
-  navigate('/')
-}
+  const confirmLogout = () => {
+    logout()
+    navigate('/')
+  }
 
   // Show Live Leaderboard only from Evaluation phase onwards
   const stage = dashboardStats?.current_stage?.toLowerCase() || ''
   const scoresLocked = stage.includes('eval') || stage.includes('result') || stage.includes('progression') || (dashboardStats?.current_stage_index !== undefined && dashboardStats.current_stage_index >= 2)
+
+
+
+  // If there is no active event (e.g. they are on the setup page), HIDE THE ENTIRE SIDEBAR
+  if (!eventId) {
+    return null
+  }
 
   return (
     <>
@@ -61,16 +68,13 @@ const confirmLogout = () => {
         collapsed ? 'w-16' : 'w-60'
       } h-screen sticky top-0 flex-shrink-0`}
     >
-      {/* Logo */}
-   {/* Logo Section */}
+      {/* Logo Section */}
       <div className="flex items-center gap-4 px-3 py-3 border-b border-gray-100 dark:border-slate-800">
         
-        {/* Shrunk the container even further to w-8 h-8 */}
         <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center">
           <img 
             src={logoImage} 
             alt="EventCraft Logo" 
-            // Bumped scale to 1.7 so the logo stays the exact same visual size 
             className="w-full h-full object-contain drop-shadow-md transition-transform hover:scale-[1.8] duration-300 scale-[1.7]" 
           />
         </div>
@@ -88,7 +92,7 @@ const confirmLogout = () => {
       </div>
 
       {/* Event Switcher */}
-      {user && user.role === 'admin' && eventsList.length > 0 && (
+      {user && (user.role === 'admin' || user.role === 'committee') && eventsList.length > 0 && (
         <div className="px-3 py-2.5 border-b border-gray-100 dark:border-slate-800 relative">
           {collapsed ? (
             <div className="flex justify-center py-1">
@@ -159,11 +163,12 @@ const confirmLogout = () => {
                               {isSelected && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-primary dark:bg-primary-400" />
                               )}
-                              {user?.role === 'admin' && (
+                              {(user?.role === 'admin' || user?.role === 'committee') && (
                                 <button
                                   onClick={(evt) => {
                                     evt.stopPropagation()
                                     setEventToDelete(e)
+                                    setDropdownOpen(false)
                                   }}
                                   className="opacity-0 group-hover/item:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded transition-all hover:bg-gray-100 dark:hover:bg-slate-750 cursor-pointer"
                                   title="Delete Event"
@@ -216,7 +221,7 @@ const confirmLogout = () => {
           </NavLink>
         ))}
 
-        {/* Live Leaderboard — only when scores are locked */}
+        {/* Live Leaderboard */}
         {scoresLocked && (
           <a
             href={`/live-leaderboard${eventId ? `?event=${eventId}` : ''}`}
@@ -236,13 +241,17 @@ const confirmLogout = () => {
         )}
       </nav>
 
-      {/* User + Collapse */}
+      {/* Bottom Section (User, Invites, Settings, Collapse) */}
       <div className="px-2 py-3 border-t border-gray-100 dark:border-slate-800 space-y-1 flex-shrink-0">
+        
+        {/* User Badge */}
         {!collapsed && user && (
-          <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-950/40 mb-1">
-            <p className="text-xs font-semibold text-gray-700 dark:text-slate-350 truncate">{user.name}</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
-            <div className="flex items-center gap-1.5 mt-1">
+          <div className="px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-950/40 mb-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-gray-700 dark:text-slate-350 truncate">{user.name}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{user.email}</p>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1.5 border-t border-gray-150 dark:border-slate-800 pt-1">
               <span className={`w-1.5 h-1.5 rounded-full ${!eventId ? 'bg-gray-300' : wsConnected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
               <span className="text-[10px] text-gray-400 dark:text-slate-500">
                 {!eventId ? 'No Active Event' : wsConnected ? 'Live' : 'Offline'}
@@ -250,6 +259,18 @@ const confirmLogout = () => {
             </div>
           </div>
         )}
+
+        {/* Settings Button */}
+        <button
+          onClick={() => navigate('/settings')}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 transition-all w-full cursor-pointer"
+          title={collapsed ? 'Settings' : undefined}
+        >
+          <Settings size={18} className="flex-shrink-0 text-gray-400 dark:text-slate-500" />
+          {!collapsed && <span>Settings</span>}
+        </button>
+
+
         
         {/* Theme Toggle Button */}
         <button
@@ -270,6 +291,7 @@ const confirmLogout = () => {
           )}
         </button>
 
+        {/* Logout Button */}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/20 dark:hover:text-red-400 transition-all w-full cursor-pointer"
@@ -279,6 +301,7 @@ const confirmLogout = () => {
           {!collapsed && <span>Logout</span>}
         </button>
         
+        {/* Collapse Toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 transition-all w-full cursor-pointer"
@@ -294,8 +317,10 @@ const confirmLogout = () => {
           )}
         </button>
       </div>
-    </aside>
 
+
+    </aside>
+       
       {/* Logout Confirmation Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -370,6 +395,6 @@ const confirmLogout = () => {
           </div>
         </div>
       )}
-      </>
+    </>
   )
 }

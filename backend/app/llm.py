@@ -631,12 +631,15 @@ When the user describes their event, extract ALL of the following:
 3. Evaluation criteria and scoring weights
 4. Communication touchpoints (which stages need emails, and to whom)
 5. Anomaly threshold for score divergence
+6. Scoring balance: percentage weights for the scoring engine (expert judges, peer review, social scrape) summing to exactly 1.0 (or 100%)
+7. A concise, professional 1-2 sentence description summarizing the event format and goals.
 
 CRITICAL RULES ABOUT WHEN TO ASK vs WHEN TO GENERATE:
 - If the user gives ONLY a vague description (e.g. "organize a hackathon", "plan an event", "set up a competition") WITHOUT specifying team size, judging criteria, number of participants, or duration — you MUST ask clarifying questions. Do NOT generate a config from vague input.
 - Ask specific questions: How many participants? Individual or team-based? If teams, what size? How long is the event? What will judges evaluate? Any special stages beyond the standard ones?
-- Only generate the full config once you have: event type, participant count OR team size, judging criteria, and event duration.
-- If the user gives a detailed description (e.g. "2-day ML hackathon, 60 participants, teams of 3, judged on Innovation, Execution, Presentation, Impact"), generate immediately.
+- MANDATORY SCORING WEIGHTS CHECK: The user MUST explicitly specify the scoring balance weights (percentage weights for expert judges, peer reviews, and social scrape) in the chat history or starting prompt. If they did not mention these weights, you MUST ask them how they want to configure the scoring weights (e.g., 100% judge, 80/20 judge/peer, or a custom balance) and you MUST set "pipeline_ready": false (or do not output any JSON block at all). Do NOT assume defaults or generate the configuration with "pipeline_ready": true until they explicitly provide or confirm their preference.
+- Only generate the full config with "pipeline_ready": true once you have: event type, participant count OR team size, judging criteria, event duration, AND the scoring balance weights explicitly specified or confirmed by the user.
+- If the user's initial prompt/description contains both the event details AND the scoring weights (e.g. "Create a 2-day hackathon... with scoring weights 90% judge and 10% peer"), then configure it directly and generate the JSON block in your first response with "pipeline_ready": true.
 
 WHEN YOU GENERATE, your response must have TWO parts:
 1. A DETAILED summary (not brief) — cover every decision you made: all stages and why, team rules and why, all criteria and their weights, which stages get emails and to whom, the anomaly threshold and what it means. This should be 10-15 lines minimum. Do NOT say "brief summary". Do NOT say "Here is the JSON configuration" or "Here is the configuration".
@@ -654,6 +657,7 @@ When ready, output the JSON block with no additional text after it.
 ```json
 {
   "pipeline_ready": true,
+  "description": "A 2-day AI/ML hackathon for top engineering students across India.",
   "stages": [
     {
       "name": "Participant Intake",
@@ -720,6 +724,11 @@ When ready, output the JSON block with no additional text after it.
     "Presentation": 0.25,
     "Impact": 0.25
   },
+  "scoring_balance": {
+    "judge": 0.70,
+    "peer": 0.15,
+    "social": 0.15
+  },
   "anomaly_threshold": 2.5,
   "communication_stages": [
     {"stage": "Participant Intake", "recipient_type": "all_participants"},
@@ -744,10 +753,29 @@ For each stage in your stages list, you MUST explicitly set:
 - "is_evaluation": true if this is the evaluation, judging, or peer review stage where judges/peers rate and score the projects, false otherwise.
 - "portal_description": A friendly, participant-facing status message to be displayed on their portal during this stage (e.g. "Hacking is in progress! Build your project and submit it using the My Submission Hub" or "Evaluation is underway. Judges are reviewing all team submissions.").
 
-Always make scoring_weights sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info."""
+Always make scoring_weights sum to 1.0. Always make scoring_balance sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info, including the scoring balance."""
 
 
-def agent_chat(
+def _extract_json(reply: str) -> Optional[Dict[str, Any]]:
+    # Try markdown code block first
+    json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1).strip())
+        except Exception:
+            pass
+    # Fallback: find first '{' and last '}'
+    start = reply.find('{')
+    end = reply.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(reply[start:end+1].strip())
+        except Exception:
+            pass
+    return None
+
+
+def _agent_chat_inner(
     history: List[Dict[str, str]],
     new_message: str,
 ) -> Dict[str, Any]:
@@ -777,15 +805,10 @@ def agent_chat(
             pipeline_config = None
             pipeline_ready = False
 
-            json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
-            if json_match:
-                try:
-                    config = json.loads(json_match.group(1))
-                    if config.get("pipeline_ready"):
-                        pipeline_config = config
-                        pipeline_ready = True
-                except Exception:
-                    pass
+            config = _extract_json(reply)
+            if config and config.get("pipeline_ready"):
+                pipeline_config = config
+                pipeline_ready = True
 
             needs_clarification = not pipeline_ready and any(
                 c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
@@ -817,15 +840,10 @@ def agent_chat(
                     pipeline_config = None
                     pipeline_ready = False
 
-                    json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
-                    if json_match:
-                        try:
-                            config = json.loads(json_match.group(1))
-                            if config.get("pipeline_ready"):
-                                pipeline_config = config
-                                pipeline_ready = True
-                        except Exception:
-                            pass
+                    config = _extract_json(reply)
+                    if config and config.get("pipeline_ready"):
+                        pipeline_config = config
+                        pipeline_ready = True
 
                     needs_clarification = not pipeline_ready and any(
                         c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
@@ -877,15 +895,10 @@ def agent_chat(
             pipeline_config = None
             pipeline_ready = False
 
-            json_match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", reply)
-            if json_match:
-                try:
-                    config = json.loads(json_match.group(1))
-                    if config.get("pipeline_ready"):
-                        pipeline_config = config
-                        pipeline_ready = True
-                except Exception:
-                    pass
+            config = _extract_json(reply)
+            if config and config.get("pipeline_ready"):
+                pipeline_config = config
+                pipeline_ready = True
 
             needs_clarification = not pipeline_ready and any(
                 c in reply.lower() for c in ["?", "clarif", "could you", "please provide", "what is", "how many"]
@@ -912,6 +925,61 @@ def agent_chat(
         "pipeline_ready": False,
         "needs_clarification": False,
     }
+
+
+def _user_has_specified_scoring(history: List[Dict[str, str]], new_message: str) -> bool:
+    user_msgs = [m["parts"] for m in history if m["role"] == "user"] + [new_message]
+    combined_text = "\n".join(user_msgs).lower()
+    
+    # 1. Look for percentage numbers (e.g., 90%, 80 %, 100%)
+    if re.search(r"\d+\s*%", combined_text):
+        return True
+        
+    # 2. Look for ratios (e.g., 80/20, 70/15/15, 90/10)
+    if re.search(r"\d+/\d+", combined_text):
+        return True
+        
+    # 3. Look for explicit scoring configuration keywords (excluding general "judged")
+    keywords = [
+        "scoring weights", "scoring weight", "scoring balance",
+        "judge weight", "peer weight", "social weight",
+        "expert weight", "distribution of weights", "percentage of judge",
+        "percentage of peer", "percentage of social",
+        "default scoring", "default weights", "default balance",
+        "default scoring weights"
+    ]
+    for kw in keywords:
+        if kw in combined_text:
+            return True
+            
+    return False
+
+
+def agent_chat(
+    history: List[Dict[str, str]],
+    new_message: str,
+) -> Dict[str, Any]:
+    """Wraps inner agent chat, forcing a clarifying question if scoring weights are not specified."""
+    res = _agent_chat_inner(history, new_message)
+    
+    if res.get("pipeline_ready") and res.get("pipeline_config"):
+        if not _user_has_specified_scoring(history, new_message):
+            res["pipeline_ready"] = False
+            res["pipeline_config"] = None
+            res["needs_clarification"] = True
+            
+            # Keep the detailed LLM reply text, stripping the JSON block if it exists
+            reply_text = res["reply"]
+            reply_text = re.sub(r"```json[\s\S]*?```", "", reply_text).strip()
+            reply_text = re.sub(r"```[\s\S]*?```", "", reply_text).strip()
+            
+            res["reply"] = (
+                f"{reply_text}\n\n"
+                "Please confirm how you would like to configure the scoring balance weights (Expert Judges vs Peer reviews vs Social scrape). "
+                "For example, you can say 'use default weights' (70% judge / 15% peer / 15% social) or specify a custom balance (e.g., '90% judge and 10% peer')."
+            )
+            
+    return res
 
 
 # ── Results Summary ────────────────────────────────────────────────────────────

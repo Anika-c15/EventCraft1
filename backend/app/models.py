@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 import uuid
+from typing import Optional
 
 from .database import Base
 from datetime import datetime
@@ -100,8 +101,10 @@ class Event(Base):
     # Dynamic pipeline — stored as JSON list of stage definitions
     pipeline_config = Column(JSON, nullable=True)  # set by conversational agent
     formation_rules = Column(JSON, nullable=True)
+    scoring_weights = Column(JSON, nullable=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
 
+    owner = relationship("User")
 
     stages = relationship("PipelineStage", back_populates="event", cascade="all, delete-orphan")
     participants = relationship("Participant", back_populates="event", cascade="all, delete-orphan")
@@ -111,6 +114,17 @@ class Event(Base):
     activity_logs = relationship("ActivityLog", back_populates="event", cascade="all, delete-orphan")
     agent_messages = relationship("AgentMessage", back_populates="event", cascade="all, delete-orphan")
     judge_invitations = relationship("JudgeInvitation", back_populates="event", cascade="all, delete-orphan")
+
+    @property
+    def current_stage(self) -> Optional[str]:
+        for stage in self.stages:
+            if stage.status == StageStatus.active:
+                return stage.name
+        return None
+
+    @property
+    def owner_name(self) -> Optional[str]:
+        return self.owner.name if self.owner else "System"
 
 
 
@@ -251,6 +265,15 @@ class ActivityLog(Base):
 
     event = relationship("Event", back_populates="activity_logs")
 
+class OTPVerification(Base):
+    __tablename__ = "otp_verifications"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    email = Column(String, nullable=False, index=True)
+    otp = Column(String, nullable=False)
+    is_verified = Column(Boolean, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class AgentMessage(Base):
     """Stores the conversational agent chat history for dynamic event config."""
@@ -315,3 +338,19 @@ class Subscriber(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     notified = Column(Boolean, default=False)
     subscribed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CommitteeInvitation(Base):
+    __tablename__ = "committee_invitations"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    email = Column(String, nullable=False, index=True)
+    is_accepted = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    event = relationship("Event")
+
+    @property
+    def event_name(self) -> Optional[str]:
+        return self.event.name if self.event else None

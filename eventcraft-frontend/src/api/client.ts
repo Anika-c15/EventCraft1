@@ -71,12 +71,19 @@ export const eventsApi = {
   create: (name: string, description?: string) =>
     request<any>('/api/events', { method: 'POST', body: JSON.stringify({ name, description }) }),
   get: (id: string) => request<any>(`/api/events/${id}`),
+  update: (id: string, payload: { description?: string }) =>
+    request<any>(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   dashboard: (id: string) => request<any>(`/api/events/${id}/dashboard`),
   stages: (id: string) => request<any[]>(`/api/events/${id}/stages`),
   updateFormationRules: (id: string, rules: any) =>
     request<any>(`/api/events/${id}/formation-rules`, {
       method: 'PUT',
       body: JSON.stringify(rules),
+    }),
+  updateScoringWeights: (id: string, weights: { judge: number; peer: number; social: number }) =>
+    request<any>(`/api/events/${id}/scoring-weights`, {
+      method: 'PUT',
+      body: JSON.stringify(weights),
     }),
   advanceStage: (id: string) =>
     request<any>(`/api/events/${id}/advance-stage`, { method: 'POST' }),

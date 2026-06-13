@@ -1,32 +1,133 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Bot, Sparkles, GitBranch, ArrowRight, X } from 'lucide-react'
 import { OmniAgentSidebar } from './OmniAgentSidebar'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export const Layout: React.FC = () => {
-  const { eventId, approvals, dashboardStats } = useAppContext()
+  const { eventId, approvals, dashboardStats, loadEventsList, setEventId, user } = useAppContext()
   const [isOpen, setIsOpen] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const navigate = useNavigate()
+  const toast = useToast()
 
-  // Show banner when there's a pending Progression approval (stage advance ready)
+  const [pendingInvites, setPendingInvites] = useState<any[]>([])
+
+  const loadPendingInvites = async () => {
+    const token = localStorage.getItem('ec_token')
+    if (!token) return
+    try {
+      const res = await fetch(`${BASE_URL}/api/events/invitations/pending`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        setPendingInvites(await res.json())
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  useEffect(() => {
+    if (user) {
+      loadPendingInvites()
+    }
+  }, [user])
+
+  const handleAcceptInvite = async (inviteId: string, eventIdToSwitch: string, eventName: string) => {
+    const token = localStorage.getItem('ec_token')
+    try {
+      const res = await fetch(`${BASE_URL}/api/events/invitations/${inviteId}/accept`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        toast.success(`Accepted invitation to manage "${eventName || 'Event'}"!`)
+        await loadEventsList()
+        setEventId(eventIdToSwitch)
+        await loadPendingInvites()
+        navigate('/dashboard')
+      } else {
+        toast.error("Failed to accept invitation.")
+      }
+    } catch (err) {
+      toast.error("An error occurred while accepting.")
+    }
+  }
+
+  const handleDeclineInvite = async (inviteId: string, eventName: string) => {
+    const token = localStorage.getItem('ec_token')
+    try {
+      const res = await fetch(`${BASE_URL}/api/events/invitations/${inviteId}/decline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        toast.success(`Declined invitation to manage "${eventName || 'Event'}".`)
+        await loadPendingInvites()
+      } else {
+        toast.error("Failed to decline invitation.")
+      }
+    } catch (err) {
+      toast.error("An error occurred while declining.")
+    }
+  }
+
   const pendingProgression = approvals.find(
-    a => a.status === 'pending' && a.type === 'Progression'
+    (a: any) => a.status === 'pending' && a.type === 'Progression'
   )
   const showAdvanceBanner = !!pendingProgression && !bannerDismissed
 
-  // Extract stage info from the approval description
   const stageDesc = pendingProgression?.description || ''
   const stageMatch = stageDesc.match(/'([^']+)'\s*→\s*'([^']+)'/)
   const fromStage = stageMatch?.[1] ?? dashboardStats?.current_stage ?? 'Current Stage'
   const toStage = stageMatch?.[2] ?? 'Next Stage'
 
+
+
   return (
     <div className="flex min-h-screen bg-background dark:bg-slate-950 transition-colors duration-200 relative">
-      <Sidebar />
+      
+      {/* ONLY SHOW LEFT COLUMN IF AN EVENT EXISTS */}
+      {eventId && <Sidebar />}
+
       <main className="flex-1 overflow-auto">
+        {/* Pending Invitations Banner */}
+        {pendingInvites.map((invite) => (
+          <div
+            key={invite.id}
+            className="sticky top-0 z-30 bg-gradient-to-r from-orange-500 to-red-500 text-white px-5 py-3 flex items-center justify-between gap-3 shadow-md border-b border-orange-400/20"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-base flex-shrink-0 animate-bounce">📩</span>
+              <p className="text-sm font-semibold truncate">
+                Co-Admin Invitation:
+                <span className="font-normal opacity-90 ml-1">
+                  You have been invited to co-manage the event{' '}
+                  <strong>{invite.event_name || 'EventCraft Workspace'}</strong>.
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => handleDeclineInvite(invite.id, invite.event_name)}
+                className="bg-transparent hover:bg-white/10 text-white/90 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border border-white/20 cursor-pointer"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => handleAcceptInvite(invite.id, invite.event_id, invite.event_name)}
+                className="bg-white hover:bg-orange-50 text-orange-600 text-xs font-black px-4 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Accept & Enter
+              </button>
+            </div>
+          </div>
+        ))}
 
         {/* Pipeline Advance Notification Banner */}
         {showAdvanceBanner && (
@@ -83,6 +184,8 @@ export const Layout: React.FC = () => {
           />
         </>
       )}
+
+
     </div>
   )
 }
