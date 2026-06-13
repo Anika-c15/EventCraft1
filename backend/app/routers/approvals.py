@@ -101,20 +101,56 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
     payload = approval.payload or {}
 
     if approval.type == models.ApprovalType.rule_change:
-        # Pipeline reconfigured by agent — clear all old draft comms that don't
-        # belong to the new pipeline stages
+        # Pipeline approved — now actually build the stages
         pipeline_config = payload.get("pipeline_config", {})
-        new_stage_names = {s["name"] for s in pipeline_config.get("stages", [])}
-        if new_stage_names:
-            # Delete drafts whose stage is NOT in the new pipeline
-            old_drafts = db.query(models.Communication).filter(
-                models.Communication.event_id == approval.event_id,
-                models.Communication.status == models.CommStatus.draft,
+        stages = pipeline_config.get("stages", [])
+
+        if stages:
+            # Clear any existing stages
+            existing = db.query(models.PipelineStage).filter(
+                models.PipelineStage.event_id == approval.event_id
             ).all()
-            for comm in old_drafts:
-                if comm.stage not in new_stage_names:
-                    db.delete(comm)
+            for s in existing:
+                db.delete(s)
             db.flush()
+
+            # Build the approved pipeline stages
+            for i, stage_def in enumerate(stages):
+                db.add(models.PipelineStage(
+                    event_id=approval.event_id,
+                    name=stage_def["name"],
+                    description=stage_def.get("description", ""),
+                    order_index=i,
+                    status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
+                    tasks=stage_def.get("tasks", []),
+                    allows_submission=stage_def.get("allows_submission", False),
+                    is_evaluation=stage_def.get("is_evaluation", False),
+                    portal_description=stage_def.get("portal_description", None),
+                ))
+
+            event = db.query(models.Event).filter(models.Event.id == approval.event_id).first()
+            if event:
+                event.current_stage_index = 0
+
+            from .events import clear_event_teams_and_submissions
+            clear_event_teams_and_submissions(approval.event_id, db)
+
+            db.add(models.ActivityLog(
+                event_id=approval.event_id,
+                message=f"Pipeline activated: {len(stages)} stages now live",
+                log_type="success",
+            ))
+
+        # Clean up old drafts from previous pipeline that don't belong to new stages
+        new_stage_names = {s["name"] for s in stages}
+        old_drafts = db.query(models.Communication).filter(
+            models.Communication.event_id == approval.event_id,
+            models.Communication.status == models.CommStatus.draft,
+        ).all()
+        for comm in old_drafts:
+            if comm.stage not in new_stage_names:
+                db.delete(comm)
+        db.flush()
 
     if approval.type == models.ApprovalType.progression:
         to_index = payload.get("to_index")

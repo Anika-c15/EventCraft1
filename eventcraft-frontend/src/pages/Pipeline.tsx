@@ -106,7 +106,7 @@ export const Pipeline: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pipeline</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {completedCount} of {stages.length} stages completed
+            {stages.length === 0 ? 'No pipeline configured yet' : `${completedCount} of ${stages.length} stages completed`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -154,6 +154,14 @@ export const Pipeline: React.FC = () => {
 
       {loading ? (
         <div className="text-center py-12 text-sm text-gray-400">Loading pipeline...</div>
+      ) : stages.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+          <GitBranch size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">No Pipeline Configured</h3>
+          <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+            This event doesn't have a pipeline yet. Use the <strong>AI Agent</strong> to describe your event and it will automatically configure the full pipeline — stages, team rules, evaluation criteria, and draft communications.
+          </p>
+        </div>
       ) : (
         <>
           {/* Visual Pipeline */}

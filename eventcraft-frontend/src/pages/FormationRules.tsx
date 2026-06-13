@@ -85,6 +85,7 @@ export const FormationRules: React.FC = () => {
     experienceLevelGrouping: 'mixed',
     maxTeams: 6,
   })
+  const [rulesConfigured, setRulesConfigured] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
   const [realTeams, setRealTeams] = useState<any[]>([])
@@ -110,6 +111,9 @@ export const FormationRules: React.FC = () => {
             experienceLevelGrouping: r.experience_level_grouping ?? 'mixed',
             maxTeams: r.max_teams ?? 6,
           })
+          setRulesConfigured(true)
+        } else {
+          setRulesConfigured(false)
         }
       }).catch(() => { })
     }
@@ -192,8 +196,11 @@ export const FormationRules: React.FC = () => {
         </div>
         <button
           onClick={handleSave}
-          disabled={loading}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-md cursor-pointer ${saved
+          disabled={loading || !rulesConfigured}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 shadow-md cursor-pointer ${
+            !rulesConfigured
+              ? 'hidden'
+              : saved
               ? 'bg-green-500 text-white shadow-green-500/30'
               : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-orange-500/30 hover:-translate-y-0.5'
             }`}
@@ -203,6 +210,15 @@ export const FormationRules: React.FC = () => {
       </div>
 
       {/* Two-column layout */}
+      {!rulesConfigured ? (
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+          <Settings size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">No Formation Rules Configured</h3>
+          <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+            Formation rules will be set automatically when the <strong>AI Agent</strong> configures your pipeline and the committee approves it.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left — Settings */}
         <div className="xl:col-span-2 space-y-4">
@@ -413,6 +429,7 @@ export const FormationRules: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

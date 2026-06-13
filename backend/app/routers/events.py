@@ -76,40 +76,17 @@ def create_event(
         name=payload.name,
         description=payload.description,
         owner_id=current_user.id,
-        formation_rules={
-            "event_name": payload.name,
-            "team_size": 3,
-            "allow_incomplete_teams": False,
-            "skill_balance": True,
-            "institution_diversity": True,
-            "max_per_institution": 1,
-            "experience_level_grouping": "mixed",
-            "max_teams": 10,
-        },
+        formation_rules=None,
     )
     db.add(event)
     db.flush()
 
-    # Create default pipeline stages
-    for i, stage_data in enumerate(DEFAULT_STAGES):
-        stage = models.PipelineStage(
-            event_id=event.id,
-            name=stage_data["name"],
-            description=stage_data["description"],
-            order_index=i,
-            status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
-            tasks=stage_data["tasks"],
-            allows_submission=stage_data.get("allows_submission", False),
-            is_evaluation=stage_data.get("is_evaluation", False),
-            portal_description=stage_data.get("portal_description", None),
-        )
-        db.add(stage)
-
+    # No default pipeline stages — pipeline is configured by the AI Agent
     # Initial activity log
     log = models.ActivityLog(
         event_id=event.id,
-        message=f"Event '{payload.name}' created",
-        log_type="success",
+        message=f"Event '{payload.name}' created — configure the pipeline using the AI Agent",
+        log_type="info",
     )
     db.add(log)
     db.commit()

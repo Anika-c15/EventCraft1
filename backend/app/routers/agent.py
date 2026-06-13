@@ -91,19 +91,16 @@ def chat(
 
 def _apply_full_config(event: models.Event, config: dict, db: Session):
     """
-    Apply the full agent configuration:
-    - Rebuild pipeline stages
-    - Update formation rules
-    - Auto-generate draft communications for each stage
-    - Create approval gate
-    - Log activity
+    Stage the agent configuration as a pending approval.
+    Nothing is applied to the pipeline until the committee approves.
+    Only saves: formation rules preview, draft comms, and the approval gate.
     """
     event_id = event.id
 
-    # 1. Save pipeline config
+    # Save pipeline config preview on event (but don't create stages yet)
     event.pipeline_config = config
 
-    # 2. Update formation rules
+    # Update formation rules preview
     if "formation_rules" in config:
         fr = config["formation_rules"]
         event.formation_rules = {
@@ -117,58 +114,28 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             "max_teams": fr.get("max_teams", 10),
         }
 
-    # 3. Rebuild pipeline stages
-    existing = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id
-    ).all()
-    for s in existing:
-        db.delete(s)
-    db.flush()
-
     stages = config.get("stages", [])
-    for i, stage_def in enumerate(stages):
-        db.add(models.PipelineStage(
-            event_id=event_id,
-            name=stage_def["name"],
-            description=stage_def.get("description", ""),
-            order_index=i,
-            status=models.StageStatus.active if i == 0 else models.StageStatus.pending,
-            tasks=stage_def.get("tasks", []),
-            allows_submission=stage_def.get("allows_submission", False),
-            is_evaluation=stage_def.get("is_evaluation", False),
-            portal_description=stage_def.get("portal_description", None),
-        ))
+    criteria = config.get("evaluation_criteria", ["Innovation", "Execution", "Presentation", "Impact"])
 
-    event.current_stage_index = 0
-
-    from .events import clear_event_teams_and_submissions
-    clear_event_teams_and_submissions(event_id, db)
-
-    # 4. Auto-generate draft communications for each stage
-    # Remove ALL old draft communications for this event — new pipeline = fresh comms
-    # Keep only already-sent communications so history is preserved
+    # Remove old draft comms — new pipeline proposal = fresh drafts
     db.query(models.Communication).filter(
         models.Communication.event_id == event_id,
         models.Communication.status == models.CommStatus.draft,
     ).delete(synchronize_session=False)
     db.flush()
 
-    criteria = config.get("evaluation_criteria", ["Innovation", "Execution", "Presentation", "Impact"])
+    # Auto-generate draft communications (so committee can review before approving)
     comm_stages_raw = config.get("communication_stages", [s["name"] for s in stages])
-
-    # Support both old format (list of strings) and new format (list of dicts)
     comm_stage_entries = []
     for entry in comm_stages_raw:
         if isinstance(entry, dict):
             comm_stage_entries.append((entry["stage"], entry.get("recipient_type", "all_participants")))
         else:
-            # Old string format — infer recipient type
             stage_lower = str(entry).lower()
             if any(w in stage_lower for w in ["eval", "judg", "scor"]):
                 comm_stage_entries.append((entry, "judges"))
             comm_stage_entries.append((entry, "all_participants"))
 
-    # Deduplicate while preserving order
     seen = set()
     unique_entries = []
     for stage_name, recipient_type in comm_stage_entries:
@@ -199,7 +166,7 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             stage=stage_name,
         ))
 
-    # 5. Create approval gate for the new pipeline
+    # Create approval gate — pipeline stages are NOT built until this is approved
     db.add(models.Approval(
         event_id=event_id,
         type=models.ApprovalType.rule_change,
@@ -209,24 +176,23 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
             f"{', '.join(s['name'] for s in stages)}. "
             f"Team size: {config.get('formation_rules', {}).get('team_size', 3)}. "
             f"Evaluation criteria: {', '.join(criteria)}. "
-            f"Review and approve to activate this configuration."
+            f"Review and approve to activate this pipeline."
         ),
         payload={"pipeline_config": config},
     ))
 
-    # 6. Activity log
     db.add(models.ActivityLog(
         event_id=event_id,
         message=(
-            f"AI Agent configured pipeline: {len(stages)} stages, "
+            f"AI Agent proposed pipeline: {len(stages)} stages, "
             f"team size {config.get('formation_rules', {}).get('team_size', 3)}, "
-            f"criteria: {', '.join(criteria)}"
+            f"criteria: {', '.join(criteria)} — pending approval"
         ),
-        log_type="success",
+        log_type="info",
     ))
     db.add(models.ActivityLog(
         event_id=event_id,
-        message=f"Auto-generated {len(unique_entries)} draft communications from agent config",
+        message=f"Auto-generated {len(unique_entries)} draft communications — review before sending",
         log_type="info",
     ))
 
