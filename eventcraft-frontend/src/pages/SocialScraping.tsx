@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Share2, Settings2, RefreshCw, Play, Copy, Trash, Check, AlertTriangle,
   BarChart3, Info, Globe, Sparkles, CheckCircle2, AlertCircle, ExternalLink, Send,
@@ -48,8 +49,11 @@ const PLATFORM_COLORS: Record<SocialPlatform, { bg: string; text: string; border
 
 export const SocialScraping: React.FC = () => {
   const { eventId, lastWsMessage } = useAppContext()
+  const navigate = useNavigate()
   const toast = useToast()
   const confirm = useConfirm()
+
+  const [pipelineReady, setPipelineReady] = useState<boolean | null>(null)
 
   // --- States ---
   const [config, setConfig] = useState<SocialConfig | null>(null)
@@ -300,6 +304,12 @@ export const SocialScraping: React.FC = () => {
   // Mount loading
   useEffect(() => {
     if (eventId) {
+      setPipelineReady(null)
+      import('../api/client').then(({ eventsApi }) => {
+        eventsApi.stages(eventId).then((stages) => {
+          setPipelineReady(stages.length > 0)
+        }).catch(() => setPipelineReady(false))
+      })
       loadConfig()
       loadPolls()
       loadAuthStatus()
@@ -627,6 +637,24 @@ export const SocialScraping: React.FC = () => {
       case 'running': return 'Running...'
       default: return 'Idle'
     }
+  }
+
+  if (pipelineReady === false) {
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+        <Share2 size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+        <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Pipeline Not Configured Yet</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-4">
+          Social scraping campaigns are only available after the pipeline is configured by the <strong>AI Agent</strong> and approved by the committee.
+        </p>
+        <button
+          onClick={() => navigate('/agent')}
+          className="inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
+        >
+          Go to AI Agent →
+        </button>
+      </div>
+    )
   }
 
   if (!config) {
