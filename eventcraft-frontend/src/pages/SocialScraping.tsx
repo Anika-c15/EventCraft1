@@ -47,6 +47,47 @@ const PLATFORM_COLORS: Record<SocialPlatform, { bg: string; text: string; border
   }
 }
 
+const formatSocialPlatformError = (platform: string, error: string): string => {
+  if (!error) return `${platform === 'linkedin' ? 'LinkedIn' : platform.toUpperCase()} error occurred.`
+  
+  const errLower = error.toLowerCase()
+  
+  if (platform === 'linkedin') {
+    if (errLower.includes('native polls need mdp/community') || errLower.includes('approval')) {
+      return 'LinkedIn native polls require Community Management approval.'
+    }
+    if (errLower.includes('fallback') || errLower.includes('text-only') || errLower.includes('do not support automated')) {
+      return 'LinkedIn text posts do not support auto-fetching. Please enter votes manually.'
+    }
+    if (errLower.includes('rate limit')) {
+      return 'LinkedIn rate limit exceeded. Please retry in 1 hour.'
+    }
+    if (errLower.includes('permission') || errLower.includes('unauthorized') || errLower.includes('403') || errLower.includes('401')) {
+      return 'LinkedIn API permission denied or missing.'
+    }
+    if (errLower.includes('connection') || errLower.includes('network') || errLower.includes('parsing')) {
+      return 'Could not connect to LinkedIn API. Check credentials or try again later.'
+    }
+    return 'LinkedIn API error. Please enter results manually.'
+  }
+  
+  if (platform === 'twitter') {
+    if (errLower.includes('rate limit')) {
+      return 'Twitter API rate limit exceeded.'
+    }
+    if (errLower.includes('permission') || errLower.includes('unauthorized') || errLower.includes('403') || errLower.includes('401')) {
+      return 'Twitter API authorization failed.'
+    }
+    return 'Twitter API error.'
+  }
+
+  if (platform === 'instagram') {
+    return 'Instagram Story posting requires manual URN entry.'
+  }
+  
+  return error
+}
+
 export const SocialScraping: React.FC = () => {
   const { eventId, lastWsMessage } = useAppContext()
   const navigate = useNavigate()
@@ -372,12 +413,15 @@ export const SocialScraping: React.FC = () => {
 
   const handlePostSinglePoll = async (pollId: string) => {
     if (!eventId) return
+    const poll = polls.find(p => p.id === pollId)
     try {
       await socialScrapingApi.postSinglePoll(eventId, pollId)
       toast.success('Poll posted successfully!')
       await loadPolls()
     } catch (err: any) {
-      toast.error(`Failed to post poll: ${err.message}`)
+      const platform = poll?.platform || 'unknown'
+      const cleanMsg = formatSocialPlatformError(platform, err.message)
+      toast.error(`Failed to post poll: ${cleanMsg}`)
     }
   }
 
@@ -469,8 +513,8 @@ export const SocialScraping: React.FC = () => {
       
       if (res.errors && res.errors.length > 0) {
         res.errors.forEach((err: any) => {
-          const platformName = err.platform === 'linkedin' ? 'LinkedIn' : err.platform.toUpperCase()
-          toast.error(`${platformName} poll fetch failed: ${err.error}. Please feed the results manually below.`, 8000)
+          const cleanMsg = formatSocialPlatformError(err.platform, err.error)
+          toast.error(cleanMsg, 8000)
         })
       }
 
@@ -670,107 +714,202 @@ export const SocialScraping: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* ── Title Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Share2 className="text-primary" /> Social Scraping & Campaigns
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-            Orchestrate AI-driven polls on Twitter, LinkedIn, Instagram, and compile scores dynamically under free-tier limits.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {activeLlm && (
-            <Badge variant="purple" className="font-mono text-[10px] font-extrabold uppercase px-2.5 py-1 bg-purple-500/10 text-purple-500 border border-purple-500/20 mr-1 shadow-sm flex items-center gap-1">
-              🤖 LLM: {activeLlm}
-            </Badge>
-          )}
+      {/* ── Title Header & Description ── */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <Share2 className="text-primary animate-pulse" /> Social Scraping & Campaigns
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+          Orchestrate AI-driven polls on Twitter, LinkedIn, Instagram, and compile scores dynamically under free-tier limits.
+        </p>
+      </div>
+
+      {/* ── Glassmorphic Action Control Bar ── */}
+      <div className="backdrop-blur-md bg-white/70 dark:bg-slate-900/75 border border-gray-100 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
           <Button
             variant="secondary"
             onClick={loadPolls}
             disabled={loadingPolls}
             title="Reload data"
+            className="w-10 h-10 p-0 flex items-center justify-center rounded-xl"
           >
-            <RefreshCw size={14} className={loadingPolls ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={loadingPolls ? 'animate-spin text-gray-500' : 'text-gray-500'} />
           </Button>
-
-          <Button
-            variant="secondary"
-            onClick={handlePostAllPolls}
-            disabled={actionPosting}
-          >
-            <Send size={14} className={actionPosting ? 'animate-spin' : ''} /> Post Drafts
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={handleFetchResults}
-            disabled={actionFetching}
-          >
-            <RefreshCw size={14} className={actionFetching ? 'animate-spin' : ''} /> Fetch Results
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={handleCalculateScores}
-            disabled={actionCalculating}
-          >
-            <BarChart3 size={14} className={actionCalculating ? 'animate-spin' : ''} /> Calculate Scores
-          </Button>
-
-          <Button
-            variant="primary"
-            onClick={handleRunFullPipeline}
-            disabled={actionPipeline}
-            className="shadow-md shadow-orange-500/10 hover:shadow-orange-500/20"
-          >
-            <Play size={14} /> Run Pipeline
-          </Button>
-
+          {activeLlm && (
+            <Badge variant="purple" className="font-mono text-[10px] font-extrabold uppercase px-2.5 py-1.5 bg-purple-500/10 text-purple-500 border border-purple-500/20 shadow-sm flex items-center gap-1.5">
+              🤖 LLM: {activeLlm}
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Reset Button */}
           <Button
             variant="danger-outline"
             onClick={handleResetCampaign}
             disabled={actionResetting}
+            className="text-xs font-semibold py-2 px-3 border-red-200 dark:border-red-950/50 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
           >
             <RotateCcw size={14} className={actionResetting ? 'animate-spin' : ''} /> Reset Campaign
+          </Button>
+
+          <span className="w-px h-6 bg-gray-200 dark:bg-slate-800 hidden md:inline-block" />
+
+          {/* Segmented stage actions */}
+          <div className="flex items-center bg-slate-100/60 dark:bg-slate-950/40 border border-gray-200/50 dark:border-slate-850 p-1 rounded-xl">
+            <Button
+              variant="secondary"
+              onClick={handlePostAllPolls}
+              disabled={actionPosting}
+              className="text-xs font-bold py-1.5 px-3 border-none bg-transparent hover:bg-white dark:hover:bg-slate-900 text-gray-700 dark:text-slate-350 shadow-none hover:shadow-sm"
+            >
+              <Send size={13} className={actionPosting ? 'animate-spin' : ''} /> Post Drafts
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleFetchResults}
+              disabled={actionFetching}
+              className="text-xs font-bold py-1.5 px-3 border-none bg-transparent hover:bg-white dark:hover:bg-slate-900 text-gray-700 dark:text-slate-350 shadow-none hover:shadow-sm"
+            >
+              <RefreshCw size={13} className={actionFetching ? 'animate-spin' : ''} /> Fetch Results
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleCalculateScores}
+              disabled={actionCalculating}
+              className="text-xs font-bold py-1.5 px-3 border-none bg-transparent hover:bg-white dark:hover:bg-slate-900 text-gray-700 dark:text-slate-350 shadow-none hover:shadow-sm"
+            >
+              <BarChart3 size={13} className={actionCalculating ? 'animate-spin' : ''} /> Calculate Scores
+            </Button>
+          </div>
+
+          {/* Premium Run Pipeline */}
+          <Button
+            variant="primary"
+            onClick={handleRunFullPipeline}
+            disabled={actionPipeline}
+            className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 active:translate-y-0.5 transition-all"
+          >
+            <Play size={13} fill="currentColor" /> Run Pipeline
           </Button>
         </div>
       </div>
 
-      {/* ── Capability Legend ── */}
-      <div className="bg-white/80 dark:bg-slate-900/80 border border-gray-150 dark:border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm backdrop-blur-md">
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500 flex items-center gap-1.5">
-            <Info size={14} className="text-primary" /> Platform Capabilities & Free-Tier Constraints
-          </h2>
-          <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
-            API access differs by platform on standard free-tier scopes. Read-limitations fall back to manual verification safely.
+      {/* ── Platform Capabilities Grid ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Twitter Card */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-sky-300 dark:hover:border-sky-850/50 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-sky-500/5 rounded-full blur-2xl group-hover:bg-sky-500/10 transition-colors" />
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-sky-600 dark:text-sky-400 font-mono tracking-tight">Twitter/X</span>
+            </div>
+            {/* Glowing status light */}
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full inline-block animate-pulse ${authStatus?.twitter?.valid ? 'bg-green-500 shadow-sm shadow-green-500/50' : 'bg-amber-500 shadow-sm shadow-amber-500/50'}`} />
+              <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                {authStatus?.twitter?.valid ? 'Active' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 leading-relaxed mb-3">
+            Post programmatically. Fetching requires manual fallback under free limits.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-4 text-xs font-medium">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-gray-100 dark:border-slate-850">
-            <span className="font-bold text-sky-500 font-mono">Twitter/X:</span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-0.5">✓ Post Poll</span>
-            <span className="text-[10px] text-amber-500 flex items-center gap-0.5">△ Manual Fetch</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-gray-100 dark:border-slate-850">
-            <span className="font-bold text-blue-500 font-mono">LinkedIn:</span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-0.5">✓ Post Poll</span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-0.5">✓ Auto Fetch</span>
-            <span className="text-[10px] text-amber-500 flex items-center gap-0.5">△ Text Fallback</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-gray-100 dark:border-slate-850">
-            <span className="font-bold text-pink-500 font-mono">Instagram:</span>
-            <span className="text-[10px] text-amber-500 flex items-center gap-0.5">△ Manual Post</span>
-            <span className="text-[10px] text-amber-500 flex items-center gap-0.5">△ Manual Fetch</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-gray-100 dark:border-slate-850">
-            <span className="font-bold text-slate-500 font-mono font-mono">Mock Sandbox:</span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-0.5">✓ Auto Post</span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-0.5">✓ Auto Fetch</span>
+          <div className="flex flex-wrap gap-1.5 mt-auto">
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30">
+              ✓ Auto Post
+            </span>
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30">
+              ⚠️ Manual Fetch
+            </span>
           </div>
         </div>
+
+        {/* LinkedIn Card */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-850/50 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-colors" />
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-blue-600 dark:text-blue-400 font-mono tracking-tight">LinkedIn</span>
+            </div>
+            {/* Glowing status light */}
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full inline-block animate-pulse ${authStatus?.linkedin?.valid ? 'bg-green-500 shadow-sm shadow-green-500/50' : 'bg-amber-500 shadow-sm shadow-amber-500/50'}`} />
+              <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                {authStatus?.linkedin?.valid ? 'Active' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 leading-relaxed mb-3">
+            Full auto-post. Text fallback triggered on boundary errors.
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-auto">
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30">
+              ✓ Auto Post
+            </span>
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30">
+              ✓ Auto Fetch
+            </span>
+          </div>
+        </div>
+
+        {/* Instagram Card */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-pink-300 dark:hover:border-pink-850/50 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-pink-500/5 rounded-full blur-2xl group-hover:bg-pink-500/10 transition-colors" />
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-pink-600 dark:text-pink-400 font-mono tracking-tight">Instagram</span>
+            </div>
+            {/* Glowing status light */}
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full inline-block animate-pulse ${authStatus?.instagram?.valid ? 'bg-green-500 shadow-sm shadow-green-500/50' : 'bg-gray-400 shadow-sm shadow-gray-400/50'}`} />
+              <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                {authStatus?.instagram?.valid ? 'Active' : 'Offline'}
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 leading-relaxed mb-3">
+            Requires manual Story copy-posting. Reads are manual.
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-auto">
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30">
+              ⚠️ Manual Post
+            </span>
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30">
+              ⚠️ Manual Fetch
+            </span>
+          </div>
+        </div>
+
+        {/* Mock Sandbox Card */}
+        <div className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-slate-350 dark:hover:border-slate-700 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-slate-500/5 rounded-full blur-2xl group-hover:bg-slate-500/10 transition-colors" />
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-slate-600 dark:text-slate-400 font-mono tracking-tight">Mock Sandbox</span>
+            </div>
+            {/* Glowing status light */}
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full inline-block animate-pulse bg-green-500 shadow-sm shadow-green-500/50" />
+              <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">
+                Active
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 dark:text-slate-500 leading-relaxed mb-3">
+            Fully simulated pipeline for offline verification.
+          </p>
+          <div className="flex flex-wrap gap-1.5 mt-auto">
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30">
+              ✓ Auto Post
+            </span>
+            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-lg bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30">
+              ✓ Auto Fetch
+            </span>
+          </div>
+        </div>
+
       </div>
 
       {/* ── Main Dashboard Layout ── */}
@@ -1198,13 +1337,24 @@ export const SocialScraping: React.FC = () => {
                                 const total = poll.total_votes || 1
                                 const percent = Math.round((optVotes / total) * 100)
 
+                                const baseScore = poll.admin_override_score !== null ? poll.admin_override_score : (poll.normalized_score ?? 5.0)
+                                const isComparative = poll.poll_type === 'comparative' || poll.poll_type === 'twitter_text_fallback' || poll.poll_type === 'linkedin_text_fallback'
+                                const optScore = isComparative && total > 0
+                                  ? baseScore * (optVotes / total)
+                                  : null
+
                                 return (
                                   <div key={opt.position} className="space-y-1">
                                     <div className="flex justify-between text-[10px] text-gray-600 dark:text-slate-350">
-                                      <span className="font-medium truncate max-w-[200px]">{opt.text}</span>
+                                      <span className="font-medium truncate max-w-[180px]">{opt.text}</span>
                                       {poll.status === 'completed' && (
-                                        <span className="font-bold flex-shrink-0">
-                                          {optVotes} votes ({percent}%)
+                                        <span className="font-bold flex-shrink-0 flex items-center gap-1.5">
+                                          <span>{optVotes} votes ({percent}%)</span>
+                                          {optScore !== null && (
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono text-[9px] border border-emerald-100 dark:border-emerald-900/30">
+                                              ★ {optScore.toFixed(2)}/10
+                                            </span>
+                                          )}
                                         </span>
                                       )}
                                     </div>
@@ -1340,7 +1490,7 @@ export const SocialScraping: React.FC = () => {
                                <div className="bg-red-50/50 dark:bg-red-950/10 border border-red-100/60 dark:border-red-900/30 rounded-xl p-2.5">
                                  <span className="text-[9px] font-bold text-red-700 dark:text-red-400 block mb-1">API Posting Failed:</span>
                                  <p className="text-[10px] text-red-600/80 dark:text-red-400/60 leading-relaxed font-mono">
-                                   {poll.error_message || 'Unknown API Error'}
+                                   {formatSocialPlatformError(poll.platform, poll.error_message || 'Unknown API Error')}
                                  </p>
                                </div>
 
@@ -1474,12 +1624,20 @@ export const SocialScraping: React.FC = () => {
                           {poll.status === 'completed' && (
                             <div className="space-y-2 pt-2 border-t border-gray-50 dark:border-slate-850/40">
                               
-                              {/* Override configuration inputs */}
-                              <div className="flex items-center justify-between gap-3 text-[10px]">
-                                <span className="text-gray-400">Score Out of 10</span>
-                                <span className="font-bold text-gray-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-950 px-2 py-0.5 rounded-lg border border-gray-150 dark:border-slate-850">
-                                  {poll.normalized_score !== null ? `${poll.normalized_score.toFixed(2)}/10` : '—'}
-                                </span>
+                              <div className="flex flex-col gap-1 text-[10px]">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-gray-400">
+                                    {(poll.poll_type === 'comparative' || poll.poll_type === 'twitter_text_fallback' || poll.poll_type === 'linkedin_text_fallback') ? 'Base Engagement Score' : 'Score Out of 10'}
+                                  </span>
+                                  <span className="font-bold text-gray-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-950 px-2 py-0.5 rounded-lg border border-gray-150 dark:border-slate-850">
+                                    {poll.normalized_score !== null ? `${poll.normalized_score.toFixed(2)}/10` : '—'}
+                                  </span>
+                                </div>
+                                {(poll.poll_type === 'comparative' || poll.poll_type === 'twitter_text_fallback' || poll.poll_type === 'linkedin_text_fallback') && (
+                                  <p className="text-[9px] text-gray-400 dark:text-slate-500 italic mt-0.5 leading-tight">
+                                    * Dynamic team scores shown above are scaled proportionally by vote share.
+                                  </p>
+                                )}
                               </div>
 
                               <div className="flex gap-1.5">

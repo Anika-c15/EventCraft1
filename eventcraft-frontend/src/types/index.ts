@@ -90,7 +90,7 @@ export interface Subscriber {
 
 export type SocialPlatform = 'twitter' | 'linkedin' | 'instagram' | 'mock'
 export type SocialPollStatus = 'draft' | 'posted' | 'completed' | 'failed'
-export type PollType = 'rating' | 'comparative' | 'hybrid' | 'linkedin_text_fallback'
+export type PollType = 'rating' | 'comparative' | 'hybrid' | 'linkedin_text_fallback' | 'twitter_text_fallback'
 
 export interface SocialPoll {
   id: string

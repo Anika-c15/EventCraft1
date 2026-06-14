@@ -649,7 +649,7 @@ async def calculate_social_scores(
     for team in teams:
         team_polls = [p for p in polls if (
             p.team_id == team.id or 
-            (p.poll_type == "comparative" and p.option_team_mapping and any(t_id == team.id for t_id in p.option_team_mapping.values()))
+            (p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback") and p.option_team_mapping and any(t_id == team.id for t_id in p.option_team_mapping.values()))
         )]
         
         if not team_polls:
@@ -659,7 +659,7 @@ async def calculate_social_scores(
         for p in team_polls:
             # Map vote count for this team
             vote_count = 0
-            if p.poll_type == "comparative" and p.option_team_mapping:
+            if p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback") and p.option_team_mapping:
                 # Find which position maps to this team ID
                 position_key = next((k for k, v in p.option_team_mapping.items() if v == team.id), None)
                 if position_key:
@@ -674,10 +674,9 @@ async def calculate_social_scores(
             if base_score is None:
                 base_score = 5.0
 
-            if p.poll_type == "comparative":
+            if p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback"):
                 if p.total_votes > 0:
-                    num_options = len(p.options) if p.options else 1
-                    team_norm_score = min(10.0, base_score * (vote_count / p.total_votes) * num_options)
+                    team_norm_score = base_score * (vote_count / p.total_votes)
                 else:
                     team_norm_score = 0.0
             else:

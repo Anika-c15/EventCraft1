@@ -1401,7 +1401,7 @@ Output ONLY valid JSON:
     total = sum(votes.values())
     score = 5.0
     if total > 0:
-        if poll_type == "comparative":
+        if poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback"):
             # For comparative polls, use a base score of 8.0 representing active engagement
             score = 8.0
         else:
