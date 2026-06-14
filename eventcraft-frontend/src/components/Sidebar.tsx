@@ -10,15 +10,15 @@ import logoImage from '../assets/logo.png'
 
 const navItems = [
   { path: '/dashboard',       label: 'Dashboard',       icon: LayoutDashboard, exact: true },
+  { path: '/agent',           label: 'AI Agent',         icon: Bot },
   { path: '/participants',    label: 'Participants',     icon: User },
   { path: '/teams',           label: 'Teams',            icon: Users },
   { path: '/evaluations',     label: 'Evaluations',      icon: ClipboardList },
-  { path: '/communications',  label: 'Communications',   icon: Send },
   { path: '/pipeline',        label: 'Pipeline',         icon: GitBranch },
   { path: '/approvals',       label: 'Approvals',        icon: Shield },
   { path: '/formation-rules', label: 'Formation Rules',  icon: Sliders },
   { path: '/social-scraping', label: 'Social Scraping',  icon: Share2 },
-  { path: '/agent',           label: 'AI Agent',         icon: Bot },
+  { path: '/communications',  label: 'Communications',   icon: Send },
   { path: '/subscribers',     label: 'Subscribers',      icon: Bell },
 ]
 
