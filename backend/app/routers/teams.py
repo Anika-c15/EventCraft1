@@ -243,6 +243,12 @@ def _build_leaderboard(event_id: str, db: Session):
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     event_name = event.name if event else "EventCraft"
 
+    # Fetch scoring weights
+    weights = event.scoring_weights or {"judge": 0.70, "peer": 0.15, "social": 0.15} if event else {"judge": 0.70, "peer": 0.15, "social": 0.15}
+    w_judge = weights.get("judge", 0.70)
+    w_peer = weights.get("peer", 0.15)
+    w_social = weights.get("social", 0.15)
+
     teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
     result = []
 
@@ -256,6 +262,7 @@ def _build_leaderboard(event_id: str, db: Session):
         ).all()
 
         score_breakdown = {}
+        avg_score = None
         if scores:
             all_criteria = set()
             for s in scores:
@@ -263,6 +270,36 @@ def _build_leaderboard(event_id: str, db: Session):
             for criterion in all_criteria:
                 vals = [s.scores_json.get(criterion, 0) for s in scores]
                 score_breakdown[criterion] = round(sum(vals) / len(vals), 2)
+            avg_score = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+
+        # Peer review average
+        peer_reviews = db.query(models.PeerReview).filter(
+            models.PeerReview.to_team_id == team.id
+        ).all()
+        peer_avg = sum(r.score for r in peer_reviews) / len(peer_reviews) if peer_reviews else None
+
+        social = team.social_vote_score
+
+        # Dynamically compute composite score based on active elements
+        active_weights = []
+        weighted_terms = []
+        active_components_count = 0
+        if avg_score is not None:
+            active_weights.append(w_judge)
+            weighted_terms.append(w_judge * avg_score)
+            active_components_count += 1
+        if peer_avg is not None:
+            active_weights.append(w_peer)
+            weighted_terms.append(w_peer * peer_avg)
+            active_components_count += 1
+        if social is not None:
+            active_weights.append(w_social)
+            weighted_terms.append(w_social * social)
+            active_components_count += 1
+
+        composite_score = None
+        if active_weights and sum(active_weights) > 0:
+            composite_score = round(sum(weighted_terms) / sum(active_weights), 2)
 
         result.append({
             "team_id": team.id,
@@ -274,6 +311,8 @@ def _build_leaderboard(event_id: str, db: Session):
             "has_anomaly": any(s.is_anomaly for s in scores),
             "rank": team.rank,
             "judges_count": len(scores),
+            "active_components_count": active_components_count,
+            "total_components_count": 3
         })
 
     result.sort(key=lambda x: -(x["score"] or 0))

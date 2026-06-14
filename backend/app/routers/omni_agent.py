@@ -11,6 +11,25 @@ from ..database import get_db
 from ..config import settings
 from .. import models, llm
 from ..team_formation import form_teams as _form_teams
+import asyncio
+
+def run_async(coro):
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import sys
+            if sys.version_info >= (3, 7):
+                return asyncio.run_coroutine_threadsafe(coro, loop).result()
+            else:
+                return loop.run_until_complete(coro)
+        else:
+            return loop.run_until_complete(coro)
+    except Exception:
+        new_loop = asyncio.new_event_loop()
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
 
 router = APIRouter(prefix="/api/events/{event_id}/omni-agent", tags=["omni-agent"])
 
@@ -374,6 +393,20 @@ def _execute_action(action_type: str, event_id: str, db: Session) -> Dict[str, A
                 models.Team.status == models.TeamStatus.proposed
             ).update({models.Team.status: models.TeamStatus.approved})
 
+        # Auto-post polls when Evaluation stage is activated
+        if next_stage.is_evaluation:
+            config = (event.pipeline_config or {}).get("social_scraping", {})
+            if config.get("enabled") and config.get("auto_post_on_evaluation"):
+                from .social_scraping import post_all_polls
+                from fastapi import BackgroundTasks
+                bg = BackgroundTasks()
+                asyncio.ensure_future(post_all_polls(event_id, bg, db))
+                db.add(models.ActivityLog(
+                    event_id=event_id,
+                    message="Social Scraping: Auto-post triggered for Evaluation stage.",
+                    log_type="info"
+                ))
+
         db.add(models.ActivityLog(
             event_id=event_id,
             message=f"AI Copilot advanced pipeline: '{current_stage.name}' → '{next_stage.name}' via chat",
@@ -418,6 +451,63 @@ def _execute_action(action_type: str, event_id: str, db: Session) -> Dict[str, A
             "action": "approve_formation",
             "message": "✅ Team formation has been approved. All proposed teams are now active.",
         }
+
+    elif action_type == "generate_polls":
+        from .social_scraping import generate_draft_polls
+        from fastapi import BackgroundTasks
+        bg = BackgroundTasks()
+        try:
+            res = run_async(generate_draft_polls(event_id, bg, db))
+            return {"success": True, "action": "generate_polls", "message": f"✅ Social media poll drafts generated for all teams."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif action_type == "post_polls":
+        from .social_scraping import post_all_polls
+        from fastapi import BackgroundTasks
+        bg = BackgroundTasks()
+        try:
+            res = run_async(post_all_polls(event_id, bg, db))
+            return {"success": True, "action": "post_polls", "message": f"✅ Social polls posted successfully: {res['posted']} posted, {res['failed']} failed, {res['manual']} manual pending."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif action_type == "fetch_poll_results":
+        from .social_scraping import fetch_polls_results
+        from fastapi import BackgroundTasks
+        bg = BackgroundTasks()
+        try:
+            res = run_async(fetch_polls_results(event_id, bg, db))
+            return {"success": True, "action": "fetch_poll_results", "message": f"✅ Social polls fetching completed. Fetched: {res['fetched']}, Manual pending: {res['manual_pending']}."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif action_type == "calculate_social_scores":
+        from .social_scraping import calculate_social_scores
+        from fastapi import BackgroundTasks
+        bg = BackgroundTasks()
+        try:
+            res = run_async(calculate_social_scores(event_id, bg, db))
+            return {"success": True, "action": "calculate_social_scores", "message": f"✅ Social scoring calculation completed. Updated {res['teams_updated']} teams."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif action_type == "social_status":
+        polls = db.query(models.SocialPoll).filter(models.SocialPoll.event_id == event_id).all()
+        total = len(polls)
+        drafts = len([p for p in polls if p.status == models.SocialPollStatus.draft])
+        posted = len([p for p in polls if p.status == models.SocialPollStatus.posted])
+        completed = len([p for p in polls if p.status == models.SocialPollStatus.completed])
+        flagged = len([p for p in polls if p.flagged])
+        manual = len([p for p in polls if p.manual_pending])
+        
+        msg = (
+            f"Social Scraping Campaign Status:\n"
+            f"- Total polls: {total}\n"
+            f"- Drafts: {drafts} | Posted: {posted} | Completed: {completed}\n"
+            f"- Flagged: {flagged} | Awaiting Manual Votes: {manual}"
+        )
+        return {"success": True, "action": "social_status", "message": msg}
 
     return {"success": False, "error": f"Unknown action type: {action_type}"}
 

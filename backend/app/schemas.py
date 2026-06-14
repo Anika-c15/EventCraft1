@@ -128,6 +128,7 @@ class TeamOut(BaseModel):
     rank: Optional[int]
     judge_avg_score: Optional[float] = None
     social_vote_score: Optional[float] = None
+    social_vote_total_votes: Optional[int] = None
     public_vote_score: Optional[float] = None   # combined avg(social, peer)
     ai_proposed_score: Optional[float] = None
     bias_rationale: Optional[str] = None
@@ -435,3 +436,26 @@ class CommitteeInviteOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ── Social Scraping Schemas ───────────────────────────────────────────────────
+
+class SocialConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    platforms: Optional[List[str]] = None
+    poll_type: Optional[str] = None
+    poll_duration_minutes: Optional[int] = None
+    auto_post_on_evaluation: Optional[bool] = None
+    auto_fetch_on_completion: Optional[bool] = None
+    min_vote_threshold: Optional[int] = None
+
+class InstagramIdPayload(BaseModel):
+    story_media_id: str
+    posted_at: Optional[datetime] = None
+
+class SetPostIdPayload(BaseModel):
+    post_id: str
+    posted_at: Optional[datetime] = None
+
+class ManualVotesPayload(BaseModel):
+    votes: Dict[str, int]
+

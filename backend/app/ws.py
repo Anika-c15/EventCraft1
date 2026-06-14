@@ -3,15 +3,10 @@ WebSocket connection manager.
 Clients subscribe to an event_id channel and receive real-time updates.
 
 Message types pushed to clients:
-  - dashboard_update   : stats changed (new participant, team formed, etc.)
-  - approval_created   : new approval needs action
-  - approval_resolved  : approval was approved/rejected
-  - rationales_ready   : AI rationales finished generating
-  - email_sent         : bulk email delivery complete
-  - score_submitted    : new evaluation score received
-  - anomaly_flagged    : score anomaly detected
-  - stage_advanced     : pipeline stage changed
-  - activity_log       : new activity log entry
+  - social:poll_posted  : poll successfully posted or manual URN confirmed
+  - social:poll_fetched : poll votes fetched or marked as manual pending
+  - social:scores_updated: team social_vote_score updated
+  - social:pipeline_step: pipeline grid state updated (Generate/Post/Fetch/Calculate)
 """
 import asyncio
 import json

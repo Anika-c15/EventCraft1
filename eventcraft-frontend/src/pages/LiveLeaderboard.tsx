@@ -12,6 +12,8 @@ interface TeamRow {
   member_count: number
   judges_count: number
   score_breakdown: Record<string, number>
+  active_components_count?: number
+  total_components_count?: number
 }
 
 // Rank styles have both dark and light variants
@@ -324,7 +326,7 @@ export const LiveLeaderboard: React.FC = () => {
                         : isDark ? 'bg-white/5' : 'bg-gray-100'
                     }`}>
                       {cfg ? cfg.icon : (
-                        <span className={`text-base font-bold ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                        <span className={`text-base font-bold font-mono ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
                           #{team.rank}
                         </span>
                       )}
@@ -342,9 +344,14 @@ export const LiveLeaderboard: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <div className={`flex items-center gap-3 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                      <div className={`flex flex-wrap items-center gap-3 text-xs ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
                         <span className="flex items-center gap-1"><Users size={11} /> {team.member_count} members</span>
                         <span>{team.judges_count} judge{team.judges_count !== 1 ? 's' : ''}</span>
+                        {team.active_components_count !== undefined && team.total_components_count !== undefined && team.active_components_count < team.total_components_count && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 whitespace-nowrap shadow-sm">
+                            Partial — based on {team.active_components_count} of {team.total_components_count} components
+                          </span>
+                        )}
                       </div>
 
                       {/* Criteria breakdown bars */}
@@ -373,7 +380,7 @@ export const LiveLeaderboard: React.FC = () => {
                     <div className="flex-shrink-0 text-right">
                       {hasScore ? (
                         <>
-                          <div className={`text-3xl font-black tabular-nums ${nameTextClass}`}>
+                          <div className={`text-3xl font-black font-mono tabular-nums ${nameTextClass}`}>
                             {(team.score as number).toFixed(2)}
                           </div>
                           <div className={`text-xs mt-0.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>/ 10</div>

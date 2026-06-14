@@ -22,6 +22,7 @@ const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ defaul
 const Unsubscribe = React.lazy(() => import('./pages/Unsubscribe').then(m => ({ default: m.Unsubscribe })))
 const LiveLeaderboard = React.lazy(() => import('./pages/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 const CandidatePortal = React.lazy(() => import('./pages/CandidatePortal').then(m => ({ default: m.CandidatePortal })))
+const SocialScraping = React.lazy(() => import('./pages/SocialScraping').then(m => ({ default: m.SocialScraping })))
 
 // FIXED: Using (m: any) to bypass strict TypeScript checks on lazy loads
 const EventSetup = React.lazy(() => import('./pages/EventSetup'))
@@ -87,6 +88,7 @@ const App: React.FC = () => {
                 <Route path="/formation-rules" element={<FormationRules />} />
                 <Route path="/agent" element={<Agent />} />
                 <Route path="/subscribers" element={<Subscribers />} />
+                <Route path="/social-scraping" element={<SocialScraping />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
             </Routes>

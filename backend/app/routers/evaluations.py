@@ -204,6 +204,13 @@ def consolidate_scores(
     if unresolved > 0:
         raise HTTPException(400, f"Cannot consolidate: {unresolved} unresolved score anomalies.")
 
+    # Fetch scoring weights
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    weights = event.scoring_weights or {"judge": 0.70, "peer": 0.15, "social": 0.15} if event else {"judge": 0.70, "peer": 0.15, "social": 0.15}
+    w_judge = weights.get("judge", 0.70)
+    w_peer = weights.get("peer", 0.15)
+    w_social = weights.get("social", 0.15)
+
     teams = db.query(models.Team).filter(models.Team.event_id == event_id).all()
     scored_teams = []
 
@@ -212,7 +219,33 @@ def consolidate_scores(
             models.EvaluationScore.team_id == team.id
         ).all()
         if scores:
-            final = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+            judge_avg = round(sum(s.average or 0 for s in scores) / len(scores), 2)
+            
+            # Peer review average
+            peer_reviews = db.query(models.PeerReview).filter(
+                models.PeerReview.to_team_id == team.id
+            ).all()
+            peer_avg = sum(r.score for r in peer_reviews) / len(peer_reviews) if peer_reviews else None
+
+            social = team.social_vote_score
+
+            # Dynamically compute composite score based on active elements
+            active_weights = []
+            weighted_terms = []
+            if judge_avg is not None:
+                active_weights.append(w_judge)
+                weighted_terms.append(w_judge * judge_avg)
+            if peer_avg is not None:
+                active_weights.append(w_peer)
+                weighted_terms.append(w_peer * peer_avg)
+            if social is not None:
+                active_weights.append(w_social)
+                weighted_terms.append(w_social * social)
+
+            final = judge_avg
+            if active_weights and sum(active_weights) > 0:
+                final = round(sum(weighted_terms) / sum(active_weights), 2)
+
             team.final_score = final
             scored_teams.append({"id": team.id, "name": team.name, "score": final})
 
@@ -602,7 +635,7 @@ def get_bias_mitigation(
             team.public_vote_score = combined_public
 
         # --- AI Proposed Fair Score with dynamic weights & redistribution ---
-        active_judge_weight = w_judge
+        active_judge_weight = w_judge if scores else 0.0
         active_peer_weight = w_peer if peer_avg is not None else 0.0
         active_social_weight = w_social if social is not None else 0.0
         

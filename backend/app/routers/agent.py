@@ -95,6 +95,24 @@ def _apply_full_config(event: models.Event, config: dict, db: Session):
     Nothing is applied to the pipeline until the committee approves.
     Only saves: formation rules preview, draft comms, and the approval gate.
     """
+    # Validate social config
+    social_cfg = config.get("social_scraping", {})
+    if social_cfg:
+        enabled = social_cfg.get("enabled", False)
+        poll_type = social_cfg.get("poll_type", "hybrid")
+        if enabled:
+            if poll_type not in ("rating", "comparative", "hybrid"):
+                raise HTTPException(status_code=400, detail="social_scraping.poll_type must be rating, comparative, or hybrid")
+            # Validate scoring_balance weights
+            sb = config.get("scoring_balance", {})
+            judge = sb.get("judge", 0.0)
+            peer = sb.get("peer", 0.0)
+            social = sb.get("social", 0.0)
+            if abs(judge + peer + social - 1.0) > 0.001:
+                raise HTTPException(status_code=400, detail="scoring_balance weights must sum to exactly 1.0")
+            if social <= 0.0:
+                raise HTTPException(status_code=400, detail="scoring_balance social weight must be greater than 0.0 when social scraping is enabled")
+
     event_id = event.id
 
     # Save pipeline config preview on event (but don't create stages yet)

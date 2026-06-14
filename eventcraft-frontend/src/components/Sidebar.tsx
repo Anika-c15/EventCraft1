@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
   Shield, Settings, Sliders, ChevronLeft, ChevronRight, Bot, LogOut,
-  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2
+  Bell, Sun, Moon, Trophy, ChevronsUpDown, Trash2, Share2
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import logoImage from '../assets/logo.png'
@@ -17,6 +17,7 @@ const navItems = [
   { path: '/pipeline',        label: 'Pipeline',         icon: GitBranch },
   { path: '/approvals',       label: 'Approvals',        icon: Shield },
   { path: '/formation-rules', label: 'Formation Rules',  icon: Sliders },
+  { path: '/social-scraping', label: 'Social Scraping',  icon: Share2 },
   { path: '/agent',           label: 'AI Agent',         icon: Bot },
   { path: '/subscribers',     label: 'Subscribers',      icon: Bell },
 ]

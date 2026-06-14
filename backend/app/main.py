@@ -11,13 +11,17 @@ from .routers import peer_review
 from .routers.websocket import router as ws_router
 from .routers import qa
 from .routers import subscribers as subscribers_router
+from .routers import social_scraping
+from .scheduler import start_scheduler, scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
     _migrate_db()
     _seed_db()
+    start_scheduler()
     yield
+    scheduler.shutdown()
 
 
 def _migrate_db():
@@ -35,6 +39,8 @@ def _migrate_db():
                 ("bias_rationale",     "TEXT"),
                 ("judge_avg_score",    "FLOAT"),
                 ("social_vote_score",  "FLOAT"),
+                ("social_vote_total_votes", "INTEGER DEFAULT 0"),
+                ("social_vote_last_updated", "TIMESTAMP"),
                 ("github_link",        "TEXT"),
                 ("demo_link",          "TEXT"),
                 ("is_locked",          "BOOLEAN DEFAULT FALSE"),
@@ -96,16 +102,55 @@ def _migrate_db():
                 with engine.begin() as conn:
                     conn.execute(text("""
                         CREATE TABLE subscribers (
-                            id            TEXT PRIMARY KEY,
-                            name          TEXT NOT NULL,
-                            email         TEXT NOT NULL UNIQUE,
-                            notified      BOOLEAN DEFAULT FALSE,
-                            subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                             id            TEXT PRIMARY KEY,
+                             name          TEXT NOT NULL,
+                             email         TEXT NOT NULL UNIQUE,
+                             notified      BOOLEAN DEFAULT FALSE,
+                             subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """))
                 print("🚀 Migrated: created subscribers table")
             except Exception as tbl_err:
-                print(f"⚠️ Could not create subscribers table: {tbl_err}")
+                 print(f"⚠️ Could not create subscribers table: {tbl_err}")
+
+        # ── social_polls table ──────────────────────────────────────────────
+        if "social_polls" not in existing_tables:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE social_polls (
+                            id                  TEXT PRIMARY KEY,
+                            event_id            TEXT NOT NULL REFERENCES events(id),
+                            team_id             TEXT REFERENCES teams(id),
+                            platform            TEXT NOT NULL,
+                            poll_type           TEXT NOT NULL,
+                            question_text       TEXT NOT NULL,
+                            commentary          TEXT,
+                            options             JSON NOT NULL,
+                            option_team_mapping JSON,
+                            platform_post_id    TEXT,
+                            platform_poll_id    TEXT,
+                            status              TEXT NOT NULL,
+                            votes               JSON,
+                            vote_snapshots      JSON,
+                            total_votes         INTEGER DEFAULT 0,
+                            normalized_score    FLOAT,
+                            error_message       TEXT,
+                            flagged             BOOLEAN DEFAULT FALSE,
+                            flag_reason         TEXT,
+                            admin_override_score FLOAT,
+                            manual_pending      BOOLEAN DEFAULT FALSE,
+                            duration_minutes    INTEGER DEFAULT 1440,
+                            posted_at           TIMESTAMP,
+                            ends_at             TIMESTAMP,
+                            fetched_at          TIMESTAMP,
+                            locked_at           TIMESTAMP,
+                            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                print("🚀 Migrated: created social_polls table")
+            except Exception as tbl_err:
+                print(f"⚠️ Could not create social_polls table: {tbl_err}")
 
         # ── agent_messages table migrations ─────────────────────────────────
         if "agent_messages" in existing_tables:
@@ -405,6 +450,7 @@ app.include_router(approvals.router)
 app.include_router(communications.router)
 app.include_router(agent.router)
 app.include_router(omni_agent.router)
+app.include_router(social_scraping.router)
 app.include_router(peer_review.router)  # Peer review scoring
 app.include_router(ws_router)  # WebSocket
 

@@ -40,7 +40,7 @@ const emptyForm = {
 }
 
 export const Participants: React.FC = () => {
-  const { eventId, dashboardStats } = useAppContext()
+  const { eventId } = useAppContext()
   const toast = useToast()
   const confirm = useConfirm()
   const navigate = useNavigate()

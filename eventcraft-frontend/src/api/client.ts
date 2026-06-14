@@ -353,3 +353,86 @@ export const omniAgentApi = {
   }
 }
 
+// ── Social Scraping ────────────────────────────────────────────────────────────
+
+export const socialScrapingApi = {
+  getSocialConfig: (eventId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/config`),
+  
+  updateSocialConfig: (eventId: string, config: any) =>
+    request<any>(`/api/events/${eventId}/social-scraping/config`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    }),
+  
+  getAuthStatus: (eventId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/auth-status`),
+  
+  generatePolls: (eventId: string) =>
+    request<any[]>(`/api/events/${eventId}/social-scraping/generate-polls`, { method: 'POST' }),
+  
+  listPolls: (eventId: string, filters?: { platform?: string; status?: string; flagged?: boolean }) => {
+    let query = ''
+    if (filters) {
+      const parts = []
+      if (filters.platform) parts.push(`platform=${filters.platform}`)
+      if (filters.status) parts.push(`status=${filters.status}`)
+      if (filters.flagged !== undefined) parts.push(`flagged=${filters.flagged}`)
+      if (parts.length > 0) query = '?' + parts.join('&')
+    }
+    return request<any[]>(`/api/events/${eventId}/social-scraping/polls${query}`)
+  },
+  
+  getPollDetail: (eventId: string, pollId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}`),
+  
+  postSinglePoll: (eventId: string, pollId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/post`, { method: 'POST' }),
+  
+  postAllPolls: (eventId: string) =>
+    request<{ posted: number; failed: number; manual: number }>(`/api/events/${eventId}/social-scraping/post-all`, { method: 'POST' }),
+  
+  setInstagramId: (eventId: string, pollId: string, storyMediaId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/set-instagram-id`, {
+      method: 'PATCH',
+      body: JSON.stringify({ story_media_id: storyMediaId }),
+    }),
+  
+  setManualPostId: (eventId: string, pollId: string, postId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/set-post-id`, {
+      method: 'POST',
+      body: JSON.stringify({ post_id: postId }),
+    }),
+  
+  submitManualVotes: (eventId: string, pollId: string, votes: Record<string, number>) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/manual-results`, {
+      method: 'POST',
+      body: JSON.stringify({ votes }),
+    }),
+  
+  overridePollScore: (eventId: string, pollId: string, score: number | null) =>
+    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/override-score`, {
+      method: 'POST',
+      body: JSON.stringify({ score }),
+    }),
+  
+  fetchPollResults: (eventId: string) =>
+    request<{ fetched: number; manual_pending: number; errors?: any[] }>(`/api/events/${eventId}/social-scraping/fetch-results`, { method: 'POST' }),
+  
+  calculateSocialScores: (eventId: string) =>
+    request<{ teams_updated: number }>(`/api/events/${eventId}/social-scraping/calculate-scores`, { method: 'POST' }),
+  
+  runFullPipeline: (eventId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/run-pipeline`, { method: 'POST' }),
+  
+  getCampaignSummary: (eventId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/campaign-summary`),
+  
+  deletePoll: (eventId: string, pollId: string) =>
+    request<void>(`/api/events/${eventId}/social-scraping/polls/${pollId}`, { method: 'DELETE' }),
+  
+  resetCampaign: (eventId: string) =>
+    request<{ status: string; message: string }>(`/api/events/${eventId}/social-scraping/reset-campaign`, { method: 'POST' }),
+}
+
+

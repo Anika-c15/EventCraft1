@@ -114,6 +114,7 @@ class Event(Base):
     activity_logs = relationship("ActivityLog", back_populates="event", cascade="all, delete-orphan")
     agent_messages = relationship("AgentMessage", back_populates="event", cascade="all, delete-orphan")
     judge_invitations = relationship("JudgeInvitation", back_populates="event", cascade="all, delete-orphan")
+    social_polls = relationship("SocialPoll", back_populates="event", cascade="all, delete-orphan")
 
     @property
     def current_stage(self) -> Optional[str]:
@@ -189,6 +190,8 @@ class Team(Base):
     rank = Column(Integer, nullable=True)
     judge_avg_score = Column(Float, nullable=True)       # cached judge panel average
     social_vote_score = Column(Float, nullable=True)     # raw score from social scraping
+    social_vote_total_votes = Column(Integer, default=0)
+    social_vote_last_updated = Column(DateTime(timezone=True), nullable=True)
     public_vote_score = Column(Float, nullable=True)     # combined avg(social, peer) — the 30%
     ai_proposed_score = Column(Float, nullable=True)
     bias_rationale = Column(Text, nullable=True)
@@ -354,3 +357,57 @@ class CommitteeInvitation(Base):
     @property
     def event_name(self) -> Optional[str]:
         return self.event.name if self.event else None
+
+class SocialPollStatus(str, enum.Enum):
+    draft = "draft"
+    posted = "posted"
+    completed = "completed"
+    failed = "failed"
+
+class SocialPoll(Base):
+    __tablename__ = "social_polls"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    team_id = Column(String, ForeignKey("teams.id"), nullable=True)  # null for comparative poll
+    platform = Column(String, nullable=False)  # "twitter" | "linkedin" | "instagram" | "mock"
+    poll_type = Column(String, default="rating")  # "rating" | "comparative"
+
+    # Generated content
+    question_text = Column(Text, nullable=False)
+    commentary = Column(Text, nullable=True)
+    options = Column(JSON, nullable=False)  # [{"text": "...", "position": 1}, ...]
+
+    # Comparative poll team mapping by position to bypass name truncation matching issues
+    # e.g., {"position_1": "team-uuid-abc", "position_2": "team-uuid-def"}
+    option_team_mapping = Column(JSON, nullable=True)
+
+    # Platform post details
+    platform_post_id = Column(String, nullable=True)
+    platform_poll_id = Column(String, nullable=True)
+
+    # Vote state
+    status = Column(SAEnum(SocialPollStatus), default=SocialPollStatus.draft)
+    votes = Column(JSON, nullable=True)  # {"Option A": 10, "Option B": 20}
+    vote_snapshots = Column(JSON, nullable=True)  # [{"ts": "...", "votes": {"A": 10}}] for velocity
+    total_votes = Column(Integer, default=0)
+    normalized_score = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    # Anti-manipulation
+    flagged = Column(Boolean, default=False)
+    flag_reason = Column(String, nullable=True)  # "low_votes" | "velocity_spike" | "manual"
+    admin_override_score = Column(Float, nullable=True)
+    manual_pending = Column(Boolean, default=False)  # for free-tier fallbacks
+    llm_provider_used = Column(String, nullable=True)
+
+    # Timestamps & constraints
+    duration_minutes = Column(Integer, default=1440)
+    posted_at = Column(DateTime(timezone=True), nullable=True)
+    ends_at = Column(DateTime(timezone=True), nullable=True)
+    fetched_at = Column(DateTime(timezone=True), nullable=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)  # frozen roster timestamp
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    event = relationship("Event", back_populates="social_polls")
+    team = relationship("Team")

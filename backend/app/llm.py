@@ -123,8 +123,8 @@ def _call_gemini_api(
             raise ValueError(f"Unexpected response format from Gemini: {data}")
 
 
-def _call(prompt: str, system: Optional[str] = None) -> str:
-    """Single-turn call, trying Groq first, with fallback to Gemini."""
+def _call_with_provider(prompt: str, system: Optional[str] = None) -> tuple[str, str]:
+    """Single-turn call, trying Groq first, with fallback to Gemini. Returns (response_text, provider_name)."""
     groq_client = _get_client()
     
     # Try Groq if key is configured
@@ -141,7 +141,7 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
                 temperature=0.7,
                 max_tokens=2048,
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip(), "groq"
         except Exception as groq_err:
             print(f"[LLM Fallback] Groq call failed: {groq_err}. Trying Gemini...")
             # If Groq fails, fall back to Gemini if configured
@@ -151,17 +151,17 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
                     if system:
                         messages.append({"role": "system", "content": system})
                     messages.append({"role": "user", "content": prompt})
-                    return _call_gemini_api(messages)
+                    return _call_gemini_api(messages), "gemini"
                 except Exception as gemini_err:
-                    return f"[Gemini Fallback Error: {gemini_err} (Groq error was: {groq_err})]"
+                    return f"[Gemini Fallback Error: {gemini_err} (Groq error was: {groq_err})]", "gemini"
             
             # If Gemini not configured, handle original Groq error
             if _is_rate_limit_error(groq_err):
-                return "[Groq rate limit hit — wait a moment and try again]"
+                return "[Groq rate limit hit — wait a moment and try again]", "groq"
             if _is_auth_error(groq_err):
                 _reset_client()
-                return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]"
-            return f"[LLM Error: {groq_err}]"
+                return "[Invalid Groq API key — check GROQ_API_KEY in backend/.env]", "groq"
+            return f"[LLM Error: {groq_err}]", "groq"
 
     # If Groq client is not configured, try Gemini directly
     if _use_gemini():
@@ -170,11 +170,17 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-            return _call_gemini_api(messages)
+            return _call_gemini_api(messages), "gemini"
         except Exception as e:
-            return f"[Gemini Error: {e}]"
+            return f"[Gemini Error: {e}]", "gemini"
 
-    return "[LLM not configured — add GROQ_API_KEY or GEMINI_API_KEY to backend/.env]"
+    return "[LLM not configured — add GROQ_API_KEY or GEMINI_API_KEY to backend/.env]", "none"
+
+
+def _call(prompt: str, system: Optional[str] = None) -> str:
+    """Single-turn call, trying Groq first, with fallback to Gemini."""
+    res, _ = _call_with_provider(prompt, system)
+    return res
 
 
 @lru_cache(maxsize=128)
@@ -769,6 +775,15 @@ When ready, output the JSON block with no additional text after it.
     "peer": 0.15,
     "social": 0.15
   },
+  "social_scraping": {
+    "enabled": false,
+    "platforms": [],
+    "poll_type": "hybrid",
+    "poll_duration_minutes": 1440,
+    "auto_post_on_evaluation": false,
+    "auto_fetch_on_completion": true,
+    "min_vote_threshold": 30
+  },
   "anomaly_threshold": 2.5,
   "communication_stages": [
     {"stage": "Participant Intake", "recipient_type": "all_participants"},
@@ -1116,12 +1131,22 @@ Supported actions (only use the exact type strings below):
 - "show_scores" → Retrieve all judge scores and evaluation breakdowns
 - "advance_stage" → Immediately advance the pipeline to the next stage
 - "approve_formation" → Approve the currently pending team formation proposal
+- "generate_polls" → Generate social media poll drafts for all teams and platforms
+- "post_polls" → Bulk post all social media poll drafts
+- "fetch_poll_results" → Fetch all completed social media poll results
+- "calculate_social_scores" → Aggregate and calculate social scores for all teams
+- "social_status" → Retrieve a report of the social voting campaign status
 
 Recognition rules:
 - "form teams", "create teams", "run team formation" → "form_teams"
 - "show scores", "who scored what", "judge scores", "evaluation results", "what did judges score" → "show_scores"
 - "advance stage", "next stage", "move to next stage" → "advance_stage"
 - "approve teams", "approve formation" → "approve_formation"
+- "generate polls", "create polls", "make social polls" → "generate_polls"
+- "post polls", "publish polls", "share social polls" → "post_polls"
+- "fetch results", "get votes", "retrieve poll results" → "fetch_poll_results"
+- "calculate social", "aggregate social scores", "compute social score" → "calculate_social_scores"
+- "social status", "poll status", "campaign status" → "social_status"
 
 IMPORTANT: Output the action block on its own line at the very end. Never output more than one action block. If no action is requested, just answer conversationally."""
 
@@ -1174,4 +1199,351 @@ HARD RESTRICTIONS:
             _reset_client()
             return "Invalid Groq API key — check GROQ_API_KEY in backend/.env"
         return f"I encountered an error: {e}."
+
+
+# ── Social Scraping Poll Generation & Scoring ────────────────────────────────
+
+def generate_poll_content(
+    teams: List[Dict[str, Any]],
+    platform: str,
+    poll_type: str,
+    event_name: str,
+) -> Dict[str, Any]:
+    """
+    Generates poll content (questions, commentary, options, and team mappings) for all teams.
+    To respect the LLM free-tier rate limits, all teams are processed in a single batched call.
+    """
+    # Define platform constraints
+    # X/Twitter: 4 options, 25 chars max per option. Question max 280.
+    # LinkedIn: 4 options, 30 chars max per option. Question max 140. Commentary max 3000.
+    # Instagram: 2 options, 24 chars max.
+    
+    teams_json = json.dumps([{"id": t["id"], "name": t["name"], "challenge": t.get("challenge", "")} for t in teams], indent=2)
+    
+    prompt = f"""You are EventCraft's AI Social Media coordinator.
+Generate social media poll configurations for the hackathon event '{event_name}' on the platform '{platform}'.
+The poll type is '{poll_type}'.
+
+Here is the list of teams competing:
+{teams_json}
+
+Platform Constraints for '{platform}':
+"""
+    if platform == "twitter":
+        prompt += """- Create one or more posts. 
+- If rating: generate 1 poll config per team (options must represent a rating scale e.g. "⭐ Amazing!", "👍 Good", "👎 Needs Work").
+- If comparative: generate 1 comparative poll listing up to 4 teams. Option texts must be the team name.
+- Options: max 4 options. Max 25 characters per option text! If team names are long, truncate them.
+- Commentary/Tweet text: max 280 characters.
+"""
+    elif platform == "linkedin":
+        prompt += """- If rating: generate 1 poll config per team (options must represent a rating scale e.g. "⭐ Amazing!", "👍 Good", "👎 Needs Work").
+- If comparative: generate 1 comparative poll listing up to 4 teams. Option texts must be the team name.
+- Options: max 4 options. Max 30 characters per option text!
+- Question text: max 140 characters.
+- Commentary: max 3000 characters.
+"""
+    elif platform == "instagram":
+        prompt += """- For Instagram, we can only do Story Poll stickers, which allow exactly 2 options.
+- If rating: generate 1 poll config per team. Options must be exactly 2 choices (e.g. "⭐ Amazing!", "👍 Decent").
+- If comparative: generate comparative polls pitting 2 teams against each other.
+- Options: max 2 choices. Max 24 characters per option text.
+- Commentary/Caption text: short and catchy.
+"""
+    else:  # mock
+        prompt += "- Generate mock poll details. Up to 4 options.\n"
+
+    prompt += """
+Output format requirements:
+Return ONLY a JSON object containing a "polls" list.
+For comparative polls, map option positions to team IDs via the "option_team_mapping" object.
+For rating polls, "option_team_mapping" is not needed, but "team_id" must specify which team the poll evaluates.
+
+JSON Structure:
+{
+  "polls": [
+    {
+      "team_id": "team-uuid or null for comparative",
+      "question_text": "The poll question",
+      "commentary": "Catchy social media post body/commentary text",
+      "options": [
+        {"text": "Option text (respecting char limit)", "position": 1},
+        {"text": "Option text (respecting char limit)", "position": 2}
+      ],
+      "option_team_mapping": {
+        "position_1": "team-uuid-1",
+        "position_2": "team-uuid-2"
+      }
+    }
+  ]
+}
+
+Return ONLY valid JSON in a ```json block. Respect all char limits strictly!
+"""
+    system = "You are an AI social media manager. Generate poll contents complying with strict platform char limits. Return only JSON."
+    
+    # Simple pacing sleep before the call to avoid hitting the 15 RPM limit
+    import time
+    time.sleep(2.0)
+    
+    try:
+        result, provider = _call_with_provider(prompt, system=system)
+        parsed = _extract_json(result)
+        if isinstance(parsed, dict) and parsed.get("polls"):
+            parsed["llm_provider_used"] = provider
+            return parsed
+    except Exception as e:
+        print(f"[LLM Error] Social poll generation failed, activating local fallback: {e}")
+        provider = "local_fallback"
+        
+    # Programmatic fail-safe local fallback structure
+    fallback_polls = []
+    if poll_type == "comparative":
+        max_opt_len = 25 if platform == "twitter" else (24 if platform == "instagram" else 30)
+        max_options = 2 if platform == "instagram" else 4
+        
+        limited_teams = teams[:max_options]
+        options = []
+        option_team_mapping = {}
+        for idx, t in enumerate(limited_teams):
+            pos = idx + 1
+            opt_text = t["name"]
+            if len(opt_text) > max_opt_len:
+                opt_text = opt_text[:max_opt_len - 2] + ".."
+            options.append({"text": opt_text, "position": pos})
+            option_team_mapping[f"position_{pos}"] = t["id"]
+            
+        fallback_polls.append({
+            "team_id": None,
+            "question_text": f"Which team has the best project at {event_name}?",
+            "commentary": f"Cast your vote for the best project at {event_name} on {platform}!",
+            "options": options,
+            "option_team_mapping": option_team_mapping
+        })
+    else:
+        max_opt_len = 25 if platform == "twitter" else (24 if platform == "instagram" else 30)
+        for t in teams:
+            if platform == "instagram":
+                options = [
+                    {"text": "⭐ Amazing!", "position": 1},
+                    {"text": "👍 Good", "position": 2}
+                ]
+            else:
+                options = [
+                    {"text": "⭐ Amazing!", "position": 1},
+                    {"text": "👍 Good", "position": 2},
+                    {"text": "👌 Okay", "position": 3},
+                    {"text": "👎 Needs Work", "position": 4}
+                ]
+            
+            for opt in options:
+                if len(opt["text"]) > max_opt_len:
+                    opt["text"] = opt["text"][:max_opt_len - 2] + ".."
+                    
+            fallback_polls.append({
+                "team_id": t["id"],
+                "question_text": f"Rate the project of {t['name']}!",
+                "commentary": f"How do you like the project built by {t['name']} at {event_name}? Vote now!",
+                "options": options,
+                "option_team_mapping": None
+            })
+            
+    return {"polls": fallback_polls, "llm_provider_used": "local_fallback"}
+
+
+def normalize_poll_votes(
+    votes: Dict[str, int],
+    options: List[Dict[str, Any]],
+    poll_type: str,
+    velocity_data: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Evaluates the vote results of a poll and calculates a normalized score from 0.0 to 10.0.
+    Considers vote distribution and velocity anomalies.
+    """
+    votes_json = json.dumps(votes)
+    options_json = json.dumps(options)
+    velocity_json = json.dumps(velocity_data) if velocity_data else "None"
+    
+    prompt = f"""You are EventCraft's Score Normalization Engine.
+Evaluate these social poll vote results and compute a final normalized score on a scale of 0.0 to 10.0.
+
+Poll Type: {poll_type}
+Options Configured: {options_json}
+Final Votes Count: {votes_json}
+Velocity Snapshots: {velocity_json}
+
+Scoring Rules:
+- For rating polls: Options reflect ratings (e.g. ⭐, Good, OK). Compute a weighted score based on options' positive/negative sentiment.
+- For comparative polls: Calculate score based on vote share. If a team receives most of the votes, they get a high score.
+- Anomaly penalty: If velocity snapshots show unnatural spikes (e.g. 50% of votes in a 5-minute window), apply a warning and reduce confidence score.
+
+Return a JSON object with:
+- "normalized_score": float (between 0.0 and 10.0)
+- "rationale": str (brief explanation of the score calculation)
+
+Output ONLY valid JSON:
+```json
+{{"normalized_score": 7.5, "rationale": "Explanation..."}}
+```
+"""
+    system = "You are a score normalization engine. Compute a 0-10 score from poll votes. Return only JSON."
+    
+    import time
+    time.sleep(1.0)
+    
+    result = _call(prompt, system=system)
+    parsed = _extract_json(result)
+    if isinstance(parsed, dict) and "normalized_score" in parsed:
+        return parsed
+    
+    # Fallback calculation
+    total = sum(votes.values())
+    score = 5.0
+    if total > 0:
+        if poll_type == "comparative":
+            # For comparative polls, use a base score of 8.0 representing active engagement
+            score = 8.0
+        else:
+            # Calculate a weighted score based on option sentiment or position
+            weighted_sum = 0.0
+            total_v = 0
+            for opt_text, count in votes.items():
+                opt_lower = opt_text.lower()
+                
+                # Check sentiment keywords or emojis
+                if any(x in opt_lower for x in ["amazing", "great", "excellent", "awesome", "⭐", "5 star", "perfect", "love", "best"]):
+                    weight = 10.0
+                elif any(x in opt_lower for x in ["good", "like", "well done", "4 star", "fine", "👍"]):
+                    weight = 7.5
+                elif any(x in opt_lower for x in ["ok", "okay", "average", "decent", "neutral", "3 star", "👌"]):
+                    weight = 5.0
+                elif any(x in opt_lower for x in ["needs work", "bad", "poor", "dislike", "1 star", "2 star", "worst", "👎"]):
+                    weight = 2.0
+                else:
+                    # Match by option position
+                    opt_obj = next((o for o in options if o["text"] == opt_text), None)
+                    if opt_obj:
+                        pos = opt_obj.get("position", 1)
+                        if pos == 1:
+                            weight = 10.0
+                        elif pos == 2:
+                            weight = 7.5
+                        elif pos == 3:
+                            weight = 5.0
+                        else:
+                            weight = 2.0
+                    else:
+                        weight = 5.0
+                        
+                weighted_sum += weight * count
+                total_v += count
+            if total_v > 0:
+                score = round(weighted_sum / total_v, 2)
+    else:
+        score = 0.0
+
+    return {
+        "normalized_score": score,
+        "rationale": "Calculated local weighted fallback score."
+    }
+
+
+def aggregate_cross_platform_scores(polls_for_team: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Aggregates scores from multiple social media platforms for a single team.
+    """
+    polls_json = json.dumps(polls_for_team, indent=2)
+    prompt = f"""Aggregate the following social media poll scores from different platforms for a single team into a unified score on a 0.0 to 10.0 scale.
+
+Polls Data:
+{polls_json}
+
+Calculate a vote-weighted average score:
+- Platforms with more votes should carry higher weight.
+- Flagged polls (e.g. vote manipulation, low vote count) should be penalized or discarded from calculation.
+
+Return a JSON object with:
+- "aggregate_score": float (between 0.0 and 10.0)
+- "explanation": str (brief aggregate breakdown)
+
+Output ONLY valid JSON:
+```json
+{{"aggregate_score": 8.2, "explanation": "..."}}
+```
+"""
+    system = "You are a score aggregation assistant. Return JSON only."
+    
+    import time
+    time.sleep(1.0)
+    
+    result = _call(prompt, system=system)
+    parsed = _extract_json(result)
+    if isinstance(parsed, dict) and "aggregate_score" in parsed:
+        return parsed
+        
+    # Fallback
+    total_votes = 0
+    weighted_sum = 0.0
+    valid_count = 0
+    raw_sum = 0.0
+    for p in polls_for_team:
+        score = p.get("normalized_score")
+        if score is None or p.get("flagged"):
+            continue
+        
+        raw_sum += score
+        valid_count += 1
+        
+        # Try to use team_votes, otherwise total_votes, default to 1
+        votes_weight = p.get("team_votes")
+        if votes_weight is None:
+            votes_weight = p.get("total_votes", 0)
+        if votes_weight <= 0:
+            votes_weight = 1
+            
+        weighted_sum += score * votes_weight
+        total_votes += votes_weight
+        
+    if total_votes > 0:
+        agg_score = weighted_sum / total_votes
+    elif valid_count > 0:
+        agg_score = raw_sum / valid_count
+    else:
+        agg_score = 0.0
+        
+    return {
+        "aggregate_score": round(agg_score, 2),
+        "explanation": "Calculated vote-weighted average of valid platform scores."
+    }
+
+
+def generate_social_campaign_summary(all_polls: List[Dict[str, Any]], teams: List[Dict[str, Any]]) -> tuple[str, str]:
+    """
+    Generates a rich, Markdown-formatted summary report of the social media scraping campaign.
+    """
+    polls_json = json.dumps(all_polls, indent=2)
+    teams_json = json.dumps(teams, indent=2)
+    
+    prompt = f"""Generate a detailed social media voting campaign summary report for the hackathon.
+
+Teams List:
+{teams_json}
+
+Polls Activity & Votes:
+{polls_json}
+
+Format the report using Markdown. Include:
+1. Executive Summary (total votes across platforms, avg engagement)
+2. Platform breakdown (Twitter, LinkedIn, Instagram engagement levels)
+3. Highlights & Flags (any vote manipulation alerts, low votes)
+4. Team Performance Leaderboard (social vote scores and aggregate highlights)
+"""
+    system = "You are a professional social media campaign analyst. Return a rich markdown summary."
+    
+    import time
+    time.sleep(1.0)
+    
+    return _call_with_provider(prompt, system=system)
+
 

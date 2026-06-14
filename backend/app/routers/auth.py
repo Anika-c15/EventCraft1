@@ -160,6 +160,26 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.flush()
+    # Auto-create a brand new default event space for the registered committee user
+    event_name = f"{payload.name}'s Hackathon 2026"
+    event = models.Event(
+        name=event_name,
+        description=f"AI-Powered event space for {payload.name}.",
+        owner_id=user.id,
+        formation_rules=None,
+    )
+    db.add(event)
+    db.flush()
+
+    # No default pipeline stages — pipeline is configured by the AI Agent
+
+    # Initial activity log
+    log = models.ActivityLog(
+        event_id=event.id,
+        message=f"Event '{event_name}' created — configure the pipeline using the AI Agent",
+        log_type="info",
+    )
+    db.add(log)
 
     db.commit()
     db.refresh(user)

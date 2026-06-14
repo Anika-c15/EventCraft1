@@ -35,6 +35,30 @@ class Settings(BaseSettings):
 
     ANOMALY_THRESHOLD: float = 2.5
 
+    # ── Social Scraping Settings ──
+    SOCIAL_FREE_TIER_MODE: bool = True
+    SOCIAL_POST_DELAY_SECONDS: int = 2
+    SOCIAL_MIN_VOTE_THRESHOLD: int = 30
+    SOCIAL_MOCK_MODE: bool = True
+
+    # Twitter/X
+    TWITTER_BEARER_TOKEN: str = ""
+    TWITTER_API_KEY: str = ""
+    TWITTER_API_SECRET: str = ""
+    TWITTER_ACCESS_TOKEN: str = ""
+    TWITTER_ACCESS_TOKEN_SECRET: str = ""
+
+    # LinkedIn
+    LINKEDIN_ACCESS_TOKEN: str = ""
+    LINKEDIN_ORG_URN: str = ""
+    LINKEDIN_PERSON_URN: str = ""
+    LINKEDIN_TOKEN_EXPIRES_AT: str = ""
+
+    # Instagram
+    INSTAGRAM_ACCESS_TOKEN: str = ""
+    INSTAGRAM_BUSINESS_ACCOUNT_ID: str = ""
+    INSTAGRAM_TOKEN_EXPIRES_AT: str = ""
+
     class Config:
         env_file = str(BASE_DIR / ".env")
         extra = "ignore"

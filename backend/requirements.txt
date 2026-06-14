@@ -19,3 +19,5 @@ pypdf
 python-docx
 psycopg2-binary
 bcrypt==4.0.1
+apscheduler
+tweepy
