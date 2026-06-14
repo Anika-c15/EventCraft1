@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Upload, Plus, ExternalLink, Trash2, Search, X, Send, Copy, Check } from 'lucide-react'
+import { Upload, Plus, ExternalLink, Trash2, Search, X, Send, Copy, Check, GitBranch } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -7,6 +7,7 @@ import { TableSkeleton } from '../components/ui/Skeleton'
 import { participantsApi, communicationsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
+import { useNavigate } from 'react-router-dom'
 import type { ParticipantLevel, ParticipantStatus } from '../types'
 
 const levelVariant = (level: string) => {
@@ -39,9 +40,20 @@ const emptyForm = {
 }
 
 export const Participants: React.FC = () => {
-  const { eventId } = useAppContext()
+  const { eventId, dashboardStats } = useAppContext()
   const toast = useToast()
   const confirm = useConfirm()
+  const navigate = useNavigate()
+  const [pipelineReady, setPipelineReady] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!eventId) return
+    import('../api/client').then(({ eventsApi }) => {
+      eventsApi.stages(eventId).then((stages) => {
+        setPipelineReady(stages.length > 0)
+      }).catch(() => setPipelineReady(false))
+    })
+  }, [eventId])
   const [participants, setParticipants] = useState<any[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -153,7 +165,26 @@ export const Participants: React.FC = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Pipeline not configured gate */}
+      {pipelineReady === false && (
+        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+          <GitBranch size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Pipeline Not Configured Yet</h3>
+          <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-4">
+            Participant intake is only available after the pipeline is configured by the <strong>AI Agent</strong> and approved by the committee.
+          </p>
+          <button
+            onClick={() => navigate('/agent')}
+            className="inline-flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Go to AI Agent →
+          </button>
+        </div>
+      )}
+
+      {pipelineReady === true && (
+      <div>
+        <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Participants</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -367,6 +398,8 @@ export const Participants: React.FC = () => {
           </div>
         </div>
       </Modal>
+      </div>
+      )} {/* end pipelineReady === true */}
     </div>
   )
 }
