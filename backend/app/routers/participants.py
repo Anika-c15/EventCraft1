@@ -497,9 +497,19 @@ async def parse_resume(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    _get_event(event_id, db)
-    filename = file.filename.lower()
+    event = _get_event(event_id, db)
+    filename = (file.filename or "").lower()
     file_bytes = await file.read()
+
+    # ── Format validation ──────────────────────────────────────────────────────
+    allowed_extensions = (".pdf", ".txt", ".doc", ".docx")
+    if not any(filename.endswith(ext) for ext in allowed_extensions):
+        raise HTTPException(400, "Unsupported file format. Please upload a PDF, TXT, DOC, or DOCX file.")
+
+    if len(file_bytes) < 100:
+        raise HTTPException(400, "File is too small to be a valid resume. Please upload a proper resume file.")
+    if len(file_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(400, "File is too large. Please upload a resume under 5MB.")
 
     text = ""
     if filename.endswith(".pdf"):
@@ -511,8 +521,35 @@ async def parse_resume(
     elif filename.endswith(".doc"):
         text = extract_text_from_txt(file_bytes)
 
-    if not text or len(text.strip()) < 10:
-        raise HTTPException(400, "Could not extract readable text from the uploaded file.")
+    # ── Content validation ─────────────────────────────────────────────────────
+    cleaned = text.strip()
 
-    return llm.extract_profile_from_resume(text)
+    if len(cleaned) < 200:
+        raise HTTPException(400, "Could not extract enough text from this file. It may be a scanned image or corrupt PDF. Please upload a text-based PDF or a .txt file.")
+
+    # Must look like a resume
+    resume_signals = ["education", "experience", "skills", "university", "college", "project",
+                      "internship", "work", "bachelor", "master", "engineer", "developer",
+                      "python", "java", "react", "machine learning", "data", "research", "gpa",
+                      "degree", "institute", "technology", "computer", "software"]
+    text_lower = cleaned.lower()
+    signal_matches = sum(1 for s in resume_signals if s in text_lower)
+    if signal_matches < 2:
+        raise HTTPException(400, "This file doesn't appear to be a resume. Please upload your CV or resume document.")
+
+    # Build event context for AI scoring
+    event_context = {
+        "event_name": event.name,
+        "description": event.description or "",
+    }
+    if event.pipeline_config:
+        pc = event.pipeline_config
+        event_context["evaluation_criteria"] = pc.get("evaluation_criteria", [])
+        fr = pc.get("formation_rules", {})
+        event_context["required_skills_hint"] = fr.get("skill_focus", "")
+        event_context["event_type"] = pc.get("event_type", "")
+    if event.formation_rules:
+        event_context["team_size"] = event.formation_rules.get("team_size", 3)
+
+    return llm.extract_profile_from_resume(cleaned, event_context=event_context)
 

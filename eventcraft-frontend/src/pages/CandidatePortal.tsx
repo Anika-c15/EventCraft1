@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { FileUp, Loader2, CheckCircle, Sparkles, User, Mail, Building2, Code2, AlertCircle, RefreshCw } from 'lucide-react'
+import React, { useState } from 'react'
+import { FileUp, Loader2, CheckCircle, Sparkles, User, Mail, Building2, Code2, AlertCircle, RefreshCw, Search } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { useToast } from '../context/ToastAndConfirmContext'
 import { participantsApi, eventsApi } from '../api/client'
@@ -15,18 +15,17 @@ interface ExtractedProfile {
   flags?: string[]
 }
 
-type PageState = 'upload' | 'extracting' | 'review' | 'submitted' | 'error'
+type PageState = 'select_event' | 'upload' | 'extracting' | 'review' | 'submitted' | 'error'
 
-async function extractFromResume(eventId: string, file: File): Promise<ExtractedProfile | null> {
+async function extractFromResume(eventId: string, file: File): Promise<{ profile: ExtractedProfile | null; error?: string }> {
   try {
     const extracted = await participantsApi.parseResume(eventId, file)
-    if (!extracted) return null
+    if (!extracted) return { profile: null, error: 'No data returned from server.' }
     const validLevels: ParticipantLevel[] = ['Beginner', 'Intermediate', 'Advanced', 'Expert']
     if (!validLevels.includes(extracted.level)) extracted.level = 'Intermediate'
-    return extracted as ExtractedProfile
-  } catch (err) {
-    console.error("Error parsing resume:", err)
-    return null
+    return { profile: extracted as ExtractedProfile }
+  } catch (err: any) {
+    return { profile: null, error: err.message || 'Failed to parse resume.' }
   }
 }
 
@@ -35,55 +34,70 @@ export const CandidatePortal: React.FC = () => {
   const toast = useToast()
   const [activeEventId, setActiveEventId] = useState<string>('')
   const [activeEvent, setActiveEvent] = useState<any>(null)
-  const [pageState, setPageState] = useState<PageState>('upload')
+  const [pageState, setPageState] = useState<PageState>('select_event')
   const [profile, setProfile] = useState<ExtractedProfile>({
     name: '', email: '', institution: '', level: 'Intermediate', skills: '', summary: ''
   })
   const [fileName, setFileName] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [editMode, setEditMode] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  // Verification state
+  // Event selection state
+  const [eventNameInput, setEventNameInput] = useState('')
+  const [eventSearchError, setEventSearchError] = useState('')
+  const [searchingEvent, setSearchingEvent] = useState(false)
+
+  // Verification state (at submit time)
   const [showVerifyModal, setShowVerifyModal] = useState(false)
   const [verifyInput, setVerifyInput] = useState('')
   const [verifyError, setVerifyError] = useState('')
 
-  useEffect(() => {
-    // Use public endpoint — candidates are not logged in
-    eventsApi.getActiveEvent().then(data => {
-      setActiveEventId(data.event_id)
-      setActiveEvent({ id: data.event_id, name: data.event_name })
-    }).catch(err => console.error("Failed to load active event:", err))
-  }, [])
+  const handleFindEvent = async () => {
+    if (!eventNameInput.trim()) return
+    setSearchingEvent(true)
+    setEventSearchError('')
+    try {
+      const res = await eventsApi.verifyEventName(eventNameInput.trim())
+      setActiveEventId(res.event_id)
+      setActiveEvent({ id: res.event_id, name: res.event_name })
+      setPageState('upload')
+    } catch {
+      setEventSearchError('No matching event found. Please check the event name and try again.')
+    } finally {
+      setSearchingEvent(false)
+    }
+  }
 
   const reset = () => {
-    setPageState('upload'); setFileName(''); setEditMode(false)
+    setPageState('select_event')
+    setFileName('')
+    setEditMode(false)
+    setEventNameInput('')
+    setActiveEventId('')
+    setActiveEvent(null)
     setProfile({ name: '', email: '', institution: '', level: 'Intermediate', skills: '', summary: '' })
   }
 
   const handleFile = async (file: File) => {
-    if (!file.name.match(/\.(pdf|txt|doc|docx)$/i)) { toast.error('Please upload a PDF, TXT, DOC or DOCX file'); return }
-    setFileName(file.name); setPageState('extracting')
-    
-    let evId = activeEventId
-    let evObj = activeEvent
-    if (!evId) {
-      try {
-        const data = await eventsApi.getActiveEvent()
-        evId = data.event_id
-        evObj = { id: data.event_id, name: data.event_name }
-        setActiveEventId(evId)
-        setActiveEvent(evObj)
-      } catch {}
-    }
-
-    if (!evId) {
-      setPageState('error')
+    if (!file.name.match(/\.(pdf|txt|doc|docx)$/i)) {
+      toast.error('Please upload a PDF, TXT, DOC or DOCX file')
       return
     }
+    setFileName(file.name)
+    setPageState('extracting')
+    setErrorMessage('')
 
-    const extracted = await extractFromResume(evId, file)
-    extracted ? (setProfile(extracted), setPageState('review')) : setPageState('error')
+    if (!activeEventId) { setPageState('error'); return }
+
+    const { profile: extracted, error } = await extractFromResume(activeEventId, file)
+    if (extracted) {
+      setProfile(extracted)
+      setPageState('review')
+    } else {
+      setErrorMessage(error || 'Could not process resume.')
+      setPageState('error')
+    }
   }
 
   const handleSubmit = (targetEventId?: string) => {
@@ -104,7 +118,7 @@ export const CandidatePortal: React.FC = () => {
         strengths: profile.strengths,
         flags: profile.flags,
       },
-    }, targetEventId)
+    }, targetEventId || activeEventId)
     setPageState('submitted')
   }
 
@@ -112,13 +126,12 @@ export const CandidatePortal: React.FC = () => {
     setVerifyError('')
     const input = verifyInput.trim()
     if (!input) return
-
     try {
       const res = await eventsApi.verifyEventName(input)
       handleSubmit(res.event_id)
       setShowVerifyModal(false)
       setVerifyInput('')
-    } catch (err: any) {
+    } catch {
       setVerifyError('The event name does not match. Please verify the event name you are registering for.')
     }
   }
@@ -139,21 +152,72 @@ export const CandidatePortal: React.FC = () => {
             <Sparkles size={26} className="text-primary" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">EventCraft — Candidate Portal</h1>
-          <p className="text-sm text-gray-500 mt-1">Upload your resume — AI will automatically extract your profile and register you</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {pageState === 'select_event'
+              ? 'Enter the event name to get started'
+              : activeEvent
+              ? `Registering for: ${activeEvent.name}`
+              : 'Upload your resume — AI will extract your profile and assess your fit'}
+          </p>
         </div>
 
-        {/* UPLOAD */}
-        {pageState === 'upload' && (
+        {/* STEP 1: SELECT EVENT */}
+        {pageState === 'select_event' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
               <p className="text-sm font-semibold text-orange-800 mb-2">How it works</p>
               <ol className="text-xs text-orange-700 space-y-1.5 list-decimal list-inside">
-                <li>Upload your resume (PDF or TXT format)</li>
-                <li>AI automatically extracts your name, skills, and institution</li>
-                <li>Review the extracted profile and edit if needed</li>
-                <li>Submit — the committee will review and approve your registration</li>
+                <li>Enter the event name you're registering for</li>
+                <li>Upload your resume — AI reads your skills and experience</li>
+                <li>AI scores your fit based on the event's requirements</li>
+                <li>Submit — the committee reviews and approves your registration</li>
               </ol>
             </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Which event are you registering for?
+              </label>
+              <input
+                type="text"
+                value={eventNameInput}
+                onChange={e => { setEventNameInput(e.target.value); setEventSearchError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleFindEvent()}
+                placeholder="e.g. EventCraft Hackathon 2026"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              {eventSearchError && (
+                <div className="mt-2 flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                  {eventSearchError}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleFindEvent}
+              disabled={!eventNameInput.trim() || searchingEvent}
+              className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-3 rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {searchingEvent ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+              {searchingEvent ? 'Finding event...' : 'Find Event & Continue'}
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2: UPLOAD */}
+        {pageState === 'upload' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5">
+            {activeEvent && (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
+                <CheckCircle size={15} className="text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-green-700">Event found</p>
+                  <p className="text-sm font-bold text-green-900">{activeEvent.name}</p>
+                </div>
+                <button onClick={reset} className="ml-auto text-xs text-green-600 hover:underline">Change</button>
+              </div>
+            )}
             <div
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
@@ -180,7 +244,7 @@ export const CandidatePortal: React.FC = () => {
             <Loader2 size={44} className="animate-spin text-primary mx-auto mb-4" />
             <p className="text-base font-semibold text-gray-800">AI is reading your resume...</p>
             <p className="text-sm text-gray-500 mt-1">{fileName}</p>
-            <p className="text-xs text-gray-400 mt-3">Extracting skills, institution and experience level</p>
+            <p className="text-xs text-gray-400 mt-3">Scoring fit against <strong>{activeEvent?.name}</strong> requirements</p>
           </div>
         )}
 
@@ -188,9 +252,21 @@ export const CandidatePortal: React.FC = () => {
         {pageState === 'error' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
             <AlertCircle size={44} className="text-red-400 mx-auto" />
-            <p className="text-base font-semibold text-gray-800">Could not extract profile</p>
-            <p className="text-sm text-gray-500">The file may be a scanned PDF or unreadable.<br />Please save your resume as a <strong>.txt file</strong> and try again.</p>
-            <button onClick={reset} className="flex items-center gap-2 mx-auto text-sm text-primary font-medium hover:underline">
+            <p className="text-base font-semibold text-gray-800">Could not process resume</p>
+            <p className="text-sm text-gray-500">
+              {errorMessage || (fileName
+                ? <>The file <strong>{fileName}</strong> could not be read.</>
+                : 'Something went wrong.'
+              )}
+              <br />Please ensure:
+            </p>
+            <ul className="text-xs text-gray-500 text-left space-y-1 bg-gray-50 rounded-lg px-4 py-3">
+              <li>• File is a PDF, TXT, DOC, or DOCX</li>
+              <li>• PDF is text-based, not a scanned image</li>
+              <li>• File is a valid resume/CV document</li>
+              <li>• File is under 5MB</li>
+            </ul>
+            <button onClick={() => setPageState('upload')} className="flex items-center gap-2 mx-auto text-sm text-primary font-medium hover:underline">
               <RefreshCw size={14} /> Try Again
             </button>
           </div>
@@ -329,15 +405,15 @@ export const CandidatePortal: React.FC = () => {
 
               <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                 <div className="flex gap-2">
-                  <button onClick={() => setEditMode(!editMode)}
+                  <button onClick={() => { setEditMode(!editMode) }}
                     className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5">
                     {editMode ? '✓ Done Editing' : '✏️ Edit Fields'}
                   </button>
                   <button onClick={reset} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
-                    <RefreshCw size={11} /> Upload New
+                    <RefreshCw size={11} /> Start Over
                   </button>
                 </div>
-                <button onClick={() => { setVerifyError(''); setVerifyInput(''); setShowVerifyModal(true); }} disabled={!profile.name || !profile.email}
+                <button onClick={() => handleSubmit(activeEventId)} disabled={!profile.name || !profile.email}
                   className="flex items-center gap-2 bg-primary text-white rounded-lg px-5 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   Submit Registration →
                 </button>

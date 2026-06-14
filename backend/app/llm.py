@@ -534,49 +534,89 @@ Write a brief 2-sentence neutral explanation for the committee dashboard."""
     return _call(prompt)
 
 
-def extract_profile_from_resume(text: str) -> dict:
+def extract_profile_from_resume(text: str, event_context: Optional[dict] = None) -> dict:
     """
-    Use Groq LLM to parse a candidate's resume and extract structured profile details
-    including an AI fit score and skill breakdown.
+    Use LLM to parse a resume and score candidate fit against the specific event.
     """
-    prompt = f"""You are an expert resume screener for a competitive hackathon registration system.
-Analyze the following resume and return ONLY a valid JSON object with NO markdown fences, backticks, or extra text.
+    # Build event-specific scoring instructions
+    event_name = event_context.get("event_name", "Hackathon") if event_context else "Hackathon"
+    event_desc = event_context.get("description", "") if event_context else ""
+    criteria = event_context.get("evaluation_criteria", []) if event_context else []
+    event_type = event_context.get("event_type", "") if event_context else ""
+    criteria_str = ", ".join(criteria) if criteria else "Innovation, Execution, Presentation, Impact"
 
-JSON Structure:
+    event_ctx_str = f"""
+EVENT CONTEXT (use this to calibrate fit scoring):
+- Event Name: {event_name}
+- Event Type: {event_type or "Hackathon"}
+- Event Description: {event_desc or "A competitive hackathon for developers and engineers"}
+- Evaluation Criteria: {criteria_str}
+
+SCORING CALIBRATION RULES:
+1. Score technical_depth based on how well the candidate's skills match the event type.
+   - For AI/ML events: Python, TensorFlow, PyTorch, NLP, CV, data science skills score high
+   - For web/product events: React, Node.js, design, UX, APIs score high
+   - For general hackathons: breadth of tech stack matters
+2. Score project_experience based on ACTUAL projects, internships, research in the resume — not just listed skills
+3. Score collaboration based on team projects, open source contributions, GitHub activity, group work mentioned
+4. Score innovation based on research papers, novel projects, patents, creative solutions described
+5. strengths MUST reference specific things from the resume (e.g. "Built a CNN classifier for medical imaging" not "Good at ML")
+6. flags MUST be specific gaps relevant to THIS event (e.g. "No Python experience for an AI hackathon" not generic "limited experience")
+7. Be STRICT — a fresh graduate with no projects should score 30-45, not 70+
+8. Be ACCURATE — do not hallucinate skills or projects not present in the resume
+"""
+
+    prompt = f"""You are a rigorous technical screener for a competitive hackathon. Your job is to ACCURATELY assess a candidate's fit for a specific event based ONLY on what is written in their resume. Do NOT assume or invent skills or experience not explicitly mentioned.
+
+{event_ctx_str}
+
+Return ONLY a valid JSON object. No markdown, no explanation, no extra text.
+
+JSON structure:
 {{
-  "name": "full name",
-  "email": "email address or empty string",
-  "institution": "university or college name or empty string",
-  "level": "one of exactly: Beginner, Intermediate, Advanced, Expert",
-  "skills": "comma-separated technical skills e.g. Python, React, ML, Docker",
-  "summary": "one sentence describing this candidate's strongest technical area",
-  "fit_score": <integer 0-100 representing overall hackathon readiness>,
+  "name": "candidate's full name from resume",
+  "email": "email address found in resume, or empty string",
+  "institution": "university or college name, or empty string",
+  "level": "one of: Beginner, Intermediate, Advanced, Expert",
+  "skills": "comma-separated technical skills ONLY as listed in the resume",
+  "summary": "one specific sentence about this candidate's strongest skill and how it relates to {event_name}",
+  "fit_score": <integer 0-100, sum of fit_breakdown>,
   "fit_breakdown": {{
-    "technical_depth": <0-25, score for depth of technical skills>,
-    "project_experience": <0-25, score for hands-on project/internship experience>,
-    "collaboration": <0-25, score for teamwork, open source, or group project evidence>,
-    "innovation": <0-25, score for creative or research work, novel projects>
+    "technical_depth": <0-25, based on depth and relevance of skills to this specific event>,
+    "project_experience": <0-25, based on actual projects/internships/research explicitly mentioned>,
+    "collaboration": <0-25, based on team work, open source, group projects mentioned>,
+    "innovation": <0-25, based on novel/creative work, research, or original contributions>
   }},
-  "strengths": ["strength 1", "strength 2", "strength 3"],
-  "flags": ["any concern or gap, or empty list if none"]
+  "strengths": [
+    "specific strength from resume relevant to {event_name} (cite actual project/skill)",
+    "second specific strength",
+    "third specific strength"
+  ],
+  "flags": [
+    "specific gap or concern for {event_name} based on resume (or empty list if strong fit)"
+  ]
 }}
 
-Scoring guide:
-- fit_score = sum of all fit_breakdown values (max 100)
-- 80-100: Exceptional candidate, strong technical background
-- 60-79: Good candidate, solid skills with some gaps
-- 40-59: Average candidate, basic skills present
-- 0-39: Weak fit, limited relevant experience
+EXPERIENCE LEVEL GUIDE:
+- Beginner: student with no internships, <1yr experience, mostly coursework
+- Intermediate: 1-2yr or 1 internship, some personal projects
+- Advanced: 2-4yr or multiple internships, strong project portfolio
+- Expert: 4+yr or research publications, significant open source, industry leadership
 
-Experience level guide:
-- Beginner: 0-1yr or student with no internships
-- Intermediate: 1-2yr or student with 1 internship
-- Advanced: 2-4yr or multiple internships/projects
-- Expert: 4+yr or significant open source/research contributions
+FIT SCORE GUIDE:
+- 85-100: Exceptional fit, directly relevant skills and proven project experience for this event
+- 65-84: Good fit, solid relevant skills with minor gaps
+- 45-64: Moderate fit, some relevant skills but missing key areas
+- 25-44: Weak fit, limited relevant experience for this event type
+- 0-24: Poor fit, missing most required skills/experience
 
-Resume Text:
-{text[:4000]}
-"""
+Resume to analyze:
+---
+{text[:5000]}
+---"""
+
+    system = "You are a strict, accurate technical resume screener for hackathon registration. Output only valid raw JSON. Do not hallucinate. Only report what is explicitly in the resume."
+    response_text = _call(prompt, system=system).strip()
     system = "You are a JSON resume screener for hackathon registration. Output only valid raw JSON, no markdown."
     response_text = _call(prompt, system=system).strip()
 
