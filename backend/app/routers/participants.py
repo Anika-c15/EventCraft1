@@ -348,37 +348,28 @@ def get_portal(
             ))
 
     # ── Leaderboard Standings ──────────────────────────────────────────────────
-    # Fetch all active/approved teams in this event and compute their scores
+    # Only include teams whose final_score has been locked by the committee
     teams = (
         db.query(models.Team)
         .filter(
             models.Team.event_id == event_id,
-            models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active])
+            models.Team.status.in_([models.TeamStatus.approved, models.TeamStatus.active]),
+            models.Team.final_score.isnot(None),  # only locked scores
         )
         .all()
     )
-    
+
     leaderboard_entries = []
     for t in teams:
-        score = None
-        if t.final_score is not None:
-            score = t.final_score
-        else:
-            scores = db.query(models.EvaluationScore).filter(
-                models.EvaluationScore.team_id == t.id
-            ).all()
-            if scores:
-                score = round(sum(s.average or 0 for s in scores) / len(scores), 2)
-        
         leaderboard_entries.append({
             "team_id": t.id,
             "team_name": t.name,
-            "score": score,
+            "score": t.final_score,
         })
-    
-    # Sort teams by score descending (putting None scores at the bottom)
-    leaderboard_entries.sort(key=lambda x: (x["score"] is None, -(x["score"] or 0)))
-    
+
+    # Sort by final score descending
+    leaderboard_entries.sort(key=lambda x: -(x["score"] or 0))
+
     # Assign ranks
     for i, item in enumerate(leaderboard_entries):
         item["rank"] = i + 1

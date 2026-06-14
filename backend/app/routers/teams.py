@@ -247,13 +247,15 @@ def _build_leaderboard(event_id: str, db: Session):
     result = []
 
     for team in teams:
+        # Only include teams whose score has been locked by the committee
+        if team.final_score is None:
+            continue
+
         scores = db.query(models.EvaluationScore).filter(
             models.EvaluationScore.team_id == team.id
         ).all()
 
         score_breakdown = {}
-        avg_score = None
-
         if scores:
             all_criteria = set()
             for s in scores:
@@ -261,21 +263,20 @@ def _build_leaderboard(event_id: str, db: Session):
             for criterion in all_criteria:
                 vals = [s.scores_json.get(criterion, 0) for s in scores]
                 score_breakdown[criterion] = round(sum(vals) / len(vals), 2)
-            avg_score = round(sum(s.average or 0 for s in scores) / len(scores), 2)
 
         result.append({
             "team_id": team.id,
             "team_name": team.name,
             "status": team.status.value,
             "member_count": len(team.members),
-            "score": team.final_score if team.final_score is not None else avg_score,
+            "score": team.final_score,
             "score_breakdown": score_breakdown,
             "has_anomaly": any(s.is_anomaly for s in scores),
             "rank": team.rank,
             "judges_count": len(scores),
         })
 
-    result.sort(key=lambda x: (x["score"] is None, -(x["score"] or 0)))
+    result.sort(key=lambda x: -(x["score"] or 0))
     for i, item in enumerate(result):
         item["rank"] = i + 1
 
