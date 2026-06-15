@@ -18,6 +18,8 @@ import {
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
 import { Header } from '../components/Header'
+import { useToast } from '../context/ToastAndConfirmContext'
+import { authApi } from '../api/client'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -60,13 +62,14 @@ export const LandingPage: React.FC = () => {
   const context = useAppContext()
   const theme = context?.theme || 'light'
   const { login } = useAppContext()
+  const toast = useToast()
 
   const [portalInput, setPortalInput] = useState<string>('')
   const [portalError, setPortalError] = useState<string>('')
   const [showEmailPopup, setShowEmailPopup] = useState<boolean>(false)
 
   // Admin Login / Register state
-  const [adminTab, setAdminTab] = useState<'login' | 'register'>('login')
+  const [adminTab, setAdminTab] = useState<'login' | 'register' | 'forgot_email' | 'forgot_otp'>('login')
   const [email, setEmail] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [confirmPassword, setConfirmPassword] = useState<string>('')
@@ -84,6 +87,13 @@ export const LandingPage: React.FC = () => {
   
   // Updated state type to match 'name' instead of 'orgName'
   const [pendingRegisterData, setPendingRegisterData] = useState<{email: string, password: string, name: string} | null>(null)
+
+  // Forgot password states
+  const [forgotEmail, setForgotEmail] = useState<string>('')
+  const [forgotOtp, setForgotOtp] = useState<string>('')
+  const [newPassword, setNewPassword] = useState<string>('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState<string>('')
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState<boolean>(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -112,6 +122,7 @@ export const LandingPage: React.FC = () => {
     e.preventDefault()
     setFormError('')
     if (!email || !password) { setFormError('Please fill in all fields.'); return }
+    if (password.length > 128) { setFormError('Password cannot be longer than 128 characters.'); return }
     try {
       await login(email, password)
       
@@ -129,6 +140,7 @@ export const LandingPage: React.FC = () => {
     e.preventDefault()
     setFormError('')
     if (!email || !password || !name) { setFormError('Please fill in all fields.'); return }
+    if (password.length > 128) { setFormError('Password cannot be longer than 128 characters.'); return }
     if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
     setOtpLoading(true)
     try {
@@ -145,6 +157,57 @@ export const LandingPage: React.FC = () => {
       setFormError(err.message || 'Failed to send OTP')
     } finally {
       setOtpLoading(false)
+    }
+  }
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!forgotEmail) { setFormError('Please enter your email.'); return }
+    setForgotPasswordLoading(true)
+    try {
+      await authApi.forgotPassword(forgotEmail)
+      setAdminTab('forgot_otp')
+      setFormError('')
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to send verification code')
+    } finally {
+      setForgotPasswordLoading(false)
+    }
+  }
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFormError('')
+    if (!forgotOtp || !newPassword || !confirmNewPassword) {
+      setFormError('Please fill in all fields.')
+      return
+    }
+    if (forgotOtp.length !== 6) {
+      setFormError('Verification code must be exactly 6 digits.')
+      return
+    }
+    if (newPassword.length > 128) {
+      setFormError('Password cannot be longer than 128 characters.')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      setFormError('Passwords do not match.')
+      return
+    }
+    setForgotPasswordLoading(true)
+    try {
+      await authApi.resetPassword(forgotEmail, forgotOtp, newPassword)
+      setAdminTab('login')
+      setForgotOtp('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+      setFormError('')
+      toast.success('Password reset successfully. You can now login.')
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to reset password')
+    } finally {
+      setForgotPasswordLoading(false)
     }
   }
 
@@ -453,17 +516,21 @@ export const LandingPage: React.FC = () => {
                       Committee Access
                     </h2>
                     <p className={`text-xs mt-0.5 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {adminTab === 'login' ? 'Manage your live hackathons' : 'Create a fresh event dashboard'}
+                      {adminTab === 'login' 
+                        ? 'Manage your live hackathons' 
+                        : adminTab === 'register' 
+                        ? 'Create a fresh event dashboard' 
+                        : 'Reset your committee access password'}
                     </p>
                   </div>
                 </div>
 
-                {/* Tab Switcher */}
+                 {/* Tab Switcher */}
                 <div className={`flex rounded-2xl p-1 bg-slate-100/80 dark:bg-slate-950/50 border border-slate-200/40 dark:border-slate-800/50`}>
                   <button
                     type="button"
                     onClick={() => { setAdminTab('login'); setRegisterStep('form'); setFormError('') }}
-                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'login'
+                    className={`flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-200 cursor-pointer ${adminTab === 'login' || adminTab === 'forgot_email' || adminTab === 'forgot_otp'
                       ? 'bg-white dark:bg-slate-900 text-orange-600 shadow-md scale-[1.02]'
                       : theme === 'light'
                         ? 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -519,6 +586,7 @@ export const LandingPage: React.FC = () => {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
+                          maxLength={128}
                           className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
                             ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
                             : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
@@ -530,6 +598,15 @@ export const LandingPage: React.FC = () => {
                           className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
                         >
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setAdminTab('forgot_email'); setFormError('') }}
+                          className="text-xs text-orange-500 font-bold hover:underline cursor-pointer bg-transparent border-none p-0"
+                        >
+                          Forgot Password?
                         </button>
                       </div>
                     </div>
@@ -569,7 +646,6 @@ export const LandingPage: React.FC = () => {
                           onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
                           placeholder="123456"
                           maxLength={6}
-                           /* I removed 'text-sm' from this className string below! */
                           className={`w-full border rounded-xl px-4 py-3 text-center font-mono text-lg tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all ${theme === 'light' ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500' : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'}`}
                         />
                       </div>
@@ -643,6 +719,7 @@ export const LandingPage: React.FC = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="••••••••"
+                            maxLength={128}
                             className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
                               ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
                               : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
@@ -668,6 +745,7 @@ export const LandingPage: React.FC = () => {
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
                             placeholder="••••••••"
+                            maxLength={128}
                             className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
                               ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
                               : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
@@ -697,6 +775,153 @@ export const LandingPage: React.FC = () => {
                       </button>
                     </form>
                   )
+                )}
+
+                {/* Forgot Password - Email Form */}
+                {adminTab === 'forgot_email' && (
+                  <form onSubmit={handleForgotPasswordSubmit} className="space-y-5">
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Email</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Mail size={16} />
+                        </div>
+                        <input
+                          type="email"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          placeholder="admin@organisation.com"
+                          className={`w-full border rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
+                        />
+                      </div>
+                    </div>
+                    {formError && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                        <span className="font-semibold">{formError}</span>
+                      </div>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordLoading}
+                      className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-orange-500/10 hover:shadow-orange-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
+                    >
+                      {forgotPasswordLoading ? 'Sending...' : 'Send Verification OTP'} <ArrowRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdminTab('login'); setFormError('') }}
+                      className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${theme === 'light' ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      ← Back to Login
+                    </button>
+                  </form>
+                )}
+
+                {/* Forgot Password - Verify OTP & New Password Form */}
+                {adminTab === 'forgot_otp' && (
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-5">
+                    <div className="text-center space-y-2">
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${theme === 'light' ? 'bg-orange-50' : 'bg-orange-500/10'}`}>
+                        <Mail size={24} className="text-orange-500" />
+                      </div>
+                      <p className={`text-sm font-semibold ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>Reset Password</p>
+                      <p className={`text-xs ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
+                        We sent a 6-digit verification code to <span className="font-bold text-orange-500">{forgotEmail}</span>
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Enter OTP</label>
+                      <input
+                        type="text"
+                        value={forgotOtp}
+                        onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="123456"
+                        maxLength={6}
+                        className={`w-full border rounded-xl px-4 py-3 text-center font-mono text-lg tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all ${theme === 'light' ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500' : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'}`}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>New Password</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Lock size={16} />
+                        </div>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="New Password (max 128 chars)"
+                          maxLength={128}
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm New Password</label>
+                      <div className="relative group/input">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 transition-colors group-focus-within/input:text-orange-500">
+                          <Lock size={16} />
+                        </div>
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmNewPassword}
+                          onChange={(e) => setConfirmNewPassword(e.target.value)}
+                          placeholder="Confirm New Password"
+                          maxLength={128}
+                          className={`w-full border rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-orange-500/10 transition-all duration-150 ${theme === 'light'
+                            ? 'bg-slate-50/70 border-slate-200 text-slate-800 focus:border-orange-500 focus:bg-white'
+                            : 'bg-slate-950/50 border-slate-800 text-slate-200 focus:border-orange-500'
+                            }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer p-1 rounded-lg"
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {formError && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-red-500">
+                        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                        <span className="font-semibold">{formError}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordLoading || forgotOtp.length !== 6}
+                      className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-bold transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {forgotPasswordLoading ? 'Resetting...' : 'Reset Password'} <ArrowRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdminTab('login'); setFormError(''); setForgotOtp(''); setNewPassword(''); setConfirmNewPassword('') }}
+                      className={`w-full py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${theme === 'light' ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                    >
+                      ← Cancel
+                    </button>
+                  </form>
                 )}
 
                 {/* Participant access link */}

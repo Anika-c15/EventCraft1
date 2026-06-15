@@ -10,12 +10,20 @@ from .models import (
 # ── Auth ───────────────────────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(..., max_length=128)
 
 class RegisterRequest(BaseModel):
     name: str  # Changed from org_name to just name
     email: str
-    password: str
+    password: str = Field(..., max_length=128)
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str = Field(..., max_length=128)
 
 class TokenResponse(BaseModel):
     access_token: str

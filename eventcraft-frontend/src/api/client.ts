@@ -59,6 +59,18 @@ export const authApi = {
       true,
     ),
   me: () => request<{ id: string; email: string; name: string; role: string }>('/api/auth/me'),
+  forgotPassword: (email: string) =>
+    request<any>(
+      '/api/auth/forgot-password',
+      { method: 'POST', body: JSON.stringify({ email }) },
+      true,
+    ),
+  resetPassword: (email: string, otp: string, new_password: string) =>
+    request<any>(
+      '/api/auth/reset-password',
+      { method: 'POST', body: JSON.stringify({ email, otp, new_password }) },
+      true,
+    ),
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────────

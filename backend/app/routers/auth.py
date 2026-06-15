@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import verify_password, create_access_token, get_current_user, hash_password
-from ..schemas import LoginRequest, TokenResponse, RegisterRequest
+from ..schemas import LoginRequest, TokenResponse, RegisterRequest, ForgotPasswordRequest, ResetPasswordRequest
 from .. import models
 from datetime import datetime, timedelta
 from ..email_service import send_email
@@ -195,3 +195,89 @@ def get_me(current_user: models.User = Depends(get_current_user)):
         "name": current_user.name,
         "role": current_user.role.value,
     }
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Email address not registered")
+        
+    # Delete any existing OTP verifications for this email
+    db.query(OTPVerification).filter(
+        OTPVerification.email == payload.email
+    ).delete()
+
+    # Generate password reset OTP code
+    otp = generate_otp()
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+
+    otp_record = OTPVerification(
+        email=payload.email,
+        otp=otp,
+        expires_at=expires_at,
+    )
+    db.add(otp_record)
+    db.commit()
+
+    # Send reset password email
+    await send_email(
+        to_email=payload.email,
+        subject="EventCraft — Password Reset Verification",
+        body=f"""Hi {user.name},
+
+We received a request to reset your EventCraft password.
+
+Your verification code is:
+
+🔐 {otp}
+
+This code is valid for 10 minutes.
+If you did not request a password reset, please ignore this email.
+
+Regards,
+EventCraft Team"""
+    )
+
+    return {"message": "Password reset verification code sent"}
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    # Retrieve the latest unverified OTP verification record for this email
+    record = db.query(OTPVerification).filter(
+        OTPVerification.email == payload.email,
+        OTPVerification.is_verified == False
+    ).order_by(OTPVerification.created_at.desc()).first()
+
+    if not record:
+        raise HTTPException(status_code=400, detail="No active password reset verification found")
+
+    # Check expiration
+    if datetime.utcnow() > record.expires_at.replace(tzinfo=None):
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one")
+
+    # Check OTP matches
+    if record.otp != payload.otp:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    # Mark verification record as verified
+    record.is_verified = True
+
+    # Retrieve the user
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Update password
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    return {"message": "Password reset successfully"}
