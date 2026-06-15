@@ -14,6 +14,8 @@ import {
   Building,
   Eye,
   EyeOff,
+  Check,
+  X,
 } from 'lucide-react'
 import { useAppContext } from '../context/AppContext'
 import { Modal } from '../components/ui/Modal'
@@ -55,6 +57,14 @@ const JOURNEY_DATA: Record<'participant' | 'judge' | 'organizer', JourneyStep[]>
     { phase: "04", title: "Bias Mitigation Panel", shortLabel: "Bias Check", subtitle: "Real-time score anomaly flagger", description: "Monitor live scoring; the system automatically flags judge score divergences.", icon: AlertCircle, actions: ["Monitor live evaluations feed", "Inspect flagged score divergences", "Initiate judge consensus review"] },
     { phase: "05", title: "Leaderboard & Publishing", shortLabel: "Reveal", subtitle: "Linear ranking reveal", description: "Lock rankings, publish the live leaderboard, and distribute certificates.", icon: Zap, actions: ["Validate and lock composite scoring", "Publish final rankings to live board", "Export event results analytics"] }
   ]
+}
+
+const checkPasswordStrength = (pass: string) => {
+  return {
+    minLength: pass.length >= 8,
+    hasNumber: /\d/.test(pass),
+    hasSpecial: /[^a-zA-Z0-9]/.test(pass),
+  }
 }
 
 export const LandingPage: React.FC = () => {
@@ -141,6 +151,10 @@ export const LandingPage: React.FC = () => {
     setFormError('')
     if (!email || !password || !name) { setFormError('Please fill in all fields.'); return }
     if (password.length > 128) { setFormError('Password cannot be longer than 128 characters.'); return }
+    const strength = checkPasswordStrength(password)
+    if (!strength.minLength) { setFormError('Password must be at least 8 characters long.'); return }
+    if (!strength.hasNumber) { setFormError('Password must contain at least one number.'); return }
+    if (!strength.hasSpecial) { setFormError('Password must contain at least one special character.'); return }
     if (password !== confirmPassword) { setFormError('Passwords do not match.'); return }
     setOtpLoading(true)
     try {
@@ -189,6 +203,19 @@ export const LandingPage: React.FC = () => {
     }
     if (newPassword.length > 128) {
       setFormError('Password cannot be longer than 128 characters.')
+      return
+    }
+    const strength = checkPasswordStrength(newPassword)
+    if (!strength.minLength) {
+      setFormError('Password must be at least 8 characters long.')
+      return
+    }
+    if (!strength.hasNumber) {
+      setFormError('Password must contain at least one number.')
+      return
+    }
+    if (!strength.hasSpecial) {
+      setFormError('Password must contain at least one special character.')
       return
     }
     if (newPassword !== confirmNewPassword) {
@@ -733,6 +760,35 @@ export const LandingPage: React.FC = () => {
                             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                           </button>
                         </div>
+                        {password && (
+                          <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-slate-800/50 space-y-1.5 text-[11px] font-semibold transition-all duration-300">
+                            <p className={`text-[10px] uppercase tracking-wider mb-1 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password Requirements</p>
+                            <div className="flex items-center gap-2">
+                              {checkPasswordStrength(password).minLength ? (
+                                <Check size={12} className="text-green-500" />
+                              ) : (
+                                <X size={12} className="text-red-500" />
+                              )}
+                              <span className={checkPasswordStrength(password).minLength ? "text-green-600 dark:text-green-400" : "text-slate-500"}>Minimum 8 characters</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {checkPasswordStrength(password).hasNumber ? (
+                                <Check size={12} className="text-green-500" />
+                              ) : (
+                                <X size={12} className="text-red-500" />
+                              )}
+                              <span className={checkPasswordStrength(password).hasNumber ? "text-green-600 dark:text-green-400" : "text-slate-500"}>At least one number</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {checkPasswordStrength(password).hasSpecial ? (
+                                <Check size={12} className="text-green-500" />
+                              ) : (
+                                <X size={12} className="text-red-500" />
+                              )}
+                              <span className={checkPasswordStrength(password).hasSpecial ? "text-green-600 dark:text-green-400" : "text-slate-500"}>At least one special character</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <label className={`block text-xs font-extrabold uppercase tracking-wider ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Confirm Password</label>
@@ -871,6 +927,35 @@ export const LandingPage: React.FC = () => {
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
+                      {newPassword && (
+                        <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-slate-800/50 space-y-1.5 text-[11px] font-semibold transition-all duration-300">
+                          <p className={`text-[10px] uppercase tracking-wider mb-1 ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>Password Requirements</p>
+                          <div className="flex items-center gap-2">
+                            {checkPasswordStrength(newPassword).minLength ? (
+                              <Check size={12} className="text-green-500" />
+                            ) : (
+                              <X size={12} className="text-red-500" />
+                            )}
+                            <span className={checkPasswordStrength(newPassword).minLength ? "text-green-600 dark:text-green-400" : "text-slate-500"}>Minimum 8 characters</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {checkPasswordStrength(newPassword).hasNumber ? (
+                              <Check size={12} className="text-green-500" />
+                            ) : (
+                              <X size={12} className="text-red-500" />
+                            )}
+                            <span className={checkPasswordStrength(newPassword).hasNumber ? "text-green-600 dark:text-green-400" : "text-slate-500"}>At least one number</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {checkPasswordStrength(newPassword).hasSpecial ? (
+                              <Check size={12} className="text-green-500" />
+                            ) : (
+                              <X size={12} className="text-red-500" />
+                            )}
+                            <span className={checkPasswordStrength(newPassword).hasSpecial ? "text-green-600 dark:text-green-400" : "text-slate-500"}>At least one special character</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
