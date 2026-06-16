@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Bell, BellOff, CheckCircle, Mail, User, XCircle } from 'lucide-react'
-import { subscribersApi } from '../api/client'
+import { subscribersApi, eventsApi } from '../api/client'
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 type View = 'subscribeForm' | 'subscribed' | 'unsubscribeForm' | 'unsubscribed'
@@ -15,17 +15,43 @@ export const Subscribe: React.FC = () => {
   const [unsubLoading, setUnsubLoading] = useState(false)
   const [unsubError, setUnsubError] = useState('')
 
-  // Single view state controls everything
   const [view, setView] = useState<View>('subscribeForm')
+  const [activeEventId, setActiveEventId] = useState<string>('')
+  const [activeEventName, setActiveEventName] = useState<string>('')
+
+  useEffect(() => {
+    // First try to get event_id from URL query param (from committee-shared link)
+    const params = new URLSearchParams(window.location.search)
+    const urlEventId = params.get('event_id')
+
+    if (urlEventId) {
+      // Fetch event name for this specific event
+      eventsApi.getActiveEvent().then(data => {
+        // Verify the event exists by trying active-event, but use the URL param id
+        setActiveEventId(urlEventId)
+        // Try to get event name
+        setActiveEventName(data.event_name)
+      }).catch(() => {
+        setActiveEventId(urlEventId)
+      })
+    } else {
+      // Fallback to active event
+      eventsApi.getActiveEvent().then(data => {
+        setActiveEventId(data.event_id)
+        setActiveEventName(data.event_name)
+      }).catch(() => {})
+    }
+  }, [])
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !email.trim()) { setSubError('Name and email are both required'); return }
     if (!email.includes('@')) { setSubError('Please enter a valid email address'); return }
+    if (!activeEventId) { setSubError('No active event found. Please try again later.'); return }
     setSubStatus('loading')
     setSubError('')
     try {
-      await subscribersApi.subscribe(name.trim(), email.trim())
+      await subscribersApi.subscribe(name.trim(), email.trim(), activeEventId)
       setView('subscribed')
       setSubStatus('idle')
     } catch (err: any) {
@@ -35,10 +61,11 @@ export const Subscribe: React.FC = () => {
   }
 
   const handleUnsubscribe = async () => {
+    if (!activeEventId) return
     setUnsubLoading(true)
     setUnsubError('')
     try {
-      await subscribersApi.unsubscribe(email.trim(), unsubReason.trim())
+      await subscribersApi.unsubscribe(email.trim(), activeEventId, unsubReason.trim())
       setView('unsubscribed')
     } catch (err: any) {
       setUnsubError(err.message || 'Failed to unsubscribe.')

@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { BellOff, Mail, CheckCircle, ChevronDown } from 'lucide-react'
-import { subscribersApi } from '../api/client'
+import { subscribersApi, eventsApi } from '../api/client'
 
 const REASONS = [
   'I no longer want to receive these emails',
@@ -17,16 +17,22 @@ export const Unsubscribe: React.FC = () => {
   const [reason, setReason] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState('')
+  const [activeEventId, setActiveEventId] = useState<string>('')
+
+  useEffect(() => {
+    eventsApi.getActiveEvent().then(data => setActiveEventId(data.event_id)).catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email.trim()) { setError('Please enter your email address'); return }
     if (!email.includes('@')) { setError('Please enter a valid email address'); return }
+    if (!activeEventId) { setError('Could not determine the event. Please try again.'); return }
 
     setStatus('loading')
     setError('')
     try {
-      await subscribersApi.unsubscribe(email.trim(), reason)
+      await subscribersApi.unsubscribe(email.trim(), activeEventId, reason)
       setStatus('success')
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')

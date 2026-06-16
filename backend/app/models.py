@@ -337,8 +337,9 @@ class Subscriber(Base):
     __tablename__ = "subscribers"
 
     id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=True)  # null = global subscriber
     name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, index=True, nullable=False)  # not unique globally — same email can subscribe to multiple events
     notified = Column(Boolean, default=False)
     subscribed_at = Column(DateTime(timezone=True), server_default=func.now())
 

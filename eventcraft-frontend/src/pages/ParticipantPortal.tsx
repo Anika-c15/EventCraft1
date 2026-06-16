@@ -922,7 +922,7 @@ export const ParticipantPortal: React.FC = () => {
                 </div>
               </div>
               <Link
-                to="/subscribe"
+                to={`/subscribe?event_id=${eventId || ''}`}
                 className="flex-shrink-0 flex items-center gap-2 bg-primary hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm"
               >
                 <Bell size={13} />

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Bell, Trash2, Send, Users, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
 import { subscribersApi } from '../api/client'
+import { useAppContext } from '../context/AppContext'
 
 export const Subscribers: React.FC = () => {
+  const { eventId, eventName: currentEventName } = useAppContext()
   const [subscribers, setSubscribers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [eventName, setEventName] = useState('')
@@ -13,17 +15,23 @@ export const Subscribers: React.FC = () => {
   const [notifying, setNotifying] = useState(false)
 
   const loadSubscribers = useCallback(async () => {
+    if (!eventId) return
     try {
-      const data = await subscribersApi.list()
+      const data = await subscribersApi.list(eventId)
       setSubscribers(data)
     } catch (e) {
       console.error('Failed to load subscribers', e)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [eventId])
 
   useEffect(() => { loadSubscribers() }, [loadSubscribers])
+
+  // Pre-fill event name from context
+  useEffect(() => {
+    if (currentEventName) setEventName(currentEventName)
+  }, [currentEventName])
 
   const handleRemove = async (id: string) => {
     try {
@@ -35,17 +43,15 @@ export const Subscribers: React.FC = () => {
   }
 
   const handleNotify = async () => {
-    if (!eventName.trim()) return
+    if (!eventName.trim() || !eventId) return
     setNotifying(true)
     try {
-      const res = await subscribersApi.notifyAll(eventName, description)
+      const res = await subscribersApi.notifyAll(eventId, eventName, description)
       const sent = (res as any).sent ?? res.notified
       const failed = (res as any).failed ?? 0
       setNotified(sent)
       setNotifyFailed(failed)
-      // Refresh list so statuses update
       await loadSubscribers()
-      setEventName('')
       setDescription('')
       setShowForm(false)
       setTimeout(() => { setNotified(null); setNotifyFailed(0) }, 5000)
@@ -68,7 +74,7 @@ export const Subscribers: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <a
-            href="/subscribe"
+            href={`/subscribe?event_id=${eventId || ''}`}
             target="_blank"
             className="flex items-center gap-1.5 text-sm text-primary border border-primary/30 rounded-lg px-3 py-2 hover:bg-primary/5 transition-colors"
           >
@@ -152,7 +158,9 @@ export const Subscribers: React.FC = () => {
           <p className="text-sm font-medium text-gray-500">No subscribers yet</p>
           <p className="text-xs text-gray-400 mt-1">
             Share subscription link:{' '}
-            <a href="/subscribe" target="_blank" className="text-primary hover:underline">localhost:5173/subscribe</a>
+            <a href={`/subscribe?event_id=${eventId || ''}`} target="_blank" className="text-primary hover:underline">
+              {window.location.origin}/subscribe?event_id={eventId || '...'}
+            </a>
           </p>
         </div>
       ) : (

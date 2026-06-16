@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import asyncio
@@ -84,15 +84,22 @@ def _build_notification_email(name: str, event_name: str, description: str, unsu
 # ── Public: subscribe ──────────────────────────────────────────────────────────
 
 @router.post("", response_model=schemas.SubscriberOut, status_code=201)
-def subscribe(data: schemas.SubscriberCreate, db: Session = Depends(get_db)):
-    """Anyone can subscribe — no auth required."""
+def subscribe(
+    data: schemas.SubscriberCreate,
+    event_id: str = Query(..., description="Event ID to subscribe to"),
+    db: Session = Depends(get_db),
+):
+    """Anyone can subscribe to a specific event — no auth required."""
+    # Check if already subscribed to this specific event
     existing = db.query(models.Subscriber).filter(
-        models.Subscriber.email == data.email.lower().strip()
+        models.Subscriber.email == data.email.lower().strip(),
+        models.Subscriber.event_id == event_id,
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="This email is already subscribed.")
+        raise HTTPException(status_code=409, detail="This email is already subscribed to this event.")
 
     sub = models.Subscriber(
+        event_id=event_id,
         name=data.name.strip(),
         email=data.email.lower().strip(),
     )
@@ -109,13 +116,18 @@ class UnsubscribeRequest(BaseModel):
     reason: str = ""
 
 @router.post("/unsubscribe", status_code=200)
-def unsubscribe(data: UnsubscribeRequest, db: Session = Depends(get_db)):
-    """Anyone can unsubscribe by email — no auth required."""
+def unsubscribe(
+    data: UnsubscribeRequest,
+    event_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Anyone can unsubscribe by email from a specific event — no auth required."""
     sub = db.query(models.Subscriber).filter(
-        models.Subscriber.email == data.email.lower().strip()
+        models.Subscriber.email == data.email.lower().strip(),
+        models.Subscriber.event_id == event_id,
     ).first()
     if not sub:
-        raise HTTPException(status_code=404, detail="This email is not subscribed.")
+        raise HTTPException(status_code=404, detail="This email is not subscribed to this event.")
     db.delete(sub)
     db.commit()
     return {"message": "You have been unsubscribed successfully."}
@@ -125,10 +137,16 @@ def unsubscribe(data: UnsubscribeRequest, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[schemas.SubscriberOut])
 def list_subscribers(
+    event_id: str = Query(..., description="Filter subscribers by event"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return db.query(models.Subscriber).order_by(models.Subscriber.subscribed_at.desc()).all()
+    return (
+        db.query(models.Subscriber)
+        .filter(models.Subscriber.event_id == event_id)
+        .order_by(models.Subscriber.subscribed_at.desc())
+        .all()
+    )
 
 
 # ── Committee: delete a subscriber ────────────────────────────────────────────
@@ -151,10 +169,14 @@ def remove_subscriber(
 @router.post("/notify", response_model=dict)
 async def notify_subscribers(
     data: schemas.NotifySubscribersRequest,
+    event_id: str = Query(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    unnotified = db.query(models.Subscriber).filter(models.Subscriber.notified == False).all()
+    unnotified = db.query(models.Subscriber).filter(
+        models.Subscriber.event_id == event_id,
+        models.Subscriber.notified == False,
+    ).all()
     if not unnotified:
         return {"notified": 0, "sent": 0, "failed": 0}
 

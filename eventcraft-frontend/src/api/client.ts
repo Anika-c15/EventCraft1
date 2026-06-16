@@ -313,27 +313,27 @@ export const peerReviewApi = {
 
 export const subscribersApi = {
   /** Public — no auth needed */
-  subscribe: (name: string, email: string) =>
-    request<any>('/api/subscribers', {
+  subscribe: (name: string, email: string, eventId: string) =>
+    request<any>(`/api/subscribers?event_id=${encodeURIComponent(eventId)}`, {
       method: 'POST',
       body: JSON.stringify({ name, email }),
     }, true),
 
   /** Public — no auth needed */
-  unsubscribe: (email: string, reason?: string) =>
-    request<{ message: string }>('/api/subscribers/unsubscribe', {
+  unsubscribe: (email: string, eventId: string, reason?: string) =>
+    request<{ message: string }>(`/api/subscribers/unsubscribe?event_id=${encodeURIComponent(eventId)}`, {
       method: 'POST',
       body: JSON.stringify({ email, reason: reason || '' }),
     }, true),
 
   /** Committee — requires auth */
-  list: () => request<any[]>('/api/subscribers'),
+  list: (eventId: string) => request<any[]>(`/api/subscribers?event_id=${encodeURIComponent(eventId)}`),
 
   remove: (id: string) =>
     request<void>(`/api/subscribers/${id}`, { method: 'DELETE' }),
 
-  notifyAll: (eventName: string, description?: string) =>
-    request<{ notified: number }>('/api/subscribers/notify', {
+  notifyAll: (eventId: string, eventName: string, description?: string) =>
+    request<{ notified: number }>(`/api/subscribers/notify?event_id=${encodeURIComponent(eventId)}`, {
       method: 'POST',
       body: JSON.stringify({ event_name: eventName, description }),
     }),
