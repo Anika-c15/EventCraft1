@@ -81,6 +81,20 @@ def _build_notification_email(name: str, event_name: str, description: str, unsu
     return subject, html
 
 
+@router.get("/check")
+def check_subscription(
+    email: str = Query(...),
+    event_id: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Public — check if an email is already subscribed to a specific event."""
+    exists = db.query(models.Subscriber).filter(
+        models.Subscriber.email == email.lower().strip(),
+        models.Subscriber.event_id == event_id,
+    ).first()
+    return {"subscribed": exists is not None}
+
+
 # ── Public: subscribe ──────────────────────────────────────────────────────────
 
 @router.post("", response_model=schemas.SubscriberOut, status_code=201)

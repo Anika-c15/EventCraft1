@@ -13,6 +13,9 @@ export const Subscribe: React.FC = () => {
   const [error, setError] = useState('')
   const [resending, setResending] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false)
+  const [emailChecking, setEmailChecking] = useState(false)
+  const [emailAlreadySubscribed, setEmailAlreadySubscribed] = useState(false)
 
   const [unsubReason, setUnsubReason] = useState('')
   const [unsubLoading, setUnsubLoading] = useState(false)
@@ -47,6 +50,11 @@ export const Subscribe: React.FC = () => {
     if (!name.trim()) { setError('Please enter your name'); return }
     if (!email.trim() || !email.includes('@')) { setError('Please enter a valid email address'); return }
     if (!activeEventId) { setError('No active event found. Please try again.'); return }
+    if (emailAlreadySubscribed) {
+      setAlreadySubscribed(true)
+      setView('subscribed')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -67,8 +75,17 @@ export const Subscribe: React.FC = () => {
     setError('')
     try {
       await authApi.verifyOtp(email.trim(), otp.trim())
-      await subscribersApi.subscribe(name.trim(), email.trim(), activeEventId)
-      setView('subscribed')
+      try {
+        await subscribersApi.subscribe(name.trim(), email.trim(), activeEventId)
+        setView('subscribed')
+      } catch (subErr: any) {
+        if (subErr.message?.toLowerCase().includes('already subscribed')) {
+          setAlreadySubscribed(true)
+          setView('subscribed') // treat as success — already subscribed is fine
+        } else {
+          setError(subErr.message || 'Failed to subscribe. Please try again.')
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Invalid or expired OTP. Please try again.')
     } finally {
@@ -87,6 +104,20 @@ export const Subscribe: React.FC = () => {
       setError('Failed to resend OTP.')
     } finally {
       setResending(false)
+    }
+  }
+
+  const handleEmailBlur = async () => {
+    if (!email.trim() || !email.includes('@') || !activeEventId) return
+    setEmailChecking(true)
+    setEmailAlreadySubscribed(false)
+    try {
+      const res = await subscribersApi.checkSubscription(email.trim(), activeEventId)
+      setEmailAlreadySubscribed(res.subscribed)
+    } catch {
+      // silently ignore check errors
+    } finally {
+      setEmailChecking(false)
     }
   }
 
@@ -142,11 +173,21 @@ export const Subscribe: React.FC = () => {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => { setEmail(e.target.value); setError('') }}
+                      onChange={e => { setEmail(e.target.value); setError(''); setEmailAlreadySubscribed(false) }}
+                      onBlur={handleEmailBlur}
                       placeholder="e.g. priya@iitb.ac.in"
                       className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                     />
+                    {emailChecking && (
+                      <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                    )}
                   </div>
+                  {emailAlreadySubscribed && (
+                    <p className="mt-1.5 text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+                      <CheckCircle size={12} className="flex-shrink-0" />
+                      This email is already subscribed to {activeEventName || 'this event'}.
+                    </p>
+                  )}
                 </div>
                 {error && (
                   <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
@@ -227,10 +268,15 @@ export const Subscribe: React.FC = () => {
         {/* ── Subscribed Success ── */}
         {view === 'subscribed' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-8 text-center">
-            <CheckCircle size={48} className="text-green-500 mx-auto mb-3" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">You're subscribed!</h2>
+            <CheckCircle size={48} className={`mx-auto mb-3 ${alreadySubscribed ? 'text-blue-400' : 'text-green-500'}`} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+              {alreadySubscribed ? 'Already Subscribed!' : "You're subscribed!"}
+            </h2>
             <p className="text-sm text-gray-500 dark:text-slate-400">
-              We'll notify <b>{email}</b> about updates for {activeEventName || 'this event'}.
+              {alreadySubscribed
+                ? <><b>{email}</b> is already subscribed to updates for {activeEventName || 'this event'}.</>
+                : <>We'll notify <b>{email}</b> about updates for {activeEventName || 'this event'}.</>
+              }
             </p>
             <div className="mt-5 pt-4 border-t border-gray-100 dark:border-slate-800">
               <button

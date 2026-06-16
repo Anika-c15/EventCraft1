@@ -320,6 +320,10 @@ export const peerReviewApi = {
 // ── Subscribers ────────────────────────────────────────────────────────────────
 
 export const subscribersApi = {
+  /** Public — check if already subscribed */
+  checkSubscription: (email: string, eventId: string) =>
+    request<{ subscribed: boolean }>(`/api/subscribers/check?email=${encodeURIComponent(email)}&event_id=${encodeURIComponent(eventId)}`, {}, true),
+
   /** Public — no auth needed */
   subscribe: (name: string, email: string, eventId: string) =>
     request<any>(`/api/subscribers?event_id=${encodeURIComponent(eventId)}`, {
