@@ -540,6 +540,72 @@ Write a brief 2-sentence neutral explanation for the committee dashboard."""
     return _call(prompt)
 
 
+def classify_is_resume(
+    text: str,
+    event_name: str = "",
+    event_description: str = "",
+    event_type: str = "",
+) -> tuple[bool, str]:
+    """
+    Use LLM to determine if the uploaded document is a resume/CV suitable for this event.
+    Works for any domain — tech, design, business, arts, sports, etc.
+    Returns (is_resume, rejection_reason).
+    """
+    event_ctx = ""
+    if event_name or event_description or event_type:
+        event_ctx = f"""
+Event Context:
+- Event Name: {event_name}
+- Event Type: {event_type or 'Hackathon/Competition'}
+- Event Description: {event_description}
+
+Consider what a valid participant profile document looks like for THIS specific event.
+For example, a design competition may accept portfolios; a business case competition may accept project summaries.
+"""
+
+    prompt = f"""You are a document classifier for an event registration system. Determine if the uploaded document is a valid participant profile document (resume, CV, or equivalent) for this event.
+
+{event_ctx}
+A valid document for registration is one where a person presents their:
+- Personal information (name, contact details)
+- Education or academic background  
+- Work experience, projects, or relevant activities
+- Skills, competencies, or achievements
+- Any combination relevant to participating in this event
+
+Documents that should be REJECTED include:
+- Offer letters or appointment letters
+- Award certificates or completion certificates
+- Mark sheets or grade transcripts  
+- Invoices, receipts, or financial documents
+- Legal contracts or agreements
+- Recommendation or reference letters
+- College admission letters
+- Any official letter FROM an organization TO the candidate
+
+Document to classify:
+---
+{text}
+---
+
+Respond with ONLY valid JSON, no other text:
+{{"is_resume": true}} if it is a valid participant profile document
+{{"is_resume": false, "reason": "brief explanation of what the document is"}} if it should be rejected"""
+
+    system = "You are a strict document classifier for event registration. Respond only with valid JSON."
+    response = _call(prompt, system=system).strip()
+
+    parsed = _extract_json(response)
+    if isinstance(parsed, dict):
+        if parsed.get("is_resume") is True:
+            return True, ""
+        reason = parsed.get("reason", "This file doesn't appear to be a resume or CV.")
+        return False, f"Invalid document: {reason}. Please upload your resume or CV."
+
+    # Fallback — if LLM fails, allow through rather than blocking a valid resume
+    return True, ""
+
+
 def extract_profile_from_resume(text: str, event_context: Optional[dict] = None) -> dict:
     """
     Use LLM to parse a resume and score candidate fit against the specific event.

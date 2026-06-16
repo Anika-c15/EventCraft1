@@ -516,17 +516,24 @@ async def parse_resume(
     cleaned = text.strip()
 
     if len(cleaned) < 200:
-        raise HTTPException(400, "Could not extract enough text from this file. It may be a scanned image or corrupt PDF. Please upload a text-based PDF or a .txt file.")
+        # Could be a scanned image PDF (admit card, certificate, etc.) or just not a resume
+        if filename.endswith(".pdf"):
+            raise HTTPException(400, "This does not look like a resume. It may be a scanned document (admit card, certificate, etc.). Please upload a text-based resume PDF or a .txt file.")
+        else:
+            raise HTTPException(400, "This does not look like a resume — not enough readable text found. Please upload your CV or resume document.")
 
-    # Must look like a resume
-    resume_signals = ["education", "experience", "skills", "university", "college", "project",
-                      "internship", "work", "bachelor", "master", "engineer", "developer",
-                      "python", "java", "react", "machine learning", "data", "research", "gpa",
-                      "degree", "institute", "technology", "computer", "software"]
-    text_lower = cleaned.lower()
-    signal_matches = sum(1 for s in resume_signals if s in text_lower)
-    if signal_matches < 2:
-        raise HTTPException(400, "This file doesn't appear to be a resume. Please upload your CV or resume document.")
+    # ── Use LLM to classify if the document is a resume ──────────────────────
+    event_type_hint = ""
+    if event.pipeline_config:
+        event_type_hint = event.pipeline_config.get("event_type", "")
+    is_resume, rejection_reason = llm.classify_is_resume(
+        cleaned[:3000],
+        event_name=event.name,
+        event_description=event.description or "",
+        event_type=event_type_hint,
+    )
+    if not is_resume:
+        raise HTTPException(400, rejection_reason)
 
     # Build event context for AI scoring
     event_context = {
