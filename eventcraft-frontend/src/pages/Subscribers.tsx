@@ -156,12 +156,7 @@ export const Subscribers: React.FC = () => {
             <Users size={20} className="text-gray-400" />
           </div>
           <p className="text-sm font-medium text-gray-500">No subscribers yet</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Share subscription link:{' '}
-            <a href={`/subscribe?event_id=${eventId || ''}`} target="_blank" className="text-primary hover:underline">
-              {window.location.origin}/subscribe?event_id={eventId || '...'}
-            </a>
-          </p>
+          <p className="text-xs text-gray-400 mt-1">Share the Subscribe Page link above to get subscribers.</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
