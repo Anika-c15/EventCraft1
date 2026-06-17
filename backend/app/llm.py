@@ -101,12 +101,18 @@ def _call_gemini_api(
                 "parts": [{"text": content}]
             })
 
+    # All text-out models from Google AI Studio — ordered newest-first.
+    # On a 429 / rate-limit the system automatically falls through to the next model.
     gemini_models = [
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.5-pro",
+        "gemini-3.5-flash",       # Gemini 3.5 Flash
+        "gemini-3.1-pro",         # Gemini 3.1 Pro
+        "gemini-3.1-flash-lite",  # Gemini 3.1 Flash Lite
+        "gemini-3.0-flash",       # Gemini 3 Flash
+        "gemini-2.5-pro",         # Gemini 2.5 Pro
+        "gemini-2.5-flash",       # Gemini 2.5 Flash
+        "gemini-2.5-flash-lite",  # Gemini 2.5 Flash Lite
+        "gemini-2.0-flash",       # Gemini 2 Flash
+        "gemini-2.0-flash-lite",  # Gemini 2 Flash Lite
     ]
     last_err = None
     for model_name in gemini_models:

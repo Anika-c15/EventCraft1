@@ -212,12 +212,17 @@ async def _gemini_vision_extract(
             "Use 0 for any number you cannot find."
         )
 
+    # All vision-capable text-out models from Google AI Studio — newest-first.
+    # Automatically falls through to next model on 429 / rate-limit errors.
     gemini_models = [
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.5-pro",
+        "gemini-3.5-flash",       # Gemini 3.5 Flash
+        "gemini-3.1-flash-lite",  # Gemini 3.1 Flash Lite
+        "gemini-3.0-flash",       # Gemini 3 Flash
+        "gemini-2.5-pro",         # Gemini 2.5 Pro
+        "gemini-2.5-flash",       # Gemini 2.5 Flash
+        "gemini-2.5-flash-lite",  # Gemini 2.5 Flash Lite
+        "gemini-2.0-flash",       # Gemini 2 Flash
+        "gemini-2.0-flash-lite",  # Gemini 2 Flash Lite
     ]
     last_err = None
     for model_name in gemini_models:
