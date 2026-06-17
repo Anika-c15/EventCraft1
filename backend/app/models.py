@@ -89,7 +89,7 @@ class User(Base):
 
 class Event(Base):
     __tablename__ = "events"
-
+    is_name_edited = Column(Boolean, default=False)
     id = Column(String, primary_key=True, default=gen_uuid)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Users, Mail, CheckCircle2, Trash2, Calendar, Settings as SettingsIcon, Info, Plus, ChevronRight, User
+  Users, Mail, CheckCircle2, Trash2, Calendar, Settings as SettingsIcon, Info, Plus, ChevronRight, User, Lock, AlertCircle
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -30,6 +30,11 @@ export const Settings: React.FC = () => {
   const [eventDetails, setEventDetails] = useState<any>(null)
   const [invites, setInvites] = useState<any[]>([])
   
+  // Event Name Edit State
+  const [editEventName, setEditEventName] = useState('')
+  const [isSavingName, setIsSavingName] = useState(false)
+  const isNameLocked = eventDetails?.is_name_edited === true
+
   // Description Edit State
   const [isEditingDesc, setIsEditingDesc] = useState(false)
   const [editDescValue, setEditDescValue] = useState('')
@@ -53,6 +58,7 @@ export const Settings: React.FC = () => {
       const data = await eventsApi.get(targetId)
       setEventDetails(data)
       setEditDescValue(data.description || '')
+      setEditEventName(data.name || '')
     } catch (err: any) {
       console.error(err)
     }
@@ -84,6 +90,43 @@ export const Settings: React.FC = () => {
     }
   }, [eventId])
 
+  const handleUpdateName = async () => {
+    if (!eventId || !editEventName.trim() || editEventName === eventDetails.name) return
+    
+    const isConfirmed = await confirm({
+      title: "Change Event Name?",
+      message: "Are you sure? For security and link stability, you can only change the event name ONE time. It will be permanently locked after this.",
+    })
+    
+    if (!isConfirmed) return
+
+    setIsSavingName(true)
+    try {
+      const res = await fetch(`${BASE_URL}/api/events/${eventId}/name`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: editEventName.trim() })
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.detail || "Failed to update name")
+      }
+      
+      const updated = await res.json()
+      setEventDetails(updated)
+      toast.success("Event name updated and permanently locked!")
+      await loadEventsList() // Refresh sidebar list instantly
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
   const handleSaveDescription = async () => {
     if (!eventId) return
     setSaveDescLoading(true)
@@ -93,7 +136,6 @@ export const Settings: React.FC = () => {
       setEditDescValue(updated.description || '')
       setIsEditingDesc(false)
       toast.success('Description updated successfully!')
-      // Reload list to update in switcher as well
       await loadEventsList()
     } catch (err: any) {
       toast.error(err.message || 'Failed to update description')
@@ -162,7 +204,6 @@ export const Settings: React.FC = () => {
       setNewEventName('')
       setNewEventDesc('')
       setActiveTab('general')
-      // Note: createEvent updates eventId in context, which triggers useEffect
     } catch (err: any) {
       toast.error(err.message || 'Failed to create event')
     } finally {
@@ -260,14 +301,54 @@ export const Settings: React.FC = () => {
 
                     {eventDetails ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                        <div className="md:col-span-2">
-                          <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
-                            Event Name
-                          </span>
-                          <p className="text-sm font-semibold text-gray-800 dark:text-slate-200 bg-gray-50/50 dark:bg-slate-900/40 border border-gray-150 dark:border-slate-800 rounded-xl px-4 py-3">
-                            {eventDetails.name}
-                          </p>
-                        </div>
+                        
+                {/* NAME LOCK SECTION */}
+<div className="md:col-span-2 space-y-2">
+  <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+    Event Name
+  </span>
+  <div className="flex gap-2">
+    <input
+      type="text"
+      value={editEventName}
+      onChange={(e) => setEditEventName(e.target.value)}
+      // Lock input if it's already edited or if the user isn't the owner
+      disabled={isNameLocked || !isOwner}
+      className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${
+        isNameLocked || !isOwner
+          ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-400' 
+          : 'bg-white border-gray-300 text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-white'
+      }`}
+    />
+    
+    {/* STRICT REMOVAL: Only render the button if it is NOT locked */}
+    {isOwner && !isNameLocked && (
+      <Button
+        variant="primary"
+        onClick={handleUpdateName}
+        disabled={isSavingName || editEventName === eventDetails.name}
+        className="px-6 rounded-xl font-bold shadow-md transition-all"
+      >
+        {isSavingName ? 'Saving...' : 'Save Name'}
+      </Button>
+    )}
+  </div>
+  
+  {/* Conditional Status Messages */}
+  {isOwner && !isNameLocked && (
+      <div className="flex items-start gap-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20 p-2.5 rounded-lg border border-orange-100 dark:border-orange-900/30">
+        <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+        <span>You may only change the event name <strong>one time</strong>. After saving, it will be permanently locked.</span>
+      </div>
+  )}
+  {isNameLocked && (
+      <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-gray-100 dark:border-slate-700/50">
+        <Lock size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
+        <span>This event name is locked.</span>
+      </div>
+  )}
+</div>
+{/* END NAME LOCK SECTION */}
 
                         <div>
                           <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
