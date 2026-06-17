@@ -292,10 +292,26 @@ def get_assessment_guide(
     pipeline_config = event.pipeline_config or {}
     criteria = pipeline_config.get("evaluation_criteria", ["Innovation", "Execution", "Presentation", "Impact"])
 
+    # Build full member context
+    members = [
+        {
+            "name": m.name,
+            "institution": m.institution or "Unknown",
+            "level": m.level.value if hasattr(m.level, 'value') else str(m.level),
+            "skills": m.skills or [],
+        }
+        for m in team.members
+    ]
+
     guide = llm.generate_assessment_guide(
         event_name=event.name,
+        event_description=event.description or "",
         team_name=team.name,
+        project_title=team.project_title or "",
+        project_description=team.project_description or "",
+        github_url=team.github_url or team.github_link or "",
         challenge=team.challenge,
+        members=members,
         criteria=criteria,
     )
     return {"team_id": team_id, "team_name": team.name, "guide": guide}

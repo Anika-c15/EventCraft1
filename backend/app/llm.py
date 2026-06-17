@@ -500,21 +500,64 @@ def generate_assessment_guide(
     team_name: str,
     challenge: Optional[str],
     criteria: List[str],
+    event_description: str = "",
+    project_title: str = "",
+    project_description: str = "",
+    github_url: str = "",
+    members: Optional[List[Dict]] = None,
 ) -> str:
     criteria_str = ", ".join(criteria) if criteria else "Innovation, Execution, Presentation, Impact"
-    challenge_str = challenge or "General hackathon challenge"
+    challenge_str = challenge or project_title or "General hackathon challenge"
 
-    prompt = f"""Generate a structured assessment guide for a judge evaluating a hackathon team.
+    member_lines = ""
+    if members:
+        member_lines = "\n".join(
+            f"- {m['name']} ({m.get('institution', 'Unknown')}, {m.get('level', 'Intermediate')}): {', '.join(m.get('skills', [])) or 'No skills listed'}"
+            for m in members
+        )
+    else:
+        member_lines = "Member details not available"
+
+    project_ctx = ""
+    if project_title:
+        project_ctx += f"\nProject Title: {project_title}"
+    if project_description:
+        project_ctx += f"\nProject Description: {project_description[:800]}"
+    if github_url:
+        project_ctx += f"\nGitHub: {github_url}"
+
+    prompt = f"""You are an expert judge advisor for a competitive event. Generate a highly specific, actionable evaluation guide for a judge assessing this team. The guide must be TAILORED to the team's actual project and members — not generic.
 
 Event: {event_name}
+{f'Event Description: {event_description}' if event_description else ''}
 Team: {team_name}
-Challenge: {challenge_str}
+Challenge/Focus: {challenge_str}
+{project_ctx}
+
+Team Members:
+{member_lines}
+
 Evaluation Criteria: {criteria_str}
 
-Write a concise guide (200-300 words) covering:
-1. What to look for in each criterion
-2. 2-3 specific questions to ask the team
-3. Scoring guidance (what 9-10 vs 5-6 vs 1-3 looks like)"""
+Generate a structured guide with these exact sections:
+
+1. PROJECT OVERVIEW
+2-3 sentences summarizing what this team built based on their description.
+
+2. WHAT TO LOOK FOR
+For each criterion, 1-2 specific things to assess based on THIS project:
+{chr(10).join(f'- {c}: what specifically to evaluate for this project' for c in criteria)}
+
+3. SAMPLE QUESTIONS TO ASK
+5-7 specific questions about their actual project — reference their tech stack, project description, or specific choices they made. Make them probing and technical.
+
+4. SCORING GUIDE
+Brief calibration: what 9-10 looks like vs 6-7 vs 3-4 for this specific project type.
+
+5. RED FLAGS TO WATCH
+2-3 things that would indicate a weak submission for this type of project.
+
+Be specific. Reference the actual project title, description, and team skills. Do NOT give generic hackathon advice."""
 
     return _call(prompt)
 
