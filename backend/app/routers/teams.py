@@ -426,8 +426,15 @@ def save_submission_draft(
         models.PipelineStage.event_id == participant.event_id,
         models.PipelineStage.status == models.StageStatus.active
     ).first()
-    from ..llm import check_stage_allows_submission
-    if not active_stage or not check_stage_allows_submission(active_stage.name, active_stage.description or ""):
+    allows_submission = False
+    if active_stage:
+        db_allows = getattr(active_stage, "allows_submission", None)
+        if db_allows is not None:
+            allows_submission = db_allows
+        else:
+            from ..llm import check_stage_allows_submission
+            allows_submission = check_stage_allows_submission(active_stage.name, active_stage.description or "")
+    if not allows_submission:
         stage_name = active_stage.name if active_stage else "Participant Intake"
         raise HTTPException(400, f"Project submissions are not open during the '{stage_name}' stage")
 
@@ -474,8 +481,15 @@ def submit_final_submission(
         models.PipelineStage.event_id == participant.event_id,
         models.PipelineStage.status == models.StageStatus.active
     ).first()
-    from ..llm import check_stage_allows_submission
-    if not active_stage or not check_stage_allows_submission(active_stage.name, active_stage.description or ""):
+    allows_submission = False
+    if active_stage:
+        db_allows = getattr(active_stage, "allows_submission", None)
+        if db_allows is not None:
+            allows_submission = db_allows
+        else:
+            from ..llm import check_stage_allows_submission
+            allows_submission = check_stage_allows_submission(active_stage.name, active_stage.description or "")
+    if not allows_submission:
         stage_name = active_stage.name if active_stage else "Participant Intake"
         raise HTTPException(400, f"Project submissions are not open during the '{stage_name}' stage")
 

@@ -378,8 +378,9 @@ def get_portal(
     submission_portal_active = False
     results_phase_active = False
     if current_stage:
-        if getattr(current_stage, "allows_submission", False):
-            submission_portal_active = True
+        db_allows = getattr(current_stage, "allows_submission", None)
+        if db_allows is not None:
+            submission_portal_active = db_allows
         else:
             submission_portal_active = check_stage_allows_submission(current_stage.name, current_stage.description or "")
         results_phase_active = check_stage_is_results_phase(current_stage.name, current_stage.description or "")
