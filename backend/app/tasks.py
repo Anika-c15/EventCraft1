@@ -28,14 +28,19 @@ def _make_celery():
     try:
         import redis as redis_lib
         # Quick connectivity check before creating Celery app
-        r = redis_lib.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+        redis_url = settings.REDIS_URL or ""
+        if redis_url.startswith("rediss://"):
+            _sep = "&" if "?" in redis_url else "?"
+            redis_url = f"{redis_url}{_sep}ssl_cert_reqs=none"
+            
+        r = redis_lib.from_url(redis_url, socket_connect_timeout=1)
         r.ping()
 
         from celery import Celery
         app = Celery(
             "eventcraft",
-            broker=settings.REDIS_URL,
-            backend=settings.REDIS_URL,
+            broker=redis_url,
+            backend=redis_url,
             include=["app.tasks"],
         )
         app.conf.update(
