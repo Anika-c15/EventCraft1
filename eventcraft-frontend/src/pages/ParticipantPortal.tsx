@@ -5,15 +5,16 @@ import {
   User, Mail, Building, Users, Calendar,
   ArrowLeft, Award, CheckCircle, Clock, Star,
   Github, Youtube, Lock, Send, BarChart2,
-  Loader2, Home, Folder, Sun, Moon, Bell, Trophy, Edit2, Bot, Sparkles,
+  Loader2, Home, Folder, Sun, Moon, Bell, Trophy, Edit2, Bot, Sparkles, Share2, Trash, ExternalLink,
 } from 'lucide-react'
 import { Badge } from '../components/ui/Badge'
-import { participantsApi, peerReviewApi, teamsApi } from '../api/client'
+import { participantsApi, peerReviewApi, teamsApi, socialScrapingApi } from '../api/client'
 import { useWebSocket } from '../hooks/useWebSocket'
 import logoImage from '../assets/logo.png'
 import { useAppContext } from '../context/AppContext'
 import { QAChat, QANotificationPopup } from '../components/QAChat'
 import { OmniAgentSidebar } from '../components/OmniAgentSidebar'
+import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
 
 const levelVariant = (level: string) => {
   switch (level) {
@@ -168,13 +169,16 @@ export const ParticipantPortal: React.FC = () => {
   const [searchParams] = useSearchParams()
   const eventId = searchParams.get('event')
 
+  const toast = useToast()
+  const confirm = useConfirm()
+
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showroom, setShowroom] = useState<any[]>([])
 
   // Tabs state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission' | 'social'>('dashboard')
 
   // Submission Hub Form State
   const [projectTitle, setProjectTitle] = useState('')
@@ -195,6 +199,100 @@ export const ParticipantPortal: React.FC = () => {
   const [renameLoading, setRenameLoading] = useState(false)
   const [renameError, setRenameError] = useState('')
   const [renameSuccess, setRenameSuccess] = useState(false)
+
+  // Social advocacy states
+  const [socialPosts, setSocialPosts] = useState<any[]>([])
+  const [socialUrl, setSocialUrl] = useState('')
+  const [socialScreenshot, setSocialScreenshot] = useState<File | null>(null)
+  const [socialMethod, setSocialMethod] = useState<'auto' | 'screenshot'>('auto')
+  const [socialSubmitting, setSocialSubmitting] = useState(false)
+  const [socialError, setSocialError] = useState('')
+  const [socialSuccess, setSocialSuccess] = useState('')
+  const [socialPostsLoading, setSocialPostsLoading] = useState(false)
+
+  const loadSocialPosts = useCallback(() => {
+    if (!eventId || !data?.team?.id) return
+    setSocialPostsLoading(true)
+    socialScrapingApi.getTeamSocialPosts(eventId, data.team.id)
+      .then(posts => {
+        setSocialPosts(posts)
+        setSocialPostsLoading(false)
+      })
+      .catch(err => {
+        console.error(err)
+        setSocialPostsLoading(false)
+      })
+  }, [eventId, data?.team?.id])
+
+  useEffect(() => {
+    if (activeTab === 'social' && data?.team?.id) {
+      loadSocialPosts()
+      // Set interval to poll status every 30 seconds while on this tab
+      const interval = setInterval(loadSocialPosts, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [activeTab, data?.team?.id])
+
+  const handleSocialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!socialUrl) {
+      setSocialError('Please enter a post URL.')
+      return
+    }
+    if (socialMethod === 'screenshot' && !socialScreenshot) {
+      setSocialError('Please upload a screenshot for screenshot verification.')
+      return
+    }
+
+    setSocialSubmitting(true)
+    setSocialError('')
+    setSocialSuccess('')
+
+    try {
+      await socialScrapingApi.submitSocialPost(eventId!, data.team.id, socialUrl, socialScreenshot || undefined)
+      const successMsg = socialMethod === 'screenshot'
+        ? 'Screenshot submitted. Gemini Vision will extract your engagement data automatically.'
+        : 'Post submitted for auto-verification. Engagement counts will update shortly.'
+      setSocialSuccess(successMsg)
+      toast.success(successMsg)
+      setSocialUrl('')
+      setSocialScreenshot(null)
+      const fileInput = document.getElementById('screenshot-file-input') as HTMLInputElement
+      if (fileInput) fileInput.value = ''
+      loadSocialPosts()
+    } catch (err: any) {
+      const errMsg = err.message || 'Failed to submit post.'
+      setSocialError(errMsg)
+      toast.error(errMsg)
+    } finally {
+      setSocialSubmitting(false)
+    }
+  }
+
+  const handleDeletePost = async (postId: string) => {
+    const approved = await confirm({
+      title: 'Delete Social Post?',
+      message: 'Are you sure you want to delete this social post link? Your team will lose engagement credit for it.'
+    })
+    if (!approved) return
+    try {
+      await socialScrapingApi.deleteSocialPost(eventId!, data.team.id, postId)
+      toast.success('Social post deleted successfully.')
+      loadSocialPosts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete post.')
+    }
+  }
+
+  const handleUploadProofLater = async (postId: string, file: File) => {
+    try {
+      await socialScrapingApi.uploadPostProof(eventId!, data.team.id, postId, file)
+      toast.success('Screenshot proof uploaded. Gemini Vision will process it shortly.')
+      loadSocialPosts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload screenshot.')
+    }
+  }
 
   const loadPortal = useCallback(() => {
     if (!token || !eventId) {
@@ -220,8 +318,15 @@ export const ParticipantPortal: React.FC = () => {
       msg.type === 'anomaly_flagged'
     ) {
       loadPortal()
+    } else if (
+      msg.type === 'social:post_created' ||
+      msg.type === 'social:post_updated' ||
+      msg.type === 'social:post_deleted'
+    ) {
+      loadPortal()
+      loadSocialPosts()
     }
-  }, [loadPortal])
+  }, [loadPortal, loadSocialPosts])
 
   useWebSocket(eventId, handleWsMessage, token)
 
@@ -356,6 +461,7 @@ export const ParticipantPortal: React.FC = () => {
 
   const weights = data?.scoring_weights || { judge: 0.70, peer: 0.15, social: 0.15 }
   const isPeerVotingEnabled = (weights.peer ?? 0) > 0
+  const isSocialVotingEnabled = (weights.social ?? 0) > 0
 
   // Rename window: open only during Team Formation stage, locked from Evaluation onwards
   const currentStageLower = (current_stage || '').toLowerCase()
@@ -448,6 +554,24 @@ export const ParticipantPortal: React.FC = () => {
             >
               <Folder size={14} />
               <span>My Submission Hub</span>
+            </button>
+
+            <button
+              id="social-advocacy-tab-button"
+              disabled={isPhase1 || !isSocialVotingEnabled}
+              onClick={() => !isPhase1 && isSocialVotingEnabled && setActiveTab('social')}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${isPhase1 || !isSocialVotingEnabled
+                ? 'opacity-50 cursor-not-allowed text-gray-400'
+                : activeTab === 'social'
+                  ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200'
+                }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Share2 size={14} />
+                <span>Social Scraping</span>
+              </div>
+              {(isPhase1 || !isSocialVotingEnabled) && <Lock size={12} className="text-gray-400" />}
             </button>
           </nav>
 
@@ -1278,6 +1402,267 @@ export const ParticipantPortal: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'social' && (
+          <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-3 duration-300">
+            {/* ── Header ── */}
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800/60 p-6">
+              <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 pb-4 mb-4">
+                <div className="p-2.5 bg-primary/10 rounded-lg text-primary">
+                  <Share2 size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Social Scraping</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Spread the word about your hackathon project on social media and earn points</p>
+                </div>
+              </div>
+
+              {/* ── Guidelines & Info Cards ── */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                  <span className="text-primary font-bold text-sm block mb-1">Step 1: Write Your Post</span>
+                  <span className="text-[11px] text-gray-600 dark:text-slate-400 leading-relaxed block">
+                    Create a public post on <strong>Twitter/X</strong>, <strong>LinkedIn</strong>, or <strong>Instagram</strong> describing your hackathon project. Feel free to include links, images, or project tags.
+                  </span>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                  <span className="text-primary font-bold text-sm block mb-1">Step 2: Add Verification Tags</span>
+                  <span className="text-[11px] text-gray-600 dark:text-slate-400 leading-relaxed block">
+                    Your post must contain the event hashtag <strong>#{event_name?.replace(/[^a-zA-Z0-9]/g, '') || 'EventCraft'}</strong> AND your team's unique verification code: <strong className="text-primary bg-primary/10 px-1 py-0.5 rounded font-mono">EC-{team?.id?.substring(0, 8).toUpperCase()}</strong> to verify authorship.
+                  </span>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-100 dark:border-slate-800">
+                  <span className="text-primary font-bold text-sm block mb-1">Step 3: Verification Methods</span>
+                  <span className="text-[11px] text-gray-600 dark:text-slate-400 leading-relaxed block">
+                    Submit the URL directly using <strong>Method A (Auto-verify)</strong>. For accurate engagement counts, also upload a screenshot using <strong>Method B (Screenshot Proof)</strong> — our AI reads the real likes &amp; reposts from the image, and admins can manually review it too.
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Submit Forms panel */}
+                <div className="lg:col-span-1 space-y-6">
+                  <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">Submit New Post</h3>
+
+                    {/* Method Selector Tabs */}
+                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-gray-50 dark:bg-slate-950/60 rounded-lg">
+                      <button
+                        onClick={() => setSocialMethod('auto')}
+                        type="button"
+                        className={`text-[10px] font-bold py-1.5 px-2.5 rounded-md transition-all ${socialMethod === 'auto' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'}`}
+                      >
+                        Method A: URL Only
+                      </button>
+                      <button
+                        onClick={() => setSocialMethod('screenshot')}
+                        type="button"
+                        className={`text-[10px] font-bold py-1.5 px-2.5 rounded-md transition-all ${socialMethod === 'screenshot' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500'}`}
+                      >
+                        ✨ Method B: AI Screenshot
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSocialSubmit} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Post URL</label>
+                        <input
+                          type="url"
+                          required
+                          value={socialUrl}
+                          onChange={(e) => setSocialUrl(e.target.value)}
+                          placeholder="https://x.com/username/status/..."
+                          className="w-full text-xs bg-gray-50 dark:bg-slate-950/40 border border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-900 dark:text-white"
+                        />
+                      </div>
+
+                      {socialMethod === 'screenshot' && (
+                        <div className="space-y-1 animate-in fade-in duration-200">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Screenshot Proof</label>
+                          <input
+                            id="screenshot-file-input"
+                            type="file"
+                            accept="image/*"
+                            required
+                            onChange={(e) => setSocialScreenshot(e.target.files?.[0] || null)}
+                            className="w-full text-xs border border-dashed border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-500 bg-gray-50 dark:bg-slate-950/40"
+                          />
+                        </div>
+                      )}
+
+                      {socialError && (
+                        <div className="text-[10px] text-red-600 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-950/30 p-2.5 rounded-lg font-medium">
+                          {socialError}
+                        </div>
+                      )}
+
+                      {socialSuccess && (
+                        <div className="text-[10px] text-green-700 bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-950/30 p-2.5 rounded-lg font-medium">
+                          {socialSuccess}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={socialSubmitting}
+                        className="w-full bg-primary hover:bg-orange-600 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        {socialSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                        {socialSubmitting ? 'Submitting...' : socialMethod === 'screenshot' ? 'Submit Screenshot Proof' : 'Submit for Auto-Verification'}
+                      </button>
+                    </form>
+
+                    <div className="text-[10px] text-gray-400 dark:text-slate-500 leading-normal border-t border-gray-100 dark:border-slate-800/80 pt-3">
+                      ℹ️ Note: Auto-verification scans posts every 2 minutes. You can submit up to 5 links per team. A 30-second submission cooldown applies.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submissions List Panel */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Stats & Normalized Score Card */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Social Score</span>
+                      {team.final_score !== null && team.final_score !== undefined ? (
+                        <>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">{(team.social_vote_score ?? 0).toFixed(2)}</span>
+                            <span className="text-xs text-gray-400">/ 10.0</span>
+                          </div>
+                          <span className="text-[9px] text-gray-400 block mt-1">Based on engagement proportion to the top team</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Lock size={13} className="text-gray-300 dark:text-slate-600 flex-shrink-0" />
+                            <span className="text-sm font-semibold text-gray-300 dark:text-slate-600">Pending</span>
+                          </div>
+                          <span className="text-[9px] text-gray-400 block mt-1">Released after admin locks final scores</span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Verified Social Posts</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">{team.social_vote_total_votes ?? 0}</span>
+                        <span className="text-xs text-gray-400">posts</span>
+                      </div>
+                      <span className="text-[9px] text-gray-400 block mt-1">Maximum 5 submitted posts total</span>
+                    </div>
+                  </div>
+
+                  {/* Submissions Table/List */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">Submitted Links</h3>
+
+                    {socialPostsLoading ? (
+                      <div className="py-8 text-center text-xs text-gray-500">
+                        <Loader2 size={16} className="animate-spin mx-auto mb-2 text-primary" />
+                        Loading submitted links...
+                      </div>
+                    ) : socialPosts.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-gray-500 bg-gray-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-gray-200 dark:border-slate-800">
+                        No social posts submitted yet. Use the form on the left to add one.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-100 dark:border-slate-800 text-[10px] font-bold text-gray-400 uppercase">
+                              <th className="py-2.5 pr-6 w-24">Platform</th>
+                              <th className="py-2.5 pr-6">Post URL</th>
+                              <th className="py-2.5 pr-6 w-44">Status</th>
+                              <th className="py-2.5 pr-6 w-36">Engagement</th>
+                              <th className="py-2.5 text-right w-24">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60 text-xs text-gray-700 dark:text-slate-300">
+                            {socialPosts.map((post) => (
+                              <tr key={post.id} className="border-b border-gray-100 dark:border-slate-800/60 last:border-0">
+                                <td className="py-3 pr-6 font-semibold text-gray-900 dark:text-white uppercase tracking-wider font-mono text-[10px] whitespace-nowrap">
+                                  {post.platform}
+                                </td>
+                                <td className="py-3 pr-6 max-w-xs truncate">
+                                  <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
+                                    {post.url}
+                                    <ExternalLink size={10} />
+                                  </a>
+                                </td>
+                                <td className="py-3 pr-6 whitespace-nowrap">
+                                  {post.status === 'pending' && (
+                                    <span className="bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
+                                      Scraping Pending
+                                    </span>
+                                  )}
+                                  {post.status === 'verified' && (
+                                    <span className="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
+                                      Verified
+                                    </span>
+                                  )}
+                                  {post.status === 'fetch_error' && (
+                                    <span className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap" title="Scrape failed. Please upload screenshot proof.">
+                                      Scrape Failed
+                                    </span>
+                                  )}
+                                  {post.status === 'pending_review' && (
+                                    <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
+                                      Awaiting Admin Review
+                                    </span>
+                                  )}
+                                  {post.status === 'verification_failed' && (
+                                    <span className="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900/40 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
+                                      Rejected
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 pr-6 font-medium text-gray-500 font-mono text-[10px] whitespace-nowrap">
+                                  {post.status === 'verified' ? (
+                                    <span>{post.likes} likes, {post.shares} shares</span>
+                                  ) : post.status === 'pending_review' ? (
+                                    <span className="italic text-gray-400">Review pending</span>
+                                  ) : (
+                                    <span>—</span>
+                                  )}
+                                </td>
+                                <td className="py-3 text-right whitespace-nowrap">
+                                  <div className="flex items-center justify-end gap-2">
+                                    {!post.screenshot_url && post.status !== 'pending_review' && (
+                                      <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[9px] px-2 py-1 rounded transition-colors block whitespace-nowrap">
+                                        Upload Screenshot Proof
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0]
+                                            if (file) handleUploadProofLater(post.id, file)
+                                          }}
+                                        />
+                                      </label>
+                                    )}
+                                    <button
+                                      onClick={() => handleDeletePost(post.id)}
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 p-1.5 rounded transition-all"
+                                      title="Delete post link"
+                                    >
+                                      <Trash size={12} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

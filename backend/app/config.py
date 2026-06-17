@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     INSTAGRAM_BUSINESS_ACCOUNT_ID: str = ""
     INSTAGRAM_TOKEN_EXPIRES_AT: str = ""
 
+    # Supabase (for social scraper screenshot storage)
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
+    SUPABASE_STORAGE_BUCKET: str = "social-screenshots"
+
     class Config:
         env_file = str(BASE_DIR / ".env")
         extra = "ignore"

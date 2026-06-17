@@ -1,6 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+import os
 
 from .database import engine, SessionLocal
 from . import models
@@ -13,6 +18,7 @@ from .routers import qa
 from .routers import subscribers as subscribers_router
 from .routers import social_scraping
 from .scheduler import start_scheduler, scheduler
+from .rate_limiter import limiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -151,6 +157,39 @@ def _migrate_db():
                 print("🚀 Migrated: created social_polls table")
             except Exception as tbl_err:
                 print(f"⚠️ Could not create social_polls table: {tbl_err}")
+
+        # ── social_posts table ──────────────────────────────────────────────
+        if "social_posts" not in existing_tables:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE social_posts (
+                            id                  TEXT PRIMARY KEY,
+                            team_id             TEXT NOT NULL REFERENCES teams(id),
+                            event_id            TEXT NOT NULL REFERENCES events(id),
+                            platform            TEXT NOT NULL,
+                            url                 TEXT NOT NULL,
+                            status              TEXT DEFAULT 'pending',
+                            likes               INTEGER DEFAULT 0,
+                            shares              INTEGER DEFAULT 0,
+                            screenshot_url      TEXT,
+                            screenshot_hash     TEXT,
+                            last_scraped_at     TIMESTAMP,
+                            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                print("🚀 Migrated: created social_posts table")
+            except Exception as tbl_err:
+                print(f"⚠️ Could not create social_posts table: {tbl_err}")
+        else:
+            columns_sp = [col["name"] for col in inspector.get_columns("social_posts")]
+            if "screenshot_hash" not in columns_sp:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE social_posts ADD COLUMN screenshot_hash TEXT"))
+                    print("🚀 Migrated: added screenshot_hash to social_posts")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add screenshot_hash to social_posts: {col_err}")
 
         # ── agent_messages table migrations ─────────────────────────────────
         if "agent_messages" in existing_tables:
@@ -425,6 +464,25 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": f"Rate limit exceeded. {exc.detail}",
+            "retry_after": getattr(exc, 'retry_after', None),
+        },
+    )
+
+app.add_middleware(SlowAPIMiddleware)
+
+# Ensure uploads directory exists and mount static files serving
+os.makedirs("static/uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,35 +1,40 @@
 import asyncio
 import datetime
+import re
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
+from pydantic import BaseModel
 
-from ..database import get_db
+from ..database import get_db, SessionLocal
 from ..auth import require_committee
 from .. import models, schemas
-from ..models import Event, Team, SocialPoll, SocialPollStatus
-from ..social_service import get_platform, check_platform_auth, PlatformAPIError, RateLimitError
-from ..llm import (
-    generate_poll_content,
-    normalize_poll_votes,
-    aggregate_cross_platform_scores,
-    generate_social_campaign_summary
-)
+from ..models import Event, Team, SocialPost
 from ..config import settings
 from ..ws import broadcast
+from ..supabase_storage import upload_screenshot
+from ..llm import generate_social_campaign_summary
+from ..rate_limiter import limiter
 
 router = APIRouter(prefix="/api/events/{event_id}/social-scraping", tags=["social-scraping"])
 
 DEFAULT_SOCIAL_CONFIG = {
     "enabled": False,
-    "platforms": [],
+    "platforms": ["twitter", "linkedin"],
     "poll_type": "hybrid",
     "poll_duration_minutes": 1440,
     "auto_post_on_evaluation": False,
     "auto_fetch_on_completion": True,
     "min_vote_threshold": 30
 }
+
+
+class PostVerifyPayload(BaseModel):
+    likes: int
+    shares: int
+    approve: bool
+
 
 def check_social_scraping_allowed(event_id: str, db: Session):
     event = db.query(Event).filter(Event.id == event_id).first()
@@ -43,7 +48,8 @@ def check_social_scraping_allowed(event_id: str, db: Session):
 
 
 @router.get("/config")
-def get_social_config(event_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
+@limiter.limit("30/minute")
+def get_social_config(request: Request, event_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -75,8 +81,11 @@ def get_social_config(event_id: str, db: Session = Depends(get_db), _: models.Us
         
     return config
 
+
 @router.put("/config")
+@limiter.limit("10/minute")
 def update_social_config(
+    request: Request,
     event_id: str,
     payload: schemas.SocialConfigUpdate,
     db: Session = Depends(get_db),
@@ -100,9 +109,12 @@ def update_social_config(
     db.commit()
     return new_social
 
+
 @router.get("/auth-status")
-def get_auth_status(event_id: str, _: models.User = Depends(require_committee)):
+@limiter.limit("20/minute")
+def get_auth_status(request: Request, event_id: str, _: models.User = Depends(require_committee)):
     # Check configurations for each platform
+    from ..social_service import check_platform_auth
     return {
         "twitter": check_platform_auth("twitter"),
         "linkedin": check_platform_auth("linkedin"),
@@ -110,658 +122,725 @@ def get_auth_status(event_id: str, _: models.User = Depends(require_committee)):
         "mock": check_platform_auth("mock")
     }
 
-@router.post("/generate-polls")
-async def generate_draft_polls(
+
+# ── Participant Endpoints ──────────────────────────────────────────────────────
+
+@router.get("/teams/{team_id}/social-posts")
+@limiter.limit("60/minute")
+def get_team_social_posts(
+    request: Request,
     event_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
+    team_id: str,
+    db: Session = Depends(get_db)
 ):
     check_social_scraping_allowed(event_id, db)
-    event = db.query(Event).filter(Event.id == event_id).first()
-    if not event:
-        raise HTTPException(404, "Event not found")
+    posts = db.query(SocialPost).filter(
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).order_by(SocialPost.created_at.desc()).all()
+    return posts
+
+
+# ── Vision Engagement Extractors (Gemini primary, Groq fallback) ──────────────
+
+GEMINI_VISION_MODEL = "gemini-2.5-flash"
+GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
+GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_API_BASE = "https://api.groq.com/openai/v1"
+
+async def _gemini_vision_extract(
+    image_b64: str,
+    mime: str,
+    post_url: str = None,
+    expected_token: str = None,
+    event_hashtag: str = None
+) -> tuple[int, int, bool]:
+    """Gemini Vision: verify URL match + extract likes/reposts.
+    Raises RuntimeError on any failure so callers can fall back to Groq.
+    """
+    import httpx, json as _json
+    key = (settings.GEMINI_API_KEY or "").strip()
+    if not key:
+        raise RuntimeError("No GEMINI_API_KEY configured")
+
+    if post_url:
+        text_prompt = (
+            f"This screenshot was submitted as proof for a social media post. "
+            f"The claimed post URL is: {post_url}\n"
+        )
+        if expected_token and event_hashtag:
+            text_prompt += (
+                f"The post MUST contain the verification code '{expected_token}' "
+                f"and the event hashtag '{event_hashtag}' (case-insensitive) somewhere in the post text visible in the screenshot.\n"
+            )
+        text_prompt += (
+            "\nPlease do two things:\n"
+            "1. Verify: Does this screenshot appear to show the post from that URL? "
+            "Check if the username, post content, or any visible URL/profile in the screenshot "
+            "is consistent with the claimed URL. It is okay if the exact URL is not visible — "
+            "just check whether the post content and account seem consistent with the domain and path in the URL. "
+        )
+        if expected_token and event_hashtag:
+            text_prompt += (
+                f"Additionally, verify that BOTH the verification code '{expected_token}' and "
+                f"the event hashtag '{event_hashtag}' (case-insensitive) are clearly visible "
+                f"in the text of the post in the screenshot. If either is missing or incorrect, answer false for url_matches.\n"
+            )
+        text_prompt += (
+            "Answer true or false for url_matches.\n"
+            "2. Extract: What are the exact likes count and reposts/retweets/shares count visible in this screenshot?\n"
+            "3. Extract tags: Find and extract any verification code (in the format 'EC-XXXXXXXX') and hashtags present in the post text.\n\n"
+            "Reply with ONLY a JSON object, no markdown, no explanation:\n"
+            '{\n'
+            '  "url_matches": true/false,\n'
+            '  "likes": <integer>,\n'
+            '  "reposts": <integer>,\n'
+            '  "found_verification_code": "<extracted EC-XXXXXXXX code or empty string>",\n'
+            '  "found_hashtag": "<extracted hashtags or empty string>"\n'
+            '}\n'
+            "Set url_matches to false if the screenshot clearly does NOT match the claimed URL, "
+            "or does not contain the required verification code or hashtag. "
+            "Use 0 for any count you cannot find."
+        )
+    else:
+        text_prompt = (
+            "This is a social media post screenshot. "
+            "Find the exact likes count and reposts/retweets/shares count from the engagement stats. "
+            "Reply with ONLY a JSON object, no markdown, no explanation: "
+            '{\"url_matches\": true, \"likes\": <integer>, \"reposts\": <integer>}. '
+            "Use 0 for any number you cannot find."
+        )
+
+    gemini_models = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.5-pro",
+    ]
+    last_err = None
+    for model_name in gemini_models:
+        api_url = f"{GEMINI_API_BASE}/{model_name}:generateContent?key={key}"
+        payload = {
+            "contents": [{"parts": [
+                {"text": text_prompt},
+                {"inline_data": {"mime_type": mime, "data": image_b64}}
+            ]}],
+            "generationConfig": {
+                "temperature": 0.0,
+                "maxOutputTokens": 200,
+                "thinkingConfig": {"thinkingBudget": 0}
+            }
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.post(api_url, json=payload)
+                if res.status_code != 200:
+                    raise RuntimeError(f"API error {res.status_code}: {res.text[:200]}")
+                data = res.json()
+                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                text = next((p.get("text", "") for p in parts if "text" in p), "").strip()
+                json_match = re.search(r'\{[^}]+\}', text)
+                if not json_match:
+                    raise RuntimeError(f"Returned unparseable response: {text[:100]}")
+                parsed = _json.loads(json_match.group(0))
+                likes = int(parsed.get("likes", 0))
+                reposts = int(parsed.get("reposts", 0))
+                url_matches = bool(parsed.get("url_matches", True))
+
+                # Strict verification check
+                if expected_token:
+                    found_token = parsed.get("found_verification_code", "").strip().upper()
+                    expected_clean = expected_token.replace("-", "").upper()
+                    found_clean = found_token.replace("-", "").upper()
+                    if expected_clean not in found_clean:
+                        print(f"[Vision Verification/Gemini] Strict Token Mismatch! Expected: {expected_token}, Found: {found_token}")
+                        url_matches = False
+
+                if event_hashtag:
+                    found_hashtag = parsed.get("found_hashtag", "").strip().lower()
+                    expected_clean = event_hashtag.replace("#", "").lower()
+                    found_clean = found_hashtag.replace("#", "").lower()
+                    if expected_clean not in found_clean:
+                        print(f"[Vision Verification/Gemini] Strict Hashtag Mismatch! Expected: {event_hashtag}, Found: {found_hashtag}")
+                        url_matches = False
+
+                print(f"[Vision OCR] Model {model_name} succeeded!")
+                return likes, reposts, url_matches
+        except Exception as err:
+            print(f"[Vision OCR] Model {model_name} failed: {err}")
+            last_err = err
+            continue
+
+    raise RuntimeError(f"All Gemini models failed. Last error: {last_err}")
+
+
+async def _groq_vision_extract(
+    image_b64: str,
+    mime: str,
+    post_url: str = None,
+    expected_token: str = None,
+    event_hashtag: str = None
+) -> tuple[int, int, bool]:
+    """Groq vision fallback using llama-4-scout (OpenAI-compatible API with vision).
+    Raises RuntimeError on any failure.
+    """
+    import httpx, json as _json
+    key = (settings.GROQ_API_KEY or "").strip()
+    if not key:
+        raise RuntimeError("No GROQ_API_KEY configured")
+
+    if post_url:
+        text_prompt = (
+            f"This screenshot was submitted as proof for a social media post. "
+            f"The claimed post URL is: {post_url}\n"
+        )
+        if expected_token and event_hashtag:
+            text_prompt += (
+                f"The post MUST contain the verification code '{expected_token}' "
+                f"and the event hashtag '{event_hashtag}' (case-insensitive) somewhere in the post text visible in the screenshot.\n"
+            )
+        text_prompt += (
+            "\nPlease do two things:\n"
+            "1. Verify: Does this screenshot appear to show the post from that URL, and does it contain the required verification code and hashtag? "
+            "Check if the username/account and content match the URL domain and path. "
+        )
+        if expected_token and event_hashtag:
+            text_prompt += (
+                f"Verify that both the verification code '{expected_token}' and "
+                f"the event hashtag '{event_hashtag}' (case-insensitive) are clearly visible in the text of the post in the screenshot. "
+                "If either is missing, answer false for url_matches.\n"
+            )
+        text_prompt += (
+            "2. What are the likes count and reposts/shares count visible in this screenshot?\n"
+            "3. Extract tags: Find and extract any verification code (in the format 'EC-XXXXXXXX') and hashtags present in the post text.\n\n"
+            "Reply with ONLY a JSON object (no markdown):\n"
+            '{\n'
+            '  "url_matches": true/false,\n'
+            '  "likes": <integer>,\n'
+            '  "reposts": <integer>,\n'
+            '  "found_verification_code": "<extracted EC-XXXXXXXX code or empty string>",\n'
+            '  "found_hashtag": "<extracted hashtags or empty string>"\n'
+            '}\n'
+            "Set url_matches to false if the screenshot clearly does NOT match, or does not contain the required code or hashtag. "
+            "Use 0 for any count you cannot find."
+        )
+    else:
+        text_prompt = (
+            "This is a social media post screenshot. "
+            "Find the exact likes count and reposts/shares count from the engagement stats. "
+            'Reply ONLY with JSON (no markdown): {\"url_matches\": true, \"likes\": <integer>, \"reposts\": <integer>}. '
+            "Use 0 for any count you cannot find."
+        )
+
+    payload = {
+        "model": GROQ_VISION_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": text_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}}
+            ]
+        }],
+        "temperature": 0,
+        "max_tokens": 200
+    }
+    api_url = f"{GROQ_API_BASE}/chat/completions"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        res = await client.post(
+            api_url, json=payload,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        )
+        if res.status_code != 200:
+            raise RuntimeError(f"Groq Vision API error {res.status_code}: {res.text[:200]}")
+        data = res.json()
+        text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        json_match = re.search(r'\{[^}]+\}', text)
+        if not json_match:
+            raise RuntimeError(f"Groq Vision returned unparseable response: {text[:100]}")
+        parsed = _json.loads(json_match.group(0))
+        likes = int(parsed.get("likes", 0))
+        reposts = int(parsed.get("reposts", 0))
+        url_matches = bool(parsed.get("url_matches", True))
+
+        # Strict verification check
+        if expected_token:
+            found_token = parsed.get("found_verification_code", "").strip().upper()
+            expected_clean = expected_token.replace("-", "").upper()
+            found_clean = found_token.replace("-", "").upper()
+            if expected_clean not in found_clean:
+                print(f"[Vision Verification/Groq] Strict Token Mismatch! Expected: {expected_token}, Found: {found_token}")
+                url_matches = False
+
+        if event_hashtag:
+            found_hashtag = parsed.get("found_hashtag", "").strip().lower()
+            expected_clean = event_hashtag.replace("#", "").lower()
+            found_clean = found_hashtag.replace("#", "").lower()
+            if expected_clean not in found_clean:
+                print(f"[Vision Verification/Groq] Strict Hashtag Mismatch! Expected: {event_hashtag}, Found: {found_hashtag}")
+                url_matches = False
+
+        return likes, reposts, url_matches
+
+
+async def _extract_metrics_from_screenshot(
+    screenshot_url: str,
+    post_url: str = None,
+    expected_token: str = None,
+    event_hashtag: str = None
+) -> tuple[int, int, bool]:
+    """
+    Download a screenshot and run it through vision AI to:
+      1. Verify the screenshot matches the claimed `post_url` (when provided)
+      2. Verify the screenshot displays the team's verification code and event hashtag
+      3. Extract likes and reposts counts from the image.
+
+    Provider chain: Gemini Vision → Groq Vision (llama-4-scout) → safe defaults.
+    Returns (likes, reposts, url_matches).
+    """
+    import httpx, base64 as _b64
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            img_res = await client.get(screenshot_url)
+            if img_res.status_code != 200:
+                print(f"[Vision OCR] Could not download image: {img_res.status_code}")
+                return 0, 0, True  # Can't download: skip check
+            img_b64 = _b64.b64encode(img_res.content).decode("utf-8")
+
+        mime = "image/jpeg"
+        url_lower = screenshot_url.lower()
+        if url_lower.endswith(".png"):
+            mime = "image/png"
+        elif url_lower.endswith(".webp"):
+            mime = "image/webp"
+        elif url_lower.endswith(".gif"):
+            mime = "image/gif"
+
+        # ── 1. Try Gemini Vision ───────────────────────────────────────────
+        try:
+            likes, reposts, url_matches = await _gemini_vision_extract(img_b64, mime, post_url, expected_token, event_hashtag)
+            print(f"[Vision OCR/Gemini] url={post_url} → likes={likes}, reposts={reposts}, url_matches={url_matches}")
+            return likes, reposts, url_matches
+        except Exception as gemini_err:
+            print(f"[Vision OCR] Gemini failed: {gemini_err}. Trying Groq fallback...")
+
+        # ── 2. Groq Vision fallback ────────────────────────────────────────
+        try:
+            likes, reposts, url_matches = await _groq_vision_extract(img_b64, mime, post_url, expected_token, event_hashtag)
+            print(f"[Vision OCR/Groq] url={post_url} → likes={likes}, reposts={reposts}, url_matches={url_matches}")
+            return likes, reposts, url_matches
+        except Exception as groq_err:
+            print(f"[Vision OCR] Groq fallback also failed: {groq_err}.")
+            raise RuntimeError(f"Groq fallback failed: {groq_err}")
+
+    except Exception as e:
+        print(f"[Vision OCR] Unexpected error for {screenshot_url}: {e}")
+        raise RuntimeError(f"Vision OCR failed: {e}")
+
+
+
+async def run_immediate_scrape(event_id: str):
+    db = SessionLocal()
+    try:
+        await scrape_pending_posts(event_id, db)
+    finally:
+        db.close()
+
+
+@router.post("/teams/{team_id}/social-posts")
+@limiter.limit("10/minute")
+async def submit_social_post(
+    request: Request,
+    event_id: str,
+    team_id: str,
+    background_tasks: BackgroundTasks,
+    url: str = Form(...),
+    screenshot_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    check_social_scraping_allowed(event_id, db)
     
-    config = get_social_config(event_id, db)
-    if not config.get("enabled"):
-        raise HTTPException(400, "Social scraping is not enabled for this event.")
+    # 1. Detect Platform
+    url_lower = url.lower()
+    if "twitter.com" in url_lower or "x.com" in url_lower:
+        platform = "twitter"
+    elif "linkedin.com" in url_lower:
+        platform = "linkedin"
+    elif "instagram.com" in url_lower:
+        platform = "instagram"
+    else:
+        raise HTTPException(400, "Unsupported social media URL. Supported platforms: Twitter/X, LinkedIn, Instagram.")
+
+    # 2. Duplicate Check
+    duplicate = db.query(SocialPost).filter(
+        SocialPost.event_id == event_id,
+        SocialPost.url == url
+    ).first()
+    if duplicate:
+        if duplicate.team_id != team_id:
+            raise HTTPException(400, "This post URL has already been submitted by another team.")
         
-    platforms = config.get("platforms", [])
-    if not platforms:
-        raise HTTPException(400, "No social platforms are selected in the configuration.")
+        # Status-gated check
+        if duplicate.status in ["verified", "pending_review"]:
+            # If the post is verified but has no screenshot, and they are now uploading a screenshot, allow it!
+            if duplicate.status == "verified" and not duplicate.screenshot_url and screenshot_file:
+                pass
+            else:
+                raise HTTPException(400, f"This URL has already been submitted and is currently {duplicate.status.replace('_', ' ')}. You cannot modify or resubmit it.")
+        
+        # If it belongs to the same team, and they are providing a screenshot, update the existing post
+        if screenshot_file:
+            try:
+                file_bytes = await screenshot_file.read()
+                
+                # Screenshot hash dedup
+                import hashlib
+                hasher = hashlib.sha256()
+                hasher.update(file_bytes)
+                file_hash = hasher.hexdigest()
+                
+                existing_with_hash = db.query(SocialPost).filter(
+                    SocialPost.event_id == event_id,
+                    SocialPost.screenshot_hash == file_hash,
+                    SocialPost.url != url
+                ).first()
+                if existing_with_hash:
+                    raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
+                
+                screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+                duplicate.screenshot_url = screenshot_url
+                duplicate.screenshot_hash = file_hash
+                duplicate.status = "pending_review"
+                
+                db.commit()
+                db.refresh(duplicate)
+                
+                background_tasks.add_task(run_immediate_scrape, event_id)
+                
+                await broadcast(event_id, {
+                    "type": "social:post_updated",
+                    "post_id": duplicate.id,
+                    "status": "pending_review",
+                    "screenshot_url": screenshot_url
+                })
+                
+                return {
+                    "id": duplicate.id,
+                    "platform": duplicate.platform,
+                    "url": duplicate.url,
+                    "status": duplicate.status,
+                    "screenshot_url": duplicate.screenshot_url,
+                    "created_at": duplicate.created_at
+                }
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(500, f"Failed to upload screenshot: {str(e)}")
+        else:
+            raise HTTPException(400, "This post URL has already been submitted. Please attach a screenshot if you wish to upload proof.")
 
-    teams = db.query(Team).filter(Team.event_id == event_id).all()
-    if not teams:
-        raise HTTPException(400, "No teams available to generate polls for.")
+    # 3. Cap checks: Max 5 posts per team
+    total_posts = db.query(SocialPost).filter(
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).count()
+    if total_posts >= 5:
+        raise HTTPException(400, "Maximum limit of 5 social post submissions reached for this team.")
 
-    # Determine poll type (hybrid auto-decides)
-    configured_type = config.get("poll_type", "hybrid")
-    poll_type = configured_type
-    if configured_type == "hybrid":
-        poll_type = "comparative" if len(teams) <= 4 else "rating"
-
-    # Delete existing draft polls
-    db.query(SocialPoll).filter(
-        SocialPoll.event_id == event_id,
-        SocialPoll.status == SocialPollStatus.draft
-    ).delete()
-    db.commit()
-
-    created_polls = []
+    # 4. Cooldown checks: 30s cooldown
+    last_post = db.query(SocialPost).filter(
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).order_by(SocialPost.created_at.desc()).first()
     
-    # Batch LLM generation for each platform
-    for idx, platform in enumerate(platforms):
-        if idx > 0:
-            await asyncio.sleep(2.0)
+    if last_post:
+        delta = datetime.datetime.utcnow() - last_post.created_at
+        if delta.total_seconds() < 30:
+            wait_time = int(30 - delta.total_seconds())
+            raise HTTPException(400, f"Please wait {wait_time} seconds before submitting another link.")
 
-        # Notify start of step via WS
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "generate",
-            "platform": platform,
-            "status": "running"
+    # 5. Handle Screenshot Upload
+    screenshot_url = None
+    file_hash = None
+    status = "pending"
+    if screenshot_file:
+        try:
+            file_bytes = await screenshot_file.read()
+            
+            # Screenshot hash dedup
+            import hashlib
+            hasher = hashlib.sha256()
+            hasher.update(file_bytes)
+            file_hash = hasher.hexdigest()
+            
+            existing_with_hash = db.query(SocialPost).filter(
+                SocialPost.event_id == event_id,
+                SocialPost.screenshot_hash == file_hash,
+                SocialPost.url != url
+            ).first()
+            if existing_with_hash:
+                raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
+                
+            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+            status = "pending_review"
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Failed to upload screenshot: {str(e)}")
+
+    # 6. Save Social Post
+    db_post = SocialPost(
+        team_id=team_id,
+        event_id=event_id,
+        platform=platform,
+        url=url,
+        status=status,
+        screenshot_url=screenshot_url,
+        screenshot_hash=file_hash
+    )
+    db.add(db_post)
+    db.commit()
+    db.refresh(db_post)
+
+    if db_post.status in ["pending", "pending_review"]:
+        background_tasks.add_task(run_immediate_scrape, event_id)
+
+    await broadcast(event_id, {
+        "type": "social:post_created",
+        "team_id": team_id,
+        "post_id": db_post.id
+    })
+
+    return {
+        "id": db_post.id,
+        "platform": db_post.platform,
+        "url": db_post.url,
+        "status": db_post.status,
+        "screenshot_url": db_post.screenshot_url,
+        "created_at": db_post.created_at
+    }
+
+
+@router.put("/teams/{team_id}/social-posts/{post_id}/proof")
+@limiter.limit("10/minute")
+async def upload_post_proof(
+    request: Request,
+    event_id: str,
+    team_id: str,
+    post_id: str,
+    background_tasks: BackgroundTasks,
+    screenshot_file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    check_social_scraping_allowed(event_id, db)
+    
+    post = db.query(SocialPost).filter(
+        SocialPost.id == post_id,
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(404, "Social post not found.")
+
+    # Status-gated check
+    if post.status in ["verified", "pending_review"]:
+        if post.status == "verified" and not post.screenshot_url:
+            pass
+        else:
+            raise HTTPException(400, f"This post is already {post.status.replace('_', ' ')} and proof cannot be updated.")
+
+    try:
+        file_bytes = await screenshot_file.read()
+        
+        # Screenshot hash dedup
+        import hashlib
+        hasher = hashlib.sha256()
+        hasher.update(file_bytes)
+        file_hash = hasher.hexdigest()
+        
+        existing_with_hash = db.query(SocialPost).filter(
+            SocialPost.event_id == event_id,
+            SocialPost.screenshot_hash == file_hash,
+            SocialPost.url != post.url
+        ).first()
+        if existing_with_hash:
+            raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
+            
+        screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+        
+        post.screenshot_url = screenshot_url
+        post.screenshot_hash = file_hash
+        post.status = "pending_review"
+        db.commit()
+        db.refresh(post)
+        
+        background_tasks.add_task(run_immediate_scrape, event_id)
+
+        # Broadcast via WebSockets
+        await broadcast(event_id, {
+            "type": "social:post_updated",
+            "post_id": post.id,
+            "status": "pending_review",
+            "screenshot_url": screenshot_url
         })
         
-        try:
-            teams_data = [{"id": t.id, "name": t.name, "challenge": t.challenge or ""} for t in teams]
-            llm_result = generate_poll_content(
-                teams=teams_data,
-                platform=platform,
-                poll_type=poll_type,
-                event_name=event.name
-            )
-            
-            provider_used = llm_result.get("llm_provider_used")
-            polls_list = llm_result.get("polls", [])
-            for poll_data in polls_list:
-                db_poll = SocialPoll(
-                    event_id=event_id,
-                    team_id=poll_data.get("team_id"),
-                    platform=platform,
-                    poll_type=poll_type,
-                    question_text=poll_data["question_text"],
-                    commentary=poll_data.get("commentary"),
-                    options=poll_data["options"],
-                    option_team_mapping=poll_data.get("option_team_mapping"),
-                    status=SocialPollStatus.draft,
-                    duration_minutes=config.get("poll_duration_minutes", 1440),
-                    llm_provider_used=provider_used
-                )
-                db.add(db_poll)
-                created_polls.append(db_poll)
-            
-            db.commit()
-            
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "generate",
-                "platform": platform,
-                "status": "success"
-            })
-        except Exception as e:
-            db.rollback()
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "generate",
-                "platform": platform,
-                "status": "failed"
-            })
-            raise HTTPException(500, f"Failed to generate polls for {platform}: {str(e)}")
+        return post
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to upload screenshot: {str(e)}")
 
-    return created_polls
 
-@router.get("/polls")
-def list_polls(
+@router.delete("/teams/{team_id}/social-posts/{post_id}")
+@limiter.limit("20/minute")
+async def delete_social_post(
+    request: Request,
+    event_id: str,
+    team_id: str,
+    post_id: str,
+    db: Session = Depends(get_db)
+):
+    check_social_scraping_allowed(event_id, db)
+    
+    post = db.query(SocialPost).filter(
+        SocialPost.id == post_id,
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(404, "Social post not found.")
+        
+    db.delete(post)
+    db.commit()
+    
+    await _internal_calculate_scores(event_id, db)
+    
+    await broadcast(event_id, {
+        "type": "social:post_deleted",
+        "team_id": team_id,
+        "post_id": post_id
+    })
+    
+    return {"status": "success"}
+
+
+@router.get("/social-posts")
+@limiter.limit("30/minute")
+def get_all_social_posts(
+    request: Request,
     event_id: str,
     platform: Optional[str] = None,
     status: Optional[str] = None,
-    flagged: Optional[bool] = None,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
-    query = db.query(SocialPoll).filter(SocialPoll.event_id == event_id)
+    check_social_scraping_allowed(event_id, db)
+    query = db.query(SocialPost).filter(SocialPost.event_id == event_id)
     if platform:
-        query = query.filter(SocialPoll.platform == platform)
+        query = query.filter(SocialPost.platform == platform)
     if status:
-        query = query.filter(SocialPoll.status == status)
-    if flagged is not None:
-        query = query.filter(SocialPoll.flagged == flagged)
-    return query.all()
-
-@router.get("/polls/{poll_id}")
-def get_poll_detail(event_id: str, poll_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-    return poll
-
-@router.post("/polls/{poll_id}/post")
-async def post_single_poll(
-    event_id: str,
-    poll_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-    if poll.status != SocialPollStatus.draft:
-        raise HTTPException(400, "Only draft polls can be posted.")
-
-    # WS: posting running
-    background_tasks.add_task(broadcast, event_id, {
-        "type": "social:pipeline_step",
-        "step": "post",
-        "platform": poll.platform,
-        "poll_id": poll.id,
-        "status": "running"
-    })
-
-    if poll.platform == "instagram":
-        # Instagram cannot post automatically, wait for Story ID URN confirm
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "post",
-            "platform": "instagram",
-            "poll_id": poll.id,
-            "status": "manual_pending"
-        })
-        return {"status": "manual_pending", "message": "Instagram draft ready. Manual posting required."}
-
-    try:
-        platform = get_platform(poll.platform)
-        post_id = await platform.create_poll(poll)
+        query = query.filter(SocialPost.status == status)
         
-        poll.platform_post_id = post_id
-        poll.status = SocialPollStatus.posted
-        poll.posted_at = datetime.datetime.utcnow()
-        poll.ends_at = poll.posted_at + datetime.timedelta(minutes=poll.duration_minutes)
-        poll.locked_at = datetime.datetime.utcnow()
-        
-        if poll.platform == "linkedin" and poll.poll_type == "linkedin_text_fallback":
-            db.add(models.ActivityLog(
-                event_id=event_id,
-                message="LinkedIn: Native poll failed (403/401). Fell back to text post share with manual voting fallback.",
-                log_type="warning"
-            ))
-        
-        db.commit()
-        
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:poll_posted",
-            "poll_id": poll.id,
-            "platform": poll.platform,
-            "team_id": poll.team_id,
-            "status": "success"
-        })
-        
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "post",
-            "platform": poll.platform,
-            "poll_id": poll.id,
-            "status": "success"
-        })
-        return poll
-    except (PlatformAPIError, RateLimitError) as e:
-        poll.status = SocialPollStatus.failed
-        poll.error_message = str(e)
-        db.commit()
-        
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:poll_posted",
-            "poll_id": poll.id,
-            "platform": poll.platform,
-            "status": "failed",
-            "error": str(e)
-        })
-        
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "post",
-            "platform": poll.platform,
-            "poll_id": poll.id,
-            "status": "failed"
-        })
-        raise HTTPException(500, str(e))
-
-@router.post("/post-all")
-async def post_all_polls(
-    event_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    drafts = db.query(SocialPoll).filter(
-        SocialPoll.event_id == event_id,
-        SocialPoll.status == SocialPollStatus.draft
-    ).all()
-
-    posted, failed, manual = 0, 0, 0
-    for poll in drafts:
-        if poll.platform == "instagram":
-            # Instagram remains in draft status for manual posting
-            manual += 1
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "post",
-                "platform": "instagram",
-                "poll_id": poll.id,
-                "status": "manual_pending"
-            })
-            continue
-
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "post",
-            "platform": poll.platform,
-            "poll_id": poll.id,
-            "status": "running"
-        })
-
-        try:
-            platform = get_platform(poll.platform)
-            post_id = await platform.create_poll(poll)
-            
-            poll.platform_post_id = post_id
-            poll.status = SocialPollStatus.posted
-            poll.posted_at = datetime.datetime.utcnow()
-            poll.ends_at = poll.posted_at + datetime.timedelta(minutes=poll.duration_minutes)
-            poll.locked_at = datetime.datetime.utcnow()
-            posted += 1
-            
-            if poll.platform == "linkedin" and poll.poll_type == "linkedin_text_fallback":
-                db.add(models.ActivityLog(
-                    event_id=event_id,
-                    message="LinkedIn: Native poll failed (403/401). Fell back to text post share with manual voting fallback.",
-                    log_type="warning"
-                ))
-            
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:poll_posted",
-                "poll_id": poll.id,
-                "platform": poll.platform,
-                "team_id": poll.team_id,
-                "status": "success"
-            })
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "post",
-                "platform": poll.platform,
-                "poll_id": poll.id,
-                "status": "success"
-            })
-        except Exception as e:
-            poll.status = SocialPollStatus.failed
-            poll.error_message = str(e)
-            failed += 1
-            
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:poll_posted",
-                "poll_id": poll.id,
-                "platform": poll.platform,
-                "status": "failed",
-                "error": str(e)
-            })
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "post",
-                "platform": poll.platform,
-                "poll_id": poll.id,
-                "status": "failed"
-            })
-            
-        db.commit()
-        # Free-tier post safety pacing delay
-        await asyncio.sleep(settings.SOCIAL_POST_DELAY_SECONDS)
-
-    return {"posted": posted, "failed": failed, "manual": manual}
-
-@router.patch("/polls/{poll_id}/set-instagram-id")
-def set_instagram_story_id(
-    event_id: str,
-    poll_id: str,
-    payload: schemas.InstagramIdPayload,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-    if poll.platform != "instagram":
-        raise HTTPException(400, "This endpoint is only for Instagram polls")
-        
-    poll.platform_post_id = payload.story_media_id
-    poll.status = SocialPollStatus.posted
-    poll.posted_at = payload.posted_at or datetime.datetime.utcnow()
-    poll.ends_at = poll.posted_at + datetime.timedelta(hours=24)
-    poll.locked_at = datetime.datetime.utcnow()
-    db.commit()
-
-    background_tasks.add_task(broadcast, event_id, {
-        "type": "social:poll_posted",
-        "poll_id": poll.id,
-        "platform": "instagram",
-        "status": "success"
-    })
-    return poll
-
-@router.post("/polls/{poll_id}/set-post-id")
-def set_poll_post_id(
-    event_id: str,
-    poll_id: str,
-    payload: schemas.SetPostIdPayload,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-        
-    poll.platform_post_id = payload.post_id
-    poll.status = SocialPollStatus.posted
-    poll.posted_at = payload.posted_at or datetime.datetime.utcnow()
-    poll.ends_at = poll.posted_at + datetime.timedelta(minutes=poll.duration_minutes)
-    poll.locked_at = datetime.datetime.utcnow()
-    if poll.error_message:
-        poll.error_message = None
-    db.commit()
-
-    background_tasks.add_task(broadcast, event_id, {
-        "type": "social:poll_posted",
-        "poll_id": poll.id,
-        "platform": poll.platform,
-        "status": "success"
-    })
-    return poll
-
-@router.post("/polls/{poll_id}/manual-results")
-def submit_manual_votes(
-    event_id: str,
-    poll_id: str,
-    payload: schemas.ManualVotesPayload,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-
-    poll.votes = payload.votes
-    poll.total_votes = sum(payload.votes.values())
-    poll.status = SocialPollStatus.completed
-    poll.manual_pending = False
-    poll.fetched_at = datetime.datetime.utcnow()
+    posts = query.order_by(SocialPost.created_at.desc()).all()
     
-    # Anomaly validations
-    if poll.total_votes < settings.SOCIAL_MIN_VOTE_THRESHOLD:
-        poll.flagged = True
-        poll.flag_reason = "low_votes"
+    enriched = []
+    for p in posts:
+        team = db.query(Team).filter(Team.id == p.team_id).first()
+        enriched.append({
+            "id": p.id,
+            "team_id": p.team_id,
+            "team_name": team.name if team else "Unknown Team",
+            "platform": p.platform,
+            "url": p.url,
+            "status": p.status,
+            "likes": p.likes,
+            "shares": p.shares,
+            "screenshot_url": p.screenshot_url,
+            "last_scraped_at": p.last_scraped_at,
+            "created_at": p.created_at
+        })
+    return enriched
+
+
+@router.post("/social-posts/{post_id}/verify")
+@limiter.limit("30/minute")
+async def verify_post_manually(
+    request: Request,
+    event_id: str,
+    post_id: str,
+    payload: PostVerifyPayload,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee)
+):
+    check_social_scraping_allowed(event_id, db)
+    
+    post = db.query(SocialPost).filter(
+        SocialPost.id == post_id,
+        SocialPost.event_id == event_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(404, "Social post not found.")
+
+    if payload.approve:
+        post.status = "verified"
+        post.likes = payload.likes
+        post.shares = payload.shares
     else:
-        # Clear low votes flag if it was previously flagged for that
-        if poll.flagged and poll.flag_reason == "low_votes":
-            poll.flagged = False
-            poll.flag_reason = None
+        post.status = "verification_failed"
 
+    post.last_scraped_at = datetime.datetime.utcnow()
     db.commit()
-
-    background_tasks.add_task(broadcast, event_id, {
-        "type": "social:poll_fetched",
-        "poll_id": poll.id,
-        "platform": poll.platform,
-        "total_votes": poll.total_votes,
-        "flagged": poll.flagged,
-        "flag_reason": poll.flag_reason,
-        "manual_pending": False
-    })
-    return poll
-
-@router.post("/polls/{poll_id}/override-score")
-def override_poll_score(
-    event_id: str,
-    poll_id: str,
-    score: Optional[float] = None,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-        
-    poll.admin_override_score = score
-    if score is not None:
-        poll.flagged = True
-        poll.flag_reason = "manual"
-    db.commit()
-    return poll
-
-@router.post("/fetch-results")
-async def fetch_polls_results(
-    event_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_committee)
-):
-    check_social_scraping_allowed(event_id, db)
-    # Retrieve all posted polls
-    ended_polls = db.query(SocialPoll).filter(
-        SocialPoll.event_id == event_id,
-        SocialPoll.status == SocialPollStatus.posted
-    ).all()
-
-    fetched = 0
-    flagged_pending = 0
-    errors = []
     
-    for poll in ended_polls:
-        background_tasks.add_task(broadcast, event_id, {
-            "type": "social:pipeline_step",
-            "step": "fetch",
-            "platform": poll.platform,
-            "poll_id": poll.id,
-            "status": "running"
-        })
+    # Recalculate event-wide scores
+    await _internal_calculate_scores(event_id, db)
+    
+    await broadcast(event_id, {
+        "type": "social:post_updated",
+        "post_id": post.id,
+        "status": post.status,
+        "likes": post.likes,
+        "shares": post.shares
+    })
+    
+    return post
 
-        try:
-            platform = get_platform(poll.platform)
-            results = await platform.fetch_results(poll.platform_post_id or "")
-            
-            poll.votes = results["votes"]
-            poll.total_votes = sum(results["votes"].values())
-            poll.vote_snapshots = results.get("snapshots", [])
-            poll.status = SocialPollStatus.completed
-            poll.fetched_at = datetime.datetime.utcnow()
-            
-            if poll.total_votes < settings.SOCIAL_MIN_VOTE_THRESHOLD:
-                poll.flagged = True
-                poll.flag_reason = "low_votes"
 
-            # Check velocity anomaly
-            if poll.vote_snapshots and len(poll.vote_snapshots) > 1:
-                for i in range(1, len(poll.vote_snapshots)):
-                    prev = sum(poll.vote_snapshots[i-1]["votes"].values())
-                    curr = sum(poll.vote_snapshots[i]["votes"].values())
-                    if poll.total_votes > 0 and (curr - prev) / poll.total_votes > 0.4:
-                        poll.flagged = True
-                        poll.flag_reason = "velocity_spike"
-                        break
-            
-            db.commit()
-            fetched += 1
-            
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:poll_fetched",
-                "poll_id": poll.id,
-                "platform": poll.platform,
-                "total_votes": poll.total_votes,
-                "flagged": poll.flagged,
-                "flag_reason": poll.flag_reason,
-                "manual_pending": False
-            })
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "fetch",
-                "platform": poll.platform,
-                "poll_id": poll.id,
-                "status": "success"
-            })
-        except PlatformAPIError as e:
-            poll.manual_pending = True
-            db.commit()
-            flagged_pending += 1
-            errors.append({
-                "poll_id": poll.id,
-                "platform": poll.platform,
-                "error": str(e)
-            })
-            
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:poll_fetched",
-                "poll_id": poll.id,
-                "platform": poll.platform,
-                "manual_pending": True,
-                "error": str(e)
-            })
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:pipeline_step",
-                "step": "fetch",
-                "platform": poll.platform,
-                "poll_id": poll.id,
-                "status": "manual_pending"
-            })
-            
-    return {"fetched": fetched, "manual_pending": flagged_pending, "errors": errors}
+@router.post("/scrape-tick")
+@limiter.limit("5/minute")
+async def scrape_tick(
+    request: Request,
+    event_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee)
+):
+    check_social_scraping_allowed(event_id, db)
+    scraped_count = await scrape_pending_posts(event_id, db)
+    return {"status": "success", "scraped_count": scraped_count}
+
 
 @router.post("/calculate-scores")
+@limiter.limit("5/minute")
 async def calculate_social_scores(
+    request: Request,
     event_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
     check_social_scraping_allowed(event_id, db)
-    # Run score calculation
-    polls = db.query(SocialPoll).filter(
-        SocialPoll.event_id == event_id,
-        SocialPoll.status == SocialPollStatus.completed
-    ).all()
     
-    if not polls:
-        raise HTTPException(400, "No completed polls available to score.")
-
-    teams = db.query(Team).filter(Team.event_id == event_id).all()
-    teams_updated = 0
-
     background_tasks.add_task(broadcast, event_id, {
         "type": "social:pipeline_step",
         "step": "calculate",
-        "platform": "mock", # placeholder platform name for step
+        "platform": "mock",
         "status": "running"
     })
-
-    # To stay under the LLM free-tier rate limits, pace calls with an explicit delay wrapper
-    # First, calculate normalized score for each poll using the LLM normalization helper
-    for poll in polls:
-        # Always recalculate normalized score to update any stale placeholder/fallback values
-        opts_data = [{"text": opt["text"], "position": opt["position"]} for opt in poll.options]
-        
-        try:
-            norm_res = normalize_poll_votes(
-                votes=poll.votes,
-                options=opts_data,
-                poll_type=poll.poll_type,
-                velocity_data=poll.vote_snapshots
-            )
-            poll.normalized_score = norm_res.get("normalized_score", 5.0)
-            db.commit()
-        except Exception as e:
-            poll.normalized_score = 5.0
-            db.commit()
-
-        # Pacing delay to avoid rate limiting
-        await asyncio.sleep(4.0)
-
-    # Next, aggregate cross-platform scores for each team
-    for team in teams:
-        team_polls = [p for p in polls if (
-            p.team_id == team.id or 
-            (p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback") and p.option_team_mapping and any(t_id == team.id for t_id in p.option_team_mapping.values()))
-        )]
-        
-        if not team_polls:
-            continue
-            
-        polls_data = []
-        for p in team_polls:
-            # Map vote count for this team
-            vote_count = 0
-            if p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback") and p.option_team_mapping:
-                # Find which position maps to this team ID
-                position_key = next((k for k, v in p.option_team_mapping.items() if v == team.id), None)
-                if position_key:
-                    position = int(position_key.split("_")[1])
-                    opt = next((o for o in p.options if o["position"] == position), None)
-                    if opt:
-                        vote_count = p.votes.get(opt["text"], 0)
-            else:
-                vote_count = p.total_votes
-
-            base_score = p.admin_override_score if p.admin_override_score is not None else p.normalized_score
-            if base_score is None:
-                base_score = 5.0
-
-            if p.poll_type in ("comparative", "twitter_text_fallback", "linkedin_text_fallback"):
-                if p.total_votes > 0:
-                    team_norm_score = base_score * (vote_count / p.total_votes)
-                else:
-                    team_norm_score = 0.0
-            else:
-                team_norm_score = base_score
-
-            polls_data.append({
-                "platform": p.platform,
-                "normalized_score": team_norm_score,
-                "flagged": p.flagged,
-                "total_votes": p.total_votes,
-                "team_votes": vote_count,
-                "admin_override_score": p.admin_override_score
-            })
-
-        try:
-            agg_res = aggregate_cross_platform_scores(polls_data)
-            team.social_vote_score = agg_res.get("aggregate_score", 0.0)
-            team.social_vote_total_votes = sum([p["team_votes"] for p in polls_data])
-            team.social_vote_last_updated = datetime.datetime.utcnow()
-            from .evaluations import _recompute_combined_public
-            _recompute_combined_public(team, db)
-            db.commit()
-            teams_updated += 1
-
-            background_tasks.add_task(broadcast, event_id, {
-                "type": "social:scores_updated",
-                "team_id": team.id,
-                "team_name": team.name,
-                "social_vote_score": team.social_vote_score,
-                "total_votes": team.social_vote_total_votes
-            })
-        except Exception as e:
-            pass
-            
-        # Pacing delay
-        await asyncio.sleep(4.0)
-
-    # Re-calculate public score (combined avg social + peer review) if peer review score exists
-    # Or trigger general leaderboard updates here.
+    
+    await _internal_calculate_scores(event_id, db)
     
     background_tasks.add_task(broadcast, event_id, {
         "type": "social:pipeline_step",
@@ -769,32 +848,40 @@ async def calculate_social_scores(
         "platform": "mock",
         "status": "success"
     })
+    
+    return {"status": "success"}
 
-    return {"teams_updated": teams_updated}
+
+# ── Pipeline / Summary Endpoints ───────────────────────────────────────────────
 
 @router.post("/run-pipeline")
+@limiter.limit("3/minute")
 async def run_full_pipeline(
+    request: Request,
     event_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
     check_social_scraping_allowed(event_id, db)
-    # Run the full pipeline synchronously/sequentially
-    # 1. Generate
-    await generate_draft_polls(event_id, background_tasks, db, _)
-    await asyncio.sleep(4.0)
-    # 2. Post
-    await post_all_polls(event_id, background_tasks, db, _)
-    
-    return {"status": "pipeline_started", "message": "Polls generated and bulk post process completed."}
+    # Background scrape followed by score calculation
+    await scrape_tick(event_id, db)
+    await calculate_social_scores(event_id, background_tasks, db, _)
+    return {"status": "pipeline_started", "message": "Scrape tick and score recalculation triggered."}
+
 
 @router.get("/campaign-summary")
-def get_campaign_summary(event_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
-    polls = db.query(SocialPoll).filter(SocialPoll.event_id == event_id).all()
+@limiter.limit("10/minute")
+def get_campaign_summary(
+    request: Request,
+    event_id: str,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee)
+):
+    posts = db.query(SocialPost).filter(SocialPost.event_id == event_id).all()
     teams = db.query(Team).filter(Team.event_id == event_id).all()
     
-    if not polls:
+    if not posts:
         return {
             "total_polls": 0,
             "total_votes": 0,
@@ -809,38 +896,39 @@ def get_campaign_summary(event_id: str, db: Session = Depends(get_db), _: models
                 }
                 for t in teams
             ],
-            "ai_summary": "No campaign polls generated yet. Generate and run the campaign pipeline first.",
+            "ai_summary": "No campaign posts submitted yet. Submit and verify team posts to generate a summary.",
             "llm_provider_used": None
         }
 
-    polls_data = []
-    for p in polls:
-        polls_data.append({
+    # Map posts to old LLM poll format to reuse the generate_social_campaign_summary logic
+    mapped_posts_for_summary = []
+    for p in posts:
+        mapped_posts_for_summary.append({
             "platform": p.platform,
-            "question": p.question_text,
-            "status": p.status.value,
-            "total_votes": p.total_votes,
-            "flagged": p.flagged,
-            "flag_reason": p.flag_reason,
-            "normalized_score": p.normalized_score,
-            "votes": p.votes
+            "question": f"URL: {p.url}",
+            "status": p.status,
+            "total_votes": p.likes + p.shares,
+            "flagged": p.status == "verification_failed",
+            "flag_reason": "failed_verification",
+            "normalized_score": p.likes + p.shares,
+            "votes": {"Likes": p.likes, "Shares": p.shares}
         })
         
     teams_data = [{"id": t.id, "name": t.name, "social_vote_score": t.social_vote_score, "total_votes": t.social_vote_total_votes} for t in teams]
     
-    md_summary, summary_provider = generate_social_campaign_summary(polls_data, teams_data)
+    md_summary, summary_provider = generate_social_campaign_summary(mapped_posts_for_summary, teams_data)
     
     return {
-        "total_polls": len(polls),
-        "total_votes": sum([p.total_votes for p in polls]),
-        "avg_votes_per_poll": round(sum([p.total_votes for p in polls]) / len(polls), 1) if polls else 0,
-        "flagged_polls": len([p for p in polls if p.flagged]),
+        "total_polls": len(posts),
+        "total_votes": sum([(p.likes + p.shares) for p in posts]),
+        "avg_votes_per_poll": round(sum([(p.likes + p.shares) for p in posts]) / len(posts), 1) if posts else 0,
+        "flagged_polls": len([p for p in posts if p.status == "verification_failed"]),
         "team_scores": [
             {
                 "team_id": t.id,
                 "team_name": t.name,
                 "score": t.social_vote_score or 0.0,
-                "total_votes": t.social_vote_total_votes
+                "total_votes": t.social_vote_total_votes or 0
             }
             for t in teams
         ],
@@ -848,34 +936,247 @@ def get_campaign_summary(event_id: str, db: Session = Depends(get_db), _: models
         "llm_provider_used": summary_provider
     }
 
-@router.delete("/polls/{poll_id}")
-def delete_poll(event_id: str, poll_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
-    check_social_scraping_allowed(event_id, db)
-    poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
-    if not poll:
-        raise HTTPException(404, "Poll not found")
-    if poll.status == SocialPollStatus.posted:
-        raise HTTPException(400, "Cannot delete a poll that has already been posted.")
-    db.delete(poll)
-    db.commit()
-    return {"status": "success", "message": "Draft poll deleted successfully."}
 
 @router.post("/reset-campaign")
+@limiter.limit("3/minute")
 def reset_campaign_data(
+    request: Request,
     event_id: str,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
     check_social_scraping_allowed(event_id, db)
-    db.query(SocialPoll).filter(SocialPoll.event_id == event_id).delete()
+    db.query(SocialPost).filter(SocialPost.event_id == event_id).delete()
     
     teams = db.query(Team).filter(Team.event_id == event_id).all()
     for team in teams:
         team.social_vote_score = 0.0
         team.social_vote_total_votes = 0
         team.social_vote_last_updated = None
+        
+        # Recalculate combined scores
         from .evaluations import _recompute_combined_public
         _recompute_combined_public(team, db)
         
     db.commit()
     return {"status": "success", "message": "Social campaign data reset successfully."}
+
+
+async def scrape_pending_posts(event_id: str, db: Session) -> int:
+    """
+    Finds all SocialPost records in 'pending' status for the event,
+    crawls their public pages, checks for token and hashtag,
+    and updates their status, likes, shares, and timestamps.
+    """
+    import httpx
+    
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        return 0
+
+    pending_posts = db.query(SocialPost).filter(
+        SocialPost.event_id == event_id,
+        SocialPost.status.in_(["pending", "pending_review"])
+    ).all()
+
+    if not pending_posts:
+        return 0
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Referer": "https://www.google.com/"
+    }
+
+    scraped_count = 0
+    import random
+
+    for post in pending_posts:
+        team = db.query(Team).filter(Team.id == post.team_id).first()
+        if not team:
+            continue
+
+        # Expected token: e.g. EC-349AF (based on team ID prefix)
+        expected_token = f"EC-{team.id[:8].upper()}"
+        event_name = event.name.lower()
+        # Default hashtags
+        event_hashtag = "#" + "".join(e for e in event.name if e.isalnum())
+
+        # ── pending_review: Screenshot already uploaded, skip token check ──
+        # Gemini Vision reads the screenshot to get real engagement numbers.
+        if post.status == "pending_review":
+            try:
+                likes = 0
+                reposts = 0
+                url_matches = True
+
+                # Gemini Vision OCR on the screenshot — also verifies URL match, code, and hashtag
+                if post.screenshot_url:
+                    likes, reposts, url_matches = await _extract_metrics_from_screenshot(
+                        post.screenshot_url,
+                        post.url,
+                        expected_token=expected_token,
+                        event_hashtag=event_hashtag
+                    )
+                    print(f"[Screenshot OCR] post={post.id} platform={post.platform} likes={likes} reposts={reposts} url_matches={url_matches}")
+
+                # Reject if Gemini says the screenshot doesn't match the claimed URL
+                if not url_matches:
+                    post.status = "verification_failed"
+                    post.last_scraped_at = datetime.datetime.utcnow()
+                    db.commit()
+                    print(f"[Screenshot OCR] URL mismatch — post={post.id} rejected")
+                    await broadcast(event_id, {
+                        "type": "social:post_updated",
+                        "post_id": post.id,
+                        "status": "verification_failed"
+                    })
+                    continue
+
+                post.likes = likes
+                post.shares = reposts
+                post.status = "verified"
+                post.last_scraped_at = datetime.datetime.utcnow()
+                db.commit()
+                scraped_count += 1
+
+                await broadcast(event_id, {
+                    "type": "social:post_updated",
+                    "post_id": post.id,
+                    "status": "verified",
+                    "likes": likes,
+                    "shares": reposts
+                })
+            except Exception as e:
+                print(f"Error processing screenshot post {post.id}: {str(e)}")
+            continue  # Move to next post
+
+        # ── pending: Auto-verify via URL scrape (token + hashtag check) ──
+        # Engagement: Gemini Vision on any attached screenshot.
+        # If no screenshot, engagement stays at 0 (we cannot scrape platform walls).
+        try:
+            status_code = 200
+            html_content = ""
+
+            async with httpx.AsyncClient(headers=headers, timeout=10.0, follow_redirects=True) as client:
+                try:
+                    res = await client.get(post.url)
+                    status_code = res.status_code
+                    if status_code == 200:
+                        html_content = res.text
+                except Exception:
+                    status_code = 0
+
+            if status_code == 200:
+                # ── Verification Check ────────────────────────────────────
+                has_token = expected_token.lower() in html_content.lower()
+                has_event = (event_name in html_content.lower()) or (event_hashtag.lower() in html_content.lower())
+
+                if not has_token or not has_event:
+                    post.status = "verification_failed"
+                    post.last_scraped_at = datetime.datetime.utcnow()
+                    db.commit()
+                    await broadcast(event_id, {
+                        "type": "social:post_updated",
+                        "post_id": post.id,
+                        "status": "verification_failed"
+                    })
+                    continue
+
+            # ── Extract engagement from screenshot via Gemini Vision ───────────
+            # Platform walls block HTML scraping, so screenshot is the only real source.
+            # Gemini also verifies the screenshot matches the submitted URL.
+            likes = 0
+            reposts = 0
+            if post.screenshot_url:
+                likes, reposts, url_matches = await _extract_metrics_from_screenshot(
+                    post.screenshot_url,
+                    post.url,
+                    expected_token=expected_token,
+                    event_hashtag=event_hashtag
+                )
+                print(f"[Gemini Vision URL post] post={post.id} platform={post.platform} likes={likes} reposts={reposts} url_matches={url_matches}")
+                if not url_matches:
+                    post.status = "verification_failed"
+                    post.last_scraped_at = datetime.datetime.utcnow()
+                    db.commit()
+                    print(f"[Gemini Vision URL post] URL mismatch — post={post.id} rejected")
+                    await broadcast(event_id, {
+                        "type": "social:post_updated",
+                        "post_id": post.id,
+                        "status": "verification_failed"
+                    })
+                    continue
+
+            post.likes = likes
+            post.shares = reposts
+            post.status = "verified"
+            post.last_scraped_at = datetime.datetime.utcnow()
+            db.commit()
+            scraped_count += 1
+
+            await broadcast(event_id, {
+                "type": "social:post_updated",
+                "post_id": post.id,
+                "status": "verified",
+                "likes": likes,
+                "shares": reposts
+            })
+        except Exception as e:
+            print(f"Error scraping post {post.id}: {str(e)}")
+            post.status = "fetch_error"
+            post.last_scraped_at = datetime.datetime.utcnow()
+            db.commit()
+            
+            await broadcast(event_id, {
+                "type": "social:post_updated",
+                "post_id": post.id,
+                "status": "fetch_error"
+            })
+            
+    if scraped_count > 0:
+        await _internal_calculate_scores(event_id, db)
+        
+    return scraped_count
+
+
+async def _internal_calculate_scores(event_id: str, db: Session):
+    from ..models import Team, SocialPost
+    from .evaluations import _recompute_combined_public
+
+    teams = db.query(Team).filter(Team.event_id == event_id).all()
+    if not teams:
+        return
+
+    # Calculate raw engagement for each team
+    # Formula: Raw = Likes + Shares * 2.5
+    team_raws = {}
+    for team in teams:
+        verified_posts = db.query(SocialPost).filter(
+            SocialPost.team_id == team.id,
+            SocialPost.status == "verified"
+        ).all()
+        
+        raw_score = sum(post.likes + (post.shares * 2.5) for post in verified_posts)
+        # Cap raw score to prevent bot abuse
+        team_raws[team.id] = min(1000.0, raw_score)
+
+    max_raw = max(team_raws.values()) if team_raws else 0.0
+
+    for team in teams:
+        raw = team_raws.get(team.id, 0.0)
+        if max_raw > 0:
+            normalized = round((raw / max_raw) * 10.0, 2)
+        else:
+            normalized = 0.0
+            
+        team.social_vote_score = normalized
+        team.social_vote_total_votes = int(db.query(SocialPost).filter(
+            SocialPost.team_id == team.id,
+            SocialPost.status == "verified"
+        ).count())
+        
+        team.social_vote_last_updated = datetime.datetime.utcnow()
+        _recompute_combined_public(team, db)
+        db.commit()

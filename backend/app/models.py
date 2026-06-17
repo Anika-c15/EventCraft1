@@ -115,6 +115,7 @@ class Event(Base):
     agent_messages = relationship("AgentMessage", back_populates="event", cascade="all, delete-orphan")
     judge_invitations = relationship("JudgeInvitation", back_populates="event", cascade="all, delete-orphan")
     social_polls = relationship("SocialPoll", back_populates="event", cascade="all, delete-orphan")
+    social_posts = relationship("SocialPost", back_populates="event", cascade="all, delete-orphan")
 
     @property
     def current_stage(self) -> Optional[str]:
@@ -205,6 +206,7 @@ class Team(Base):
     peer_reviews_received = relationship("PeerReview", back_populates="to_team",
                                          foreign_keys="PeerReview.to_team_id",
                                          cascade="all, delete-orphan")
+    social_posts = relationship("SocialPost", back_populates="team", cascade="all, delete-orphan")
 
 
 class EvaluationScore(Base):
@@ -412,3 +414,23 @@ class SocialPoll(Base):
 
     event = relationship("Event", back_populates="social_polls")
     team = relationship("Team")
+
+
+class SocialPost(Base):
+    __tablename__ = "social_posts"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    team_id = Column(String, ForeignKey("teams.id"), nullable=False)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    platform = Column(String, nullable=False)
+    url = Column(String, nullable=False)
+    status = Column(String, default="pending")  # pending, verified, fetch_error, pending_review, verification_failed
+    likes = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+    screenshot_url = Column(String, nullable=True)
+    screenshot_hash = Column(String, nullable=True)
+    last_scraped_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    team = relationship("Team", back_populates="social_posts")
+    event = relationship("Event", back_populates="social_posts")

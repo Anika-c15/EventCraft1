@@ -108,6 +108,27 @@ async def _check_and_fetch_ended_polls():
     finally:
         db.close()
 
+async def _scrape_pending_social_posts_job():
+    """
+    Background job running every 2 minutes.
+    Looks for pending SocialPost submissions and scrapes their engagement metrics.
+    """
+    logger.info("Scheduler social post scraper job triggered.")
+    db = SessionLocal()
+    try:
+        from .models import Event
+        # Fetch active events
+        active_events = db.query(Event).filter(Event.is_active == True).all()
+        for event in active_events:
+            from .routers.social_scraping import scrape_pending_posts
+            scraped = await scrape_pending_posts(event.id, db)
+            if scraped > 0:
+                logger.info(f"Background scraped {scraped} social posts for event {event.id}")
+    except Exception as e:
+        logger.error(f"Error in background social post scraper job: {str(e)}")
+    finally:
+        db.close()
+
 def start_scheduler():
     # Only register job if it's not already scheduled
     if not scheduler.get_job("poll_watcher"):
@@ -116,6 +137,14 @@ def start_scheduler():
             trigger="interval",
             minutes=15,
             id="poll_watcher",
+            replace_existing=True
+        )
+    if not scheduler.get_job("social_post_scraper"):
+        scheduler.add_job(
+            _scrape_pending_social_posts_job,
+            trigger="interval",
+            minutes=2,
+            id="social_post_scraper",
             replace_existing=True
         )
     if not scheduler.running:

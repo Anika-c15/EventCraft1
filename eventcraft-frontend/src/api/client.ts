@@ -391,69 +391,73 @@ export const socialScrapingApi = {
   
   getAuthStatus: (eventId: string) =>
     request<any>(`/api/events/${eventId}/social-scraping/auth-status`),
-  
-  generatePolls: (eventId: string) =>
-    request<any[]>(`/api/events/${eventId}/social-scraping/generate-polls`, { method: 'POST' }),
-  
-  listPolls: (eventId: string, filters?: { platform?: string; status?: string; flagged?: boolean }) => {
+
+  // ── Participant Methods ──
+  getTeamSocialPosts: (eventId: string, teamId: string) =>
+    request<any[]>(`/api/events/${eventId}/social-scraping/teams/${teamId}/social-posts`, {}, true),
+
+  submitSocialPost: async (eventId: string, teamId: string, url: string, file?: File) => {
+    const formData = new FormData()
+    formData.append('url', url)
+    if (file) {
+      formData.append('screenshot_file', file)
+    }
+    const res = await fetch(`${BASE_URL}/api/events/${eventId}/social-scraping/teams/${teamId}/social-posts`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Post submission failed' }))
+      throw new Error(err.detail || 'Post submission failed')
+    }
+    return res.json()
+  },
+
+  uploadPostProof: async (eventId: string, teamId: string, postId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('screenshot_file', file)
+    const res = await fetch(`${BASE_URL}/api/events/${eventId}/social-scraping/teams/${teamId}/social-posts/${postId}/proof`, {
+      method: 'PUT',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Proof upload failed' }))
+      throw new Error(err.detail || 'Proof upload failed')
+    }
+    return res.json()
+  },
+
+  deleteSocialPost: (eventId: string, teamId: string, postId: string) =>
+    request<any>(`/api/events/${eventId}/social-scraping/teams/${teamId}/social-posts/${postId}`, {
+      method: 'DELETE',
+    }, true),
+
+  // ── Admin Methods ──
+  listAllSocialPosts: (eventId: string, filters?: { teamId?: string; status?: string }) => {
     let query = ''
     if (filters) {
       const parts = []
-      if (filters.platform) parts.push(`platform=${filters.platform}`)
+      if (filters.teamId) parts.push(`team_id=${filters.teamId}`)
       if (filters.status) parts.push(`status=${filters.status}`)
-      if (filters.flagged !== undefined) parts.push(`flagged=${filters.flagged}`)
       if (parts.length > 0) query = '?' + parts.join('&')
     }
-    return request<any[]>(`/api/events/${eventId}/social-scraping/polls${query}`)
+    return request<any[]>(`/api/events/${eventId}/social-scraping/social-posts${query}`)
   },
-  
-  getPollDetail: (eventId: string, pollId: string) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}`),
-  
-  postSinglePoll: (eventId: string, pollId: string) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/post`, { method: 'POST' }),
-  
-  postAllPolls: (eventId: string) =>
-    request<{ posted: number; failed: number; manual: number }>(`/api/events/${eventId}/social-scraping/post-all`, { method: 'POST' }),
-  
-  setInstagramId: (eventId: string, pollId: string, storyMediaId: string) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/set-instagram-id`, {
-      method: 'PATCH',
-      body: JSON.stringify({ story_media_id: storyMediaId }),
-    }),
-  
-  setManualPostId: (eventId: string, pollId: string, postId: string) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/set-post-id`, {
+
+  verifyPostManually: (eventId: string, postId: string, data: { likes: number; shares: number; approve: boolean }) =>
+    request<any>(`/api/events/${eventId}/social-scraping/social-posts/${postId}/verify`, {
       method: 'POST',
-      body: JSON.stringify({ post_id: postId }),
+      body: JSON.stringify(data),
     }),
-  
-  submitManualVotes: (eventId: string, pollId: string, votes: Record<string, number>) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/manual-results`, {
-      method: 'POST',
-      body: JSON.stringify({ votes }),
-    }),
-  
-  overridePollScore: (eventId: string, pollId: string, score: number | null) =>
-    request<any>(`/api/events/${eventId}/social-scraping/polls/${pollId}/override-score`, {
-      method: 'POST',
-      body: JSON.stringify({ score }),
-    }),
-  
-  fetchPollResults: (eventId: string) =>
-    request<{ fetched: number; manual_pending: number; errors?: any[] }>(`/api/events/${eventId}/social-scraping/fetch-results`, { method: 'POST' }),
-  
+
   calculateSocialScores: (eventId: string) =>
-    request<{ teams_updated: number }>(`/api/events/${eventId}/social-scraping/calculate-scores`, { method: 'POST' }),
+    request<any>(`/api/events/${eventId}/social-scraping/calculate-scores`, { method: 'POST' }),
   
   runFullPipeline: (eventId: string) =>
     request<any>(`/api/events/${eventId}/social-scraping/run-pipeline`, { method: 'POST' }),
   
   getCampaignSummary: (eventId: string) =>
     request<any>(`/api/events/${eventId}/social-scraping/campaign-summary`),
-  
-  deletePoll: (eventId: string, pollId: string) =>
-    request<void>(`/api/events/${eventId}/social-scraping/polls/${pollId}`, { method: 'DELETE' }),
   
   resetCampaign: (eventId: string) =>
     request<{ status: string; message: string }>(`/api/events/${eventId}/social-scraping/reset-campaign`, { method: 'POST' }),
