@@ -250,7 +250,7 @@ def get_portal(
         .first()
     )
     if not participant:
-        raise HTTPException(404, "Participant not found")
+        raise HTTPException(401, "Invalid or expired portal token")
 
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
 

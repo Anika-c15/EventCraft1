@@ -33,7 +33,7 @@ def _resolve_participant(token: str, event_id: str, db: Session) -> models.Parti
         models.Participant.event_id == event_id,
     ).first()
     if not participant:
-        raise HTTPException(404, "Participant not found in this event")
+        raise HTTPException(401, "Invalid or expired portal token")
     return participant
 
 
