@@ -34,7 +34,8 @@ const formatDate = (iso: string) => {
   if (cleanIso.includes(' ') && !cleanIso.includes('T')) {
     cleanIso = cleanIso.replace(' ', 'T')
   }
-  if (!cleanIso.endsWith('Z') && !cleanIso.includes('+') && !cleanIso.includes('-')) {
+  const hasTimezone = /Z$/i.test(cleanIso) || /[+-]\d{2}:?\d{2}$/.test(cleanIso)
+  if (!hasTimezone) {
     cleanIso += 'Z'
   }
   const d = new Date(cleanIso)
