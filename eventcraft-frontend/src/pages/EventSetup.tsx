@@ -21,10 +21,10 @@ const EventSetup: React.FC = () => {
     setLoading(true)
     
     try {
-      // Your context handles saving to the DB and updating global state!
+    
       await createEvent(eventName, `Official workspace for ${eventName}`)
       
-      // Instantly go to dashboard, no more invite step!
+    
       navigate('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Failed to create event')
@@ -32,7 +32,6 @@ const EventSetup: React.FC = () => {
       setLoading(false)
     }
   }
-
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-6 relative transition-colors duration-300 ${theme === 'light' ? 'bg-slate-50' : 'bg-slate-950'}`}>
       
