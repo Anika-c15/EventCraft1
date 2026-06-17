@@ -194,10 +194,10 @@ async def notify_subscribers(
     if not unnotified:
         return {"notified": 0, "sent": 0, "failed": 0}
 
-    unsubscribe_url = f"{settings.FRONTEND_URL}/unsubscribe"
     description = data.description or "Stay tuned for more details and registration information."
 
     async def _send_one(sub: models.Subscriber):
+        unsubscribe_url = f"{settings.FRONTEND_URL}/unsubscribe?email={sub.email}&event_id={event_id}"
         subject, html = _build_notification_email(
             name=sub.name,
             event_name=data.event_name,
