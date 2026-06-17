@@ -28,11 +28,22 @@ const statusIcon = (status: string) => {
   }
 }
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString('en-US', {
+const formatDate = (iso: string) => {
+  if (!iso) return ''
+  let cleanIso = iso.trim()
+  if (cleanIso.includes(' ') && !cleanIso.includes('T')) {
+    cleanIso = cleanIso.replace(' ', 'T')
+  }
+  if (!cleanIso.endsWith('Z') && !cleanIso.includes('+') && !cleanIso.includes('-')) {
+    cleanIso += 'Z'
+  }
+  const d = new Date(cleanIso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true,
   })
+}
 
 const STAGES = ['Participant Intake', 'Team Formation', 'Evaluation', 'Results', 'Progression']
 const RECIPIENT_TYPES = [

@@ -5,7 +5,16 @@ import { Button } from '../components/ui/Button'
 import { useAppContext } from '../context/AppContext'
 
 const formatDate = (iso: string) => {
-  const d = new Date(iso)
+  if (!iso) return ''
+  let cleanIso = iso.trim()
+  if (cleanIso.includes(' ') && !cleanIso.includes('T')) {
+    cleanIso = cleanIso.replace(' ', 'T')
+  }
+  if (!cleanIso.endsWith('Z') && !cleanIso.includes('+') && !cleanIso.includes('-')) {
+    cleanIso += 'Z'
+  }
+  const d = new Date(cleanIso)
+  if (isNaN(d.getTime())) return iso
   return d.toLocaleString('en-US', {
     month: 'numeric', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,

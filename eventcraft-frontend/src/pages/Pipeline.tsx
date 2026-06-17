@@ -20,7 +20,16 @@ const stageIcon = (name: string) => {
 
 const formatDate = (iso?: string) => {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  let cleanIso = iso.trim()
+  if (cleanIso.includes(' ') && !cleanIso.includes('T')) {
+    cleanIso = cleanIso.replace(' ', 'T')
+  }
+  if (!cleanIso.endsWith('Z') && !cleanIso.includes('+') && !cleanIso.includes('-')) {
+    cleanIso += 'Z'
+  }
+  const d = new Date(cleanIso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export const Pipeline: React.FC = () => {
