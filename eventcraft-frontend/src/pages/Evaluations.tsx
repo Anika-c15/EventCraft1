@@ -254,12 +254,17 @@ export const Evaluations: React.FC = () => {
 
   const handleInviteJudge = async () => {
     if (!eventId || !inviteName || !inviteEmail) return
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(inviteEmail.trim())) {
+      alert('Please enter a valid email address for the judge.')
+      return
+    }
     try {
       const token = localStorage.getItem('ec_token') || ''
       const res = await fetch(`${API_BASE}/api/events/${eventId}/evaluations/invite-judge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ judge_name: inviteName, judge_email: inviteEmail }),
+        body: JSON.stringify({ judge_name: inviteName, judge_email: inviteEmail.trim().toLowerCase() }),
       })
       if (!res.ok) throw new Error('Failed to generate invite')
       setInviteResult(await res.json())
