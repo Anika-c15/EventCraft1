@@ -101,26 +101,44 @@ def _call_gemini_api(
                 "parts": [{"text": content}]
             })
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={key}"
-    payload = {
-        "contents": contents,
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens
+    gemini_models = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.5-pro",
+    ]
+    last_err = None
+    for model_name in gemini_models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens
+            }
         }
-    }
-    if system_instruction:
-        payload["systemInstruction"] = system_instruction
+        if system_instruction:
+            payload["systemInstruction"] = system_instruction
 
-    with httpx.Client(timeout=30.0) as client:
-        response = client.post(url, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        
         try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError):
-            raise ValueError(f"Unexpected response format from Gemini: {data}")
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                
+                try:
+                    res_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"[Gemini LLM] Model {model_name} succeeded!")
+                    return res_text
+                except (KeyError, IndexError):
+                    raise ValueError(f"Unexpected response format from Gemini: {data}")
+        except Exception as err:
+            print(f"[Gemini LLM] Model {model_name} failed: {err}")
+            last_err = err
+            continue
+
+    raise ValueError(f"All Gemini models failed. Last error: {last_err}")
 
 
 def _call_with_provider(prompt: str, system: Optional[str] = None) -> tuple[str, str]:
@@ -1659,6 +1677,49 @@ Format the report using Markdown. Include:
     import time
     time.sleep(1.0)
     
-    return _call_with_provider(prompt, system=system)
+    # Try Groq first
+    groq_client = _get_client()
+    if groq_client is not None:
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+
+            response = _chat_completion_with_fallback(
+                client=groq_client,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            return response.choices[0].message.content.strip(), "groq"
+        except Exception as groq_err:
+            print(f"[Campaign Summary Fallback] Groq call failed: {groq_err}. Trying Gemini...")
+            # Fall back to Gemini if configured
+            if _use_gemini():
+                try:
+                    messages = []
+                    if system:
+                        messages.append({"role": "system", "content": system})
+                    messages.append({"role": "user", "content": prompt})
+                    return _call_gemini_api(messages), "gemini"
+                except Exception as gemini_err:
+                    return f"[Gemini Fallback Error: {gemini_err} (Groq error was: {groq_err})]", "gemini"
+            
+            # If Gemini not configured, handle original Groq error
+            return f"[LLM Error: {groq_err}]", "groq"
+
+    # If Groq client is not configured, try Gemini directly
+    if _use_gemini():
+        try:
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            return _call_gemini_api(messages), "gemini"
+        except Exception as e:
+            return f"[Gemini Error: {e}]", "gemini"
+
+    return "[LLM not configured — add GROQ_API_KEY or GEMINI_API_KEY to backend/.env]", "none"
 
 
