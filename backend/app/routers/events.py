@@ -13,6 +13,7 @@ from ..schemas import (
 )
 from .. import models
 from ..email_service import send_email
+from pydantic import BaseModel 
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -193,6 +194,45 @@ def get_event(
     return event
 
 
+# --- Name Update Logic ---
+
+class EventNameUpdate(BaseModel):
+    name: str
+
+@router.put("/{event_id}/name", response_model=EventOut)
+def update_event_name(
+    event_id: str, 
+    payload: EventNameUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(require_committee)
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event: 
+        raise HTTPException(404, "Event not found")
+    
+    # Authorize: Only owner can rename
+    if event.owner_id != current_user.id: 
+        raise HTTPException(403, "Not authorized to rename this event")
+        
+    # Check if already edited
+    if getattr(event, 'is_name_edited', False): 
+        raise HTTPException(400, "Event name is already locked.")
+
+    event.name = payload.name.strip()
+    event.is_name_edited = True
+    
+    db.commit()
+    db.refresh(event)
+    
+    # Optional: Broadcast sync
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_updated", "event_name": event.name})
+    except Exception:
+        pass
+        
+    return event
+
 @router.put("/{event_id}", response_model=EventOut)
 def update_event(
     event_id: str,
@@ -214,6 +254,7 @@ def update_event(
     db.commit()
     db.refresh(event)
     return event
+
 
 
 @router.get("/{event_id}/stages", response_model=List[StageOut])
