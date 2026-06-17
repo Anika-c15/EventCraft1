@@ -8,6 +8,7 @@ from ..auth import require_committee
 from ..schemas import ApprovalOut, ApprovalResolve, ApprovalCreate
 from .. import models
 from ..ws import broadcast
+from ..communications_service import auto_send_stage_communications
 
 router = APIRouter(prefix="/api/events/{event_id}/approvals", tags=["approvals"])
 
@@ -68,7 +69,7 @@ async def resolve_approval(
     approval.resolved_by = current_user.name
 
     if payload.status == models.ApprovalStatus.approved:
-        _handle_approval_side_effects(approval, db)
+        await _handle_approval_side_effects(approval, db)
 
     log_msg = f"Approval '{approval.type.value}' {payload.status.value} by {current_user.name}"
     log = models.ActivityLog(
@@ -97,7 +98,7 @@ async def resolve_approval(
     return {"message": f"Approval {payload.status.value}", "approval_id": approval_id}
 
 
-def _handle_approval_side_effects(approval: models.Approval, db: Session):
+async def _handle_approval_side_effects(approval: models.Approval, db: Session):
     payload = approval.payload or {}
 
     if approval.type == models.ApprovalType.rule_change:
@@ -165,6 +166,8 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
             if comm.stage not in new_stage_names:
                 db.delete(comm)
         db.flush()
+        if stages:
+            await auto_send_stage_communications(approval.event_id, None, stages[0]["name"], db)
 
     if approval.type == models.ApprovalType.progression:
         to_index = payload.get("to_index")
@@ -200,46 +203,10 @@ def _handle_approval_side_effects(approval: models.Approval, db: Session):
                     from .events import clear_event_teams_and_submissions
                     clear_event_teams_and_submissions(approval.event_id, db)
 
-                # Auto-generate AI draft for the new stage if one doesn't exist yet
-                try:
-                    from .. import llm as _llm
-                    stage_recipient_map = {
-                        "Team Formation":     ("all_participants", "All Participants"),
-                        "Evaluation":         ("all_participants", "All Participants"),
-                        "Results":            ("all_participants", "All Participants"),
-                        "Progression":        ("winners",          "Qualifying Teams"),
-                    }
-                    if next_stage.name in stage_recipient_map:
-                        recipient_type, recipient_label = stage_recipient_map[next_stage.name]
-                        # Only create if no unsent draft exists for this stage
-                        existing_draft = db.query(models.Communication).filter(
-                            models.Communication.event_id == approval.event_id,
-                            models.Communication.stage == next_stage.name,
-                            models.Communication.status == models.CommStatus.draft,
-                        ).first()
-                        if not existing_draft:
-                            ev = db.query(models.Event).filter(models.Event.id == approval.event_id).first()
-                            drafted = _llm.draft_communication(
-                                stage=next_stage.name,
-                                recipient_type=recipient_type,
-                                event_name=ev.name if ev else "EventCraft",
-                            )
-                            if drafted.get("subject") and drafted.get("body") and not drafted["subject"].startswith("["):
-                                db.add(models.Communication(
-                                    event_id=approval.event_id,
-                                    recipient=recipient_label,
-                                    subject=drafted["subject"],
-                                    body=drafted["body"],
-                                    status=models.CommStatus.draft,
-                                    stage=next_stage.name,
-                                ))
-                                db.add(models.ActivityLog(
-                                    event_id=approval.event_id,
-                                    message=f"AI draft generated for '{next_stage.name}' stage",
-                                    log_type="info",
-                                ))
-                except Exception as e:
-                    print(f"⚠️ Auto-draft error on stage advance: {e}")
+                db.flush()
+                from_stage = payload.get("from_stage")
+                to_stage = payload.get("to_stage") or (stages[to_index].name if to_index < len(stages) else None)
+                await auto_send_stage_communications(approval.event_id, from_stage, to_stage, db)
 
     elif approval.type == models.ApprovalType.team_formation:
         team_ids = payload.get("team_ids", [])

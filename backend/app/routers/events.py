@@ -13,7 +13,8 @@ from ..schemas import (
 )
 from .. import models
 from ..email_service import send_email
-from pydantic import BaseModel 
+from pydantic import BaseModel
+from ..communications_service import auto_send_stage_communications
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -468,7 +469,7 @@ def advance_stage(
 
 
 @router.post("/{event_id}/advance-stage-direct")
-def advance_stage_direct(
+async def advance_stage_direct(
     event_id: str,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
@@ -524,6 +525,10 @@ def advance_stage_direct(
     )
     db.add(log)
     db.commit()
+
+    # Trigger dynamic stage communications
+    await auto_send_stage_communications(event_id, current_stage.name, next_stage.name, db)
+
     return {
         "message": f"Advanced to '{next_stage.name}'",
         "current_stage": next_stage.name,
@@ -532,7 +537,7 @@ def advance_stage_direct(
 
 
 @router.post("/{event_id}/set-stage-direct")
-def set_stage_direct(
+async def set_stage_direct(
     event_id: str,
     payload: StageSetPayload,
     db: Session = Depends(get_db),
@@ -561,6 +566,10 @@ def set_stage_direct(
 
     if target_stage is None or to_index is None:
         raise HTTPException(400, f"Stage '{payload.stage_name}' not found. Available: {[s.name for s in stages]}")
+
+    current_idx = event.current_stage_index
+    current_stage = stages[current_idx] if current_idx < len(stages) else None
+    current_stage_name = current_stage.name if current_stage else None
 
     from datetime import datetime
     # Update stage statuses immediately
@@ -596,6 +605,9 @@ def set_stage_direct(
     )
     db.add(log)
     db.commit()
+
+    # Trigger dynamic stage communications
+    await auto_send_stage_communications(event_id, current_stage_name, target_stage.name, db)
 
     # Broadcast WebSocket update
     from ..ws import broadcast_sync
