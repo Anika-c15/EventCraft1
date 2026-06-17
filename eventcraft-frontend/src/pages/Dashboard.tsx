@@ -389,9 +389,13 @@ export const Dashboard: React.FC = () => {
                     <Badge variant={typeVariant(approval.type) as any}>{approval.type}</Badge>
                     <span className="text-xs text-gray-400 dark:text-slate-500">{formatDate(approval.created_at)}</span>
                   </div>
-                  {/* Spec scenario message */}
+                 
+                 {/* Spec scenario message */}
                   <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 line-clamp-3">
-                    {approvalScenarioMessage(approval, stats)}
+                    {approval.type === 'Team Formation' && approval.description.includes('Generating') 
+                      ? <span className="italic animate-pulse text-primary">Generating AI insights...</span>
+                      : approvalScenarioMessage(approval, stats)
+                    }
                   </p>
                   <div className="flex items-center gap-2">
                     <Button variant="danger-outline" size="sm"

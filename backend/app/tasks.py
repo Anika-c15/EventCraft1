@@ -7,7 +7,19 @@ Celery async task queue.
 import logging
 from typing import List, Dict, Any
 
+from fastapi import BackgroundTasks
 logger = logging.getLogger(__name__)
+
+
+def safe_execute(bg_tasks: BackgroundTasks, task, func, *args, **kwargs):
+    """Try Redis, fall back to FastAPI BackgroundTasks if it fails."""
+    if CELERY_AVAILABLE and celery_app and task:
+        try:
+            task.apply_async(args=args, kwargs=kwargs)
+            return
+        except Exception as e:
+            logger.warning(f"⚠️ Celery failed, falling back to BackgroundTasks: {e}")
+    bg_tasks.add_task(func, *args, **kwargs)
 
 # ── Celery setup ───────────────────────────────────────────────────────────────
 
@@ -148,7 +160,9 @@ def _send_bulk_email(
         db.close()
 
 
-# ── Register as Celery tasks if Redis is available ─────────────────────────────
+
+
+# ── Register as Celery tasks ─────────────────────────────────────────────────
 
 if CELERY_AVAILABLE and celery_app:
     generate_team_rationales_task = celery_app.task(
@@ -162,5 +176,5 @@ if CELERY_AVAILABLE and celery_app:
     )(_send_bulk_email)
 else:
     # Plain functions — called synchronously
-    generate_team_rationales_task = _generate_rationales
-    send_bulk_email_task = _send_bulk_email
+    generate_team_rationales_task = None
+    send_bulk_email_task = None

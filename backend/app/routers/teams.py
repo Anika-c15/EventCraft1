@@ -1,5 +1,6 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from app.tasks import safe_execute, generate_team_rationales_task, _generate_rationales
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -57,6 +58,7 @@ def list_teams(
 @router.post("/form", response_model=List[TeamOut])
 def form_teams_endpoint(
     event_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
@@ -127,15 +129,13 @@ def form_teams_endpoint(
 
     created_teams = []
 
-    for idx, comp in enumerate(team_compositions):
-        # Generate rationale synchronously with fallback
-        rationale = _get_rationale(comp["name"], comp["members"], rules, idx)
-
+    # 1. Loop through and create teams WITHOUT calling the AI yet
+    for comp in team_compositions:
         team = models.Team(
             event_id=event_id,
             name=comp["name"],
             status=models.TeamStatus.proposed,
-            rationale=rationale,
+            rationale="Generating AI insights...", # Placeholder
         )
         db.add(team)
         db.flush()
@@ -146,6 +146,17 @@ def form_teams_endpoint(
                 p.team_id = team.id
 
         created_teams.append(team)
+
+    # 2. AFTER the loop, trigger the AI in the background
+    safe_execute(
+        background_tasks,
+        generate_team_rationales_task,
+        _generate_rationales,
+        event_id=event_id,
+        # We pass the list of teams we just created
+        team_data=[{"id": t.id, "name": t.name} for t in created_teams],
+        rules=rules
+    )
 
     # Create approval gate
     rules_summary = []
