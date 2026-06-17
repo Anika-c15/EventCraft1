@@ -89,7 +89,7 @@ const formatSocialPlatformError = (platform: string, error: string): string => {
 }
 
 export const SocialScraping: React.FC = () => {
-  const { eventId, lastWsMessage } = useAppContext()
+  const { eventId, lastWsMessage, dashboardStats, loadDashboard } = useAppContext()
   const navigate = useNavigate()
   const toast = useToast()
   const confirm = useConfirm()
@@ -345,6 +345,7 @@ export const SocialScraping: React.FC = () => {
   // Mount loading
   useEffect(() => {
     if (eventId) {
+      loadDashboard()
       setPipelineReady(null)
       import('../api/client').then(({ eventsApi }) => {
         eventsApi.stages(eventId).then((stages) => {
@@ -357,7 +358,7 @@ export const SocialScraping: React.FC = () => {
       loadCampaignSummary()
       loadTeams()
     }
-  }, [eventId, loadConfig, loadPolls, loadAuthStatus, loadCampaignSummary, loadTeams])
+  }, [eventId, loadConfig, loadPolls, loadAuthStatus, loadCampaignSummary, loadTeams, loadDashboard])
 
   // --- Actions ---
   const handleSaveConfig = async (e: React.FormEvent) => {
@@ -701,11 +702,25 @@ export const SocialScraping: React.FC = () => {
     )
   }
 
-  if (!config) {
+  if (!config || !dashboardStats) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px]">
         <RefreshCw className="animate-spin text-primary mb-2" size={30} />
         <span className="text-sm text-gray-500">Loading Social Scraping pipeline status...</span>
+      </div>
+    )
+  }
+
+  const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
+
+  if (!isEvaluationPhase) {
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+        <Share2 size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3 animate-pulse" />
+        <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Social Scraping Panel Locked</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-4">
+          Social scraping campaigns and pipeline tools will unlock dynamically once the event transitions to the <strong>Evaluation</strong> phase.
+        </p>
       </div>
     )
   }

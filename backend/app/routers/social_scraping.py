@@ -37,6 +37,23 @@ def get_social_config(event_id: str, db: Session = Depends(get_db), _: models.Us
     if not event:
         raise HTTPException(404, "Event not found")
     config = (event.pipeline_config or {}).get("social_scraping", DEFAULT_SOCIAL_CONFIG)
+    
+    # Dynamically enable if the current stage is the evaluation stage
+    from ..llm import check_stage_is_evaluation_phase
+    active_stage = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id,
+        models.PipelineStage.status == models.StageStatus.active
+    ).first()
+    is_evaluation_stage = False
+    if active_stage:
+        if getattr(active_stage, "is_evaluation", False):
+            is_evaluation_stage = True
+        else:
+            is_evaluation_stage = check_stage_is_evaluation_phase(active_stage.name, active_stage.description or "")
+            
+    if is_evaluation_stage:
+        config = {**config, "enabled": True}
+        
     return config
 
 @router.put("/config")
@@ -84,7 +101,7 @@ async def generate_draft_polls(
     if not event:
         raise HTTPException(404, "Event not found")
     
-    config = (event.pipeline_config or {}).get("social_scraping", DEFAULT_SOCIAL_CONFIG)
+    config = get_social_config(event_id, db)
     if not config.get("enabled"):
         raise HTTPException(400, "Social scraping is not enabled for this event.")
         
