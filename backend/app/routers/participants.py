@@ -2,7 +2,7 @@ import io
 import csv
 from typing import List, Optional
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 
 # pyrefly: ignore [missing-import]
@@ -488,6 +488,7 @@ async def parse_resume(
     event_id: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     event = _get_event(event_id, db)
     filename = (file.filename or "").lower()
@@ -550,5 +551,16 @@ async def parse_resume(
     if event.formation_rules:
         event_context["team_size"] = event.formation_rules.get("team_size", 3)
 
-    return llm.extract_profile_from_resume(cleaned, event_context=event_context)
-
+    try:
+        # If your LLM call takes longer than X seconds, it will fail, 
+        # and you can provide a "manual entry" fallback for the user.
+        return llm.extract_profile_from_resume(cleaned, event_context=event_context)
+    except Exception as e:
+        logger.error(f"Resume parsing failed: {e}")
+        # FALLBACK: Return a generic response that allows the user to continue manually
+        return {
+            "name": "",
+            "skills": [],
+            "level": "Intermediate",
+            "error": "Could not auto-parse resume. Please fill details manually."
+        }

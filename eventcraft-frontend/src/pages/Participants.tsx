@@ -136,21 +136,24 @@ export const Participants: React.FC = () => {
     }
   }
 
-  const handleSendPortalLinks = async () => {
+ const handleSendPortalLinks = async () => {
     if (!eventId) return
     const confirmed = await confirm({
       title: 'Send Portal Links',
-      message: `Send personal portal links to all ${participants.length} participants via email?`,
+      // Update the message to let them know it's a background process
+      message: `We'll start sending links to all ${participants.length} participants in the background. You can continue working while this completes.`,
       confirmText: 'Send Links',
       type: 'info'
     })
     if (!confirmed) return
+    
     setSendingLinks(true)
     try {
-      const result = await communicationsApi.sendPortalLinks(eventId)
-      toast.success(`Portal links sent to ${result.recipients} participants successfully!`)
+      // The backend will now return almost instantly because it's using BackgroundTasks!
+      await communicationsApi.sendPortalLinks(eventId)
+      toast.success(`Email queue started for ${participants.length} participants. You will see progress in the activity log.`)
     } catch (e: any) {
-      toast.error(e.message)
+      toast.error(e.message || "Failed to queue emails.")
     } finally {
       setSendingLinks(false)
     }
