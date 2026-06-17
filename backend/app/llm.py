@@ -1652,9 +1652,67 @@ Output ONLY valid JSON:
         agg_score = 0.0
         
     return {
-        "aggregate_score": round(agg_score, 2),
+            "aggregate_score": round(agg_score, 2),
         "explanation": "Calculated vote-weighted average of valid platform scores."
     }
+
+
+def _build_local_summary(all_polls: List[Dict[str, Any]], teams: List[Dict[str, Any]]) -> str:
+    """
+    Generates a simple markdown summary from raw data without calling any LLM.
+    Used as a fallback when all AI providers are rate-limited or unavailable.
+    """
+    total_posts = len(all_polls)
+    total_votes = sum(p.get("total_votes", 0) for p in all_polls)
+    avg_votes = round(total_votes / total_posts, 1) if total_posts else 0
+    flagged = [p for p in all_polls if p.get("flagged")]
+    verified = [p for p in all_polls if p.get("status") == "verified"]
+
+    # Platform breakdown
+    platform_counts: dict = {}
+    for p in all_polls:
+        plat = p.get("platform", "Unknown")
+        platform_counts[plat] = platform_counts.get(plat, 0) + 1
+
+    platform_lines = "\n".join(
+        f"- **{plat}**: {cnt} post(s)" for plat, cnt in sorted(platform_counts.items())
+    )
+
+    # Team leaderboard
+    sorted_teams = sorted(teams, key=lambda t: t.get("social_vote_score") or 0, reverse=True)
+    leaderboard_lines = []
+    for i, t in enumerate(sorted_teams, 1):
+        score = round(t.get("social_vote_score") or 0, 2)
+        leaderboard_lines.append(f"{i}. **{t.get('name', 'Unknown')}** — Score: `{score}`")
+    leaderboard = "\n".join(leaderboard_lines) if leaderboard_lines else "_No team data available._"
+
+    return f"""## 📊 Social Campaign Summary
+
+> ⚠️ *AI summary unavailable right now — all AI providers are busy. Showing a data-driven summary instead.*
+
+---
+
+### Executive Summary
+- **Total Posts Submitted:** {total_posts}
+- **Verified Posts:** {len(verified)}
+- **Total Engagement (Likes + Shares):** {total_votes}
+- **Average Engagement per Post:** {avg_votes}
+- **Flagged / Failed Verification:** {len(flagged)}
+
+---
+
+### Platform Breakdown
+{platform_lines if platform_lines else "_No posts yet._"}
+
+---
+
+### Team Performance Leaderboard
+{leaderboard}
+
+---
+
+*Tip: Retry in a few minutes to get the full AI-generated narrative summary.*
+"""
 
 
 def generate_social_campaign_summary(all_polls: List[Dict[str, Any]], teams: List[Dict[str, Any]]) -> tuple[str, str]:
@@ -1700,7 +1758,7 @@ Format the report using Markdown. Include:
             )
             return response.choices[0].message.content.strip(), "groq"
         except Exception as groq_err:
-            print(f"[Campaign Summary Fallback] Groq call failed: {groq_err}. Trying Gemini...")
+            print(f"[Campaign Summary] Groq failed: {groq_err}. Trying Gemini...")
             # Fall back to Gemini if configured
             if _use_gemini():
                 try:
@@ -1710,10 +1768,12 @@ Format the report using Markdown. Include:
                     messages.append({"role": "user", "content": prompt})
                     return _call_gemini_api(messages), "gemini"
                 except Exception as gemini_err:
-                    return f"[Gemini Fallback Error: {gemini_err} (Groq error was: {groq_err})]", "gemini"
+                    print(f"[Campaign Summary] Gemini also failed: {gemini_err}. Using local fallback.")
+                    return _build_local_summary(all_polls, teams), "local_fallback"
             
-            # If Gemini not configured, handle original Groq error
-            return f"[LLM Error: {groq_err}]", "groq"
+            # Gemini not configured
+            print(f"[Campaign Summary] Groq failed and Gemini not configured. Using local fallback.")
+            return _build_local_summary(all_polls, teams), "local_fallback"
 
     # If Groq client is not configured, try Gemini directly
     if _use_gemini():
@@ -1724,8 +1784,10 @@ Format the report using Markdown. Include:
             messages.append({"role": "user", "content": prompt})
             return _call_gemini_api(messages), "gemini"
         except Exception as e:
-            return f"[Gemini Error: {e}]", "gemini"
+            print(f"[Campaign Summary] Gemini failed: {e}. Using local fallback.")
+            return _build_local_summary(all_polls, teams), "local_fallback"
 
-    return "[LLM not configured — add GROQ_API_KEY or GEMINI_API_KEY to backend/.env]", "none"
+    # Nothing configured — local data fallback
+    return _build_local_summary(all_polls, teams), "local_fallback"
 
 
