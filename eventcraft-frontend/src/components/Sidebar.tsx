@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, User, Users, ClipboardList, Send, GitBranch,
   Shield, Settings, Sliders, ChevronLeft, ChevronRight, Bot, LogOut,
@@ -41,6 +41,7 @@ export const Sidebar: React.FC = () => {
     deleteEvent
   } = useAppContext()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const handleLogout = () => {
     setShowLogoutModal(true)
@@ -58,7 +59,7 @@ export const Sidebar: React.FC = () => {
 
 
   // If there is no active event (e.g. they are on the setup page), HIDE THE ENTIRE SIDEBAR
-  if (!eventId) {
+  if (!eventId || location.pathname === '/setup') {
     return null
   }
 

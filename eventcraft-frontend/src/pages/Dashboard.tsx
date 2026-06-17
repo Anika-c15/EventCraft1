@@ -73,6 +73,8 @@ export const Dashboard: React.FC = () => {
     dashboardStats, loadDashboard,
     activityLog, loadActivityLog,
     lastWsMessage,
+    eventsList, 
+    loading,
   } = useAppContext()
 
   const [approvalBanner, setApprovalBanner] = useState<string | null>(null)
@@ -84,6 +86,14 @@ export const Dashboard: React.FC = () => {
   const [newEventDesc, setNewEventDesc] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // If the app is done loading and the user has 0 events, kick them to setup
+    if (!loading && eventsList && eventsList.length === 0) {
+      navigate('/setup', { replace: true })
+    }
+  }, [eventsList, loading, navigate])
+
 
   useEffect(() => {
     if (!eventId) {

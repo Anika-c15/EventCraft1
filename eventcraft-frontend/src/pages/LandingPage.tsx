@@ -23,6 +23,7 @@ import { Header } from '../components/Header'
 import { useToast } from '../context/ToastAndConfirmContext'
 import { authApi } from '../api/client'
 
+
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 interface JourneyStep {
@@ -238,7 +239,7 @@ export const LandingPage: React.FC = () => {
     }
   }
 
-  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+ const handleVerifyAndRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError('')
     if (!otpValue || !pendingRegisterData) return
@@ -268,13 +269,13 @@ export const LandingPage: React.FC = () => {
       const regData = await regRes.json()
       if (!regRes.ok) throw new Error(regData.detail || 'Registration failed')
 
-      // 3. Login and redirect to EventSetup instead of dashboard
+      // 3. Login 
       await login(pendingRegisterData.email, pendingRegisterData.password)
-     if (localStorage.getItem('ec_event_id')) {
-        navigate('/dashboard')
-      } else {
-        navigate('/setup')
-      }
+      
+      // 👇 FIX: Force all newly registered users to the setup page unconditionally! 👇
+      // Make sure '/setup' matches the route you defined in App.tsx (it might be '/event-setup')
+      navigate('/setup')
+      
     } catch (err: any) {
       setFormError(err.message || 'Verification failed')
     } finally {
