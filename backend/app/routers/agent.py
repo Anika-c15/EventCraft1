@@ -71,6 +71,33 @@ def chat(
     # ── Apply full configuration when pipeline is ready ────────────────────────
     if result["pipeline_ready"] and result["pipeline_config"]:
         config = result["pipeline_config"]
+        
+        # Enforce first 2 stages are Participant Intake and Team Formation if not mentioned
+        stages = config.get("stages", [])
+        has_intake = any("participant intake" in s.get("name", "").lower() for s in stages)
+        has_team_formation = any("team formation" in s.get("name", "").lower() for s in stages)
+        stages_to_prepend = []
+        if not has_intake:
+            stages_to_prepend.append({
+                "name": "Participant Intake",
+                "description": "Register and verify all participants, collect skill declarations.",
+                "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"],
+                "allows_submission": False,
+                "is_evaluation": False,
+                "portal_description": "Registration is open. Your profile has been received.",
+            })
+        if not has_team_formation:
+            stages_to_prepend.append({
+                "name": "Team Formation",
+                "description": "Form balanced teams based on skills and institutional diversity.",
+                "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"],
+                "allows_submission": False,
+                "is_evaluation": False,
+                "portal_description": "Teams are being formed. You'll receive an email once your team assignment is confirmed.",
+            })
+        if stages_to_prepend:
+            config["stages"] = stages_to_prepend + stages
+
         _apply_full_config(event, config, db)
 
     db.commit()
