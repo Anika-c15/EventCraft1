@@ -187,14 +187,14 @@ def _call(prompt: str, system: Optional[str] = None) -> str:
 def check_stage_allows_submission(stage_name: str, stage_description: str) -> bool:
     """
     Use Groq LLM to dynamically classify if a pipeline stage allows project submissions.
-    Falls back to keyword matching if LLM is not configured or fails.
+    Returns False if LLM is not configured, fails, or returns a non-boolean response.
     """
     client = _get_client()
     if client is not None:
         try:
-            prompt = f"""Analyze if the following event pipeline stage occurs after team formation and allows teams to submit or present their project.
-            Any stage after the team formation phase (such as hacking, prototyping, development, peer review, presentation, or expert evaluation/judging) should allow teams to submit their project links and details. Only one finalized submission is allowed per team.
-            Stages like participant intake, registration, or team formation itself do NOT allow project submissions, and the final results/announcement phase also does NOT.
+            prompt = f"""Analyze if the following event pipeline stage is a hacking, prototyping, development, or submission stage where teams actively build and submit their project details.
+            Only hacking, prototyping, development, or specific submission stages allow teams to submit their project links and details.
+            Stages like participant intake, registration, team formation, evaluation, judging, peer review, or final results/announcements do NOT allow project submissions.
             
             Stage Name: {stage_name}
             Stage Description: {stage_description}
@@ -205,15 +205,12 @@ def check_stage_allows_submission(stage_name: str, stage_description: str) -> bo
             res = _call(prompt, system=system).strip().lower()
             if "true" in res:
                 return True
-            if "false" in res:
+            elif "false" in res:
                 return False
         except Exception as e:
             print(f"⚠️ Groq stage classification error: {e}")
 
-    # Fallback to keyword heuristics
-    keywords = ("submit", "finale", "presentation", "eval", "hack", "project", "build", "pitch", "code", "work")
-    name_lower = stage_name.lower()
-    return any(kw in name_lower for kw in keywords)
+    return False
 
 
 @lru_cache(maxsize=128)
@@ -256,7 +253,7 @@ def check_stage_is_results_phase(stage_name: str, stage_description: str) -> boo
 def check_stage_is_evaluation_phase(stage_name: str, stage_description: str) -> bool:
     """
     Use Groq LLM to dynamically classify if a pipeline stage is an evaluation, scoring, or judging phase.
-    Falls back to keyword matching if LLM is not configured or fails.
+    Returns False if LLM is not configured, fails, or returns a non-boolean response.
     """
     client = _get_client()
     if client is not None:
@@ -272,16 +269,12 @@ def check_stage_is_evaluation_phase(stage_name: str, stage_description: str) -> 
             res = _call(prompt, system=system).strip().lower()
             if "true" in res:
                 return True
-            if "false" in res:
+            elif "false" in res:
                 return False
         except Exception as e:
             print(f"⚠️ Groq stage classification error: {e}")
 
-    # Fallback to keyword heuristics
-    keywords = ("eval", "judg", "scor", "peer", "review", "grade", "assessment", "rating", "vote")
-    name_lower = stage_name.lower()
-    desc_lower = stage_description.lower() if stage_description else ""
-    return any(kw in name_lower for kw in keywords) or any(kw in desc_lower for kw in keywords)
+    return False
 
 
 def _extract_json(text: str) -> Any:
@@ -1126,19 +1119,32 @@ def agent_chat(
     """Wraps inner agent chat, forcing a clarifying question if scoring weights are not specified."""
     res = _agent_chat_inner(history, new_message)
     
+    if res.get("reply"):
+        # Strip markdown code blocks if present
+        reply_text = res["reply"]
+        reply_text = re.sub(r"```json[\s\S]*?```", "", reply_text).strip()
+        reply_text = re.sub(r"```[\s\S]*?```", "", reply_text).strip()
+        # Strip raw JSON if no code blocks were used
+        start = reply_text.find('{')
+        if start != -1:
+            reply_text = reply_text[:start].strip()
+        # Clean up any trailing intro phrases like "here is the configuration:"
+        reply_text = re.sub(
+            r"\s*(here is the |here's the |here is a |here's a |json configuration|json config|configuration|summary)[:\s]*$",
+            "",
+            reply_text,
+            flags=re.IGNORECASE
+        ).strip()
+        res["reply"] = reply_text
+    
     if res.get("pipeline_ready") and res.get("pipeline_config"):
         if not _user_has_specified_scoring(history, new_message):
             res["pipeline_ready"] = False
             res["pipeline_config"] = None
             res["needs_clarification"] = True
             
-            # Keep the detailed LLM reply text, stripping the JSON block if it exists
-            reply_text = res["reply"]
-            reply_text = re.sub(r"```json[\s\S]*?```", "", reply_text).strip()
-            reply_text = re.sub(r"```[\s\S]*?```", "", reply_text).strip()
-            
             res["reply"] = (
-                f"{reply_text}\n\n"
+                f"{res['reply']}\n\n"
                 "Please confirm how you would like to configure the scoring balance weights (Expert Judges vs Peer reviews vs Social scrape). "
                 "For example, you can say 'use default weights' (70% judge / 15% peer / 15% social) or specify a custom balance (e.g., '90% judge and 10% peer')."
             )
