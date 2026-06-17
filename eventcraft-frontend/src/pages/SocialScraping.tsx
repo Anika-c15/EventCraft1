@@ -711,6 +711,18 @@ export const SocialScraping: React.FC = () => {
     )
   }
 
+  if (config.social_weight === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+        <Share2 size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+        <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Social Scraping Not Allowed</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-4">
+          Social scraping is not allowed because its scoring weight is set to 0% in the event's scoring configuration.
+        </p>
+      </div>
+    )
+  }
+
   const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
 
   if (!isEvaluationPhase) {

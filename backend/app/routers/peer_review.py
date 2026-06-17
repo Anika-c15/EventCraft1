@@ -23,6 +23,17 @@ router = APIRouter(prefix="/api/events/{event_id}/peer-reviews", tags=["peer-rev
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+def check_peer_review_allowed(event_id: str, db: Session):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    peer_weight = 0.15
+    if event.scoring_weights:
+        peer_weight = event.scoring_weights.get("peer", 0.15)
+    if peer_weight == 0:
+        raise HTTPException(400, "Peer voting is not allowed because its scoring weight is set to 0%")
+
+
 def _resolve_participant(token: str, event_id: str, db: Session) -> models.Participant:
     """Decode a portal token and return the participant."""
     participant_id = decode_portal_token(token)
@@ -76,6 +87,7 @@ def submit_peer_review(
     Requires a valid participant portal token in the query string.
     One review per (from_team → to_team) pair.  Self-voting is blocked.
     """
+    check_peer_review_allowed(event_id, db)
     participant = _resolve_participant(token, event_id, db)
 
     active_stage = db.query(models.PipelineStage).filter(
@@ -150,6 +162,7 @@ def get_my_votes(
     db: Session = Depends(get_db),
 ):
     """Return a dict of {to_team_id: score} for the authenticated participant's team."""
+    check_peer_review_allowed(event_id, db)
     participant = _resolve_participant(token, event_id, db)
     if not participant.team_id:
         return {}
@@ -171,6 +184,7 @@ def get_showroom(
     Returns all other teams' showroom cards for this event.
     Excludes the requesting participant's own team.
     """
+    check_peer_review_allowed(event_id, db)
     participant = _resolve_participant(token, event_id, db)
 
     teams = db.query(models.Team).filter(

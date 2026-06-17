@@ -31,6 +31,17 @@ DEFAULT_SOCIAL_CONFIG = {
     "min_vote_threshold": 30
 }
 
+def check_social_scraping_allowed(event_id: str, db: Session):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    social_weight = 0.15
+    if event.scoring_weights:
+        social_weight = event.scoring_weights.get("social", 0.15)
+    if social_weight == 0:
+        raise HTTPException(400, "Social scraping is not allowed because its scoring weight is set to 0%")
+
+
 @router.get("/config")
 def get_social_config(event_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
     event = db.query(Event).filter(Event.id == event_id).first()
@@ -38,21 +49,29 @@ def get_social_config(event_id: str, db: Session = Depends(get_db), _: models.Us
         raise HTTPException(404, "Event not found")
     config = (event.pipeline_config or {}).get("social_scraping", DEFAULT_SOCIAL_CONFIG)
     
-    # Dynamically enable if the current stage is the evaluation stage
-    from ..llm import check_stage_is_evaluation_phase
-    active_stage = db.query(models.PipelineStage).filter(
-        models.PipelineStage.event_id == event_id,
-        models.PipelineStage.status == models.StageStatus.active
-    ).first()
-    is_evaluation_stage = False
-    if active_stage:
-        if getattr(active_stage, "is_evaluation", False):
-            is_evaluation_stage = True
-        else:
-            is_evaluation_stage = check_stage_is_evaluation_phase(active_stage.name, active_stage.description or "")
-            
-    if is_evaluation_stage:
-        config = {**config, "enabled": True}
+    social_weight = 0.15
+    if event.scoring_weights:
+        social_weight = event.scoring_weights.get("social", 0.15)
+        
+    if social_weight == 0:
+        config = {**config, "enabled": False, "social_weight": 0.0}
+    else:
+        # Dynamically enable if the current stage is the evaluation stage
+        from ..llm import check_stage_is_evaluation_phase
+        active_stage = db.query(models.PipelineStage).filter(
+            models.PipelineStage.event_id == event_id,
+            models.PipelineStage.status == models.StageStatus.active
+        ).first()
+        is_evaluation_stage = False
+        if active_stage:
+            if getattr(active_stage, "is_evaluation", False):
+                is_evaluation_stage = True
+            else:
+                is_evaluation_stage = check_stage_is_evaluation_phase(active_stage.name, active_stage.description or "")
+                
+        if is_evaluation_stage:
+            config = {**config, "enabled": True}
+        config = {**config, "social_weight": social_weight}
         
     return config
 
@@ -63,6 +82,7 @@ def update_social_config(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -97,6 +117,7 @@ async def generate_draft_polls(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -222,6 +243,7 @@ async def post_single_poll(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -312,6 +334,7 @@ async def post_all_polls(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     drafts = db.query(SocialPoll).filter(
         SocialPoll.event_id == event_id,
         SocialPoll.status == SocialPollStatus.draft
@@ -406,6 +429,7 @@ def set_instagram_story_id(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -436,6 +460,7 @@ def set_poll_post_id(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -466,6 +491,7 @@ def submit_manual_votes(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -507,6 +533,7 @@ def override_poll_score(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -525,6 +552,7 @@ async def fetch_polls_results(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     # Retrieve all posted polls
     ended_polls = db.query(SocialPoll).filter(
         SocialPoll.event_id == event_id,
@@ -621,6 +649,7 @@ async def calculate_social_scores(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     # Run score calculation
     polls = db.query(SocialPoll).filter(
         SocialPoll.event_id == event_id,
@@ -750,6 +779,7 @@ async def run_full_pipeline(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     # Run the full pipeline synchronously/sequentially
     # 1. Generate
     await generate_draft_polls(event_id, background_tasks, db, _)
@@ -820,6 +850,7 @@ def get_campaign_summary(event_id: str, db: Session = Depends(get_db), _: models
 
 @router.delete("/polls/{poll_id}")
 def delete_poll(event_id: str, poll_id: str, db: Session = Depends(get_db), _: models.User = Depends(require_committee)):
+    check_social_scraping_allowed(event_id, db)
     poll = db.query(SocialPoll).filter(SocialPoll.id == poll_id, SocialPoll.event_id == event_id).first()
     if not poll:
         raise HTTPException(404, "Poll not found")
@@ -835,6 +866,7 @@ def reset_campaign_data(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    check_social_scraping_allowed(event_id, db)
     db.query(SocialPoll).filter(SocialPoll.event_id == event_id).delete()
     
     teams = db.query(Team).filter(Team.event_id == event_id).all()

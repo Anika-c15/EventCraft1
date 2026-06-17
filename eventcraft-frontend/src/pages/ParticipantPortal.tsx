@@ -354,6 +354,9 @@ export const ParticipantPortal: React.FC = () => {
   const isPhase2 = !isPhase3 && (scoring_phase_active ?? false)
   const isPhase1 = !isPhase2 && !isPhase3
 
+  const weights = data?.scoring_weights || { judge: 0.70, peer: 0.15, social: 0.15 }
+  const isPeerVotingEnabled = (weights.peer ?? 0) > 0
+
   // Rename window: open only during Team Formation stage, locked from Evaluation onwards
   const currentStageLower = (current_stage || '').toLowerCase()
   const isTeamFormationPhase = currentStageLower.includes('team') || currentStageLower.includes('formation')
@@ -419,9 +422,9 @@ export const ParticipantPortal: React.FC = () => {
 
             <button
               id="showroom-tab-button"
-              disabled={isPhase1}
-              onClick={() => !isPhase1 && setActiveTab('showroom')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${isPhase1
+              disabled={isPhase1 || !isPeerVotingEnabled}
+              onClick={() => !isPhase1 && isPeerVotingEnabled && setActiveTab('showroom')}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all ${isPhase1 || !isPeerVotingEnabled
                 ? 'opacity-50 cursor-not-allowed text-gray-400'
                 : activeTab === 'showroom'
                   ? 'bg-primary/10 text-primary dark:text-primary-400 dark:bg-primary/20 font-bold shadow-sm'
@@ -432,7 +435,7 @@ export const ParticipantPortal: React.FC = () => {
                 <BarChart2 size={14} />
                 <span>Project Showroom & Voting</span>
               </div>
-              {isPhase1 && <Lock size={12} className="text-gray-400" />}
+              {(isPhase1 || !isPeerVotingEnabled) && <Lock size={12} className="text-gray-400" />}
             </button>
 
             <button
@@ -990,20 +993,26 @@ export const ParticipantPortal: React.FC = () => {
                 )}
               </div>
 
-              {!scoring_phase_active ? (
+              {!scoring_phase_active || !isPeerVotingEnabled ? (
                 /* ── Locked state ── */
                 <div className="text-center py-16 px-4">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                     <Lock size={24} className="text-gray-300" />
                   </div>
-                  <h3 className="text-sm font-bold text-gray-700 mb-2">Gallery Locked</h3>
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">
+                    {!isPeerVotingEnabled ? 'Peer voting is not allowed' : 'Gallery Locked'}
+                  </h3>
                   <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
-                    Project gallery and peer voting will only open in the <strong>Scoring</strong> Phase.
+                    {!isPeerVotingEnabled
+                      ? ''
+                      : 'Project gallery and peer voting will only open in the Scoring Phase.'}
                   </p>
-                  <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-gray-400">
-                    <Clock size={12} />
-                    <span>Current stage: <strong className="text-gray-600">{current_stage || 'Participant Intake'}</strong></span>
-                  </div>
+                  {isPeerVotingEnabled && (
+                    <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-gray-400">
+                      <Clock size={12} />
+                      <span>Current stage: <strong className="text-gray-600">{current_stage || 'Participant Intake'}</strong></span>
+                    </div>
+                  )}
                 </div>
               ) : !team ? (
                 /* ── Not assigned to a team ── */
