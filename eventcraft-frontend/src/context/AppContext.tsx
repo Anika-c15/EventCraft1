@@ -220,6 +220,11 @@ const logout = () => {
 }
 
   const setEventId = (id: string) => {
+    if (id !== eventId) {
+      setApprovals([])
+      setDashboardStats(null)
+      setActivityLog([])
+    }
     setEventIdState(id)
     localStorage.setItem('ec_event_id', id)
   }
