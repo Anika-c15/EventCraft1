@@ -344,7 +344,9 @@ const logout = () => {
             }
             localStorage.setItem('ec_event_id', activeEvent.id)
           }
-          setEventIdState(activeEvent.id)
+          // Only update state if the ID actually changed — prevents double-triggering
+          // effects in child components that depend on eventId
+          setEventIdState((prev) => prev === activeEvent.id ? prev : activeEvent.id)
           setEventName(activeEvent.name)
         } else {
           setEventIdState(null)
