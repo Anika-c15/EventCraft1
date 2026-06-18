@@ -1711,7 +1711,7 @@ def _build_local_summary(all_polls: List[Dict[str, Any]], teams: List[Dict[str, 
 
 ---
 
-*Tip: Retry in a few minutes to get the full AI-generated narrative summary.*
+
 """
 
 

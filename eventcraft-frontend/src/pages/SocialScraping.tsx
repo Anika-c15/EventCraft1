@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Share2, RefreshCw, Trash, Check, ExternalLink, Eye, ShieldAlert,
   BarChart3, Settings2, RotateCcw, Sparkles
@@ -13,6 +13,8 @@ import { SocialConfig, SocialCampaignSummary } from '../types'
 export const SocialScraping: React.FC = () => {
   const { eventId, lastWsMessage } = useAppContext()
   const toast = useToast()
+  const toastRef = useRef(toast)
+  toastRef.current = toast
   const confirm = useConfirm()
 
   // --- States ---
@@ -44,22 +46,24 @@ export const SocialScraping: React.FC = () => {
       const data = await socialScrapingApi.getSocialConfig(eventId)
       setConfig(data)
     } catch (err: any) {
-      toast.error(`Failed to load config: ${err.message}`)
+      toastRef.current.error(`Failed to load config: ${err.message}`)
     }
-  }, [eventId, toast])
+  }, [eventId])
 
   const loadPosts = useCallback(async () => {
     if (!eventId) return
+    // Skip if config is loaded and social weight is 0 — backend returns 400 in this case
+    if (config !== null && config.social_weight === 0) return
     setLoadingPosts(true)
     try {
       const data = await socialScrapingApi.listAllSocialPosts(eventId)
       setPosts(data)
     } catch (err: any) {
-      toast.error(`Failed to load social posts: ${err.message}`)
+      toastRef.current.error(`Failed to load social posts: ${err.message}`)
     } finally {
       setLoadingPosts(false)
     }
-  }, [eventId, toast])
+  }, [eventId, config])
 
   const loadSummary = useCallback(async () => {
     if (!eventId) return
@@ -78,8 +82,8 @@ export const SocialScraping: React.FC = () => {
   }, [loadConfig, loadPosts, loadSummary])
 
   useEffect(() => {
-    loadAllData()
-  }, [loadAllData])
+    if (eventId) loadAllData()
+  }, [eventId])
 
   // React to WS updates
   useEffect(() => {

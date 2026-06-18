@@ -923,6 +923,13 @@ def get_campaign_summary(
     
     md_summary, summary_provider = generate_social_campaign_summary(mapped_posts_for_summary, teams_data)
     
+    # Fetch event name for personalization
+    from ..models import Event
+    event_obj = db.query(Event).filter(Event.id == event_id).first()
+    event_name = event_obj.name if event_obj else "Event"
+    header = f"# Social Media Voting Campaign Report: {event_name}"
+    full_report = header + "\n" + md_summary
+    
     return {
         "total_polls": len(posts),
         "total_votes": sum([(p.likes + p.shares) for p in posts]),
@@ -937,7 +944,7 @@ def get_campaign_summary(
             }
             for t in teams
         ],
-        "ai_summary": md_summary,
+        "ai_summary": full_report,
         "llm_provider_used": summary_provider
     }
 
