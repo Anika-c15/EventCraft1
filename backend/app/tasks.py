@@ -26,23 +26,25 @@ def safe_execute(bg_tasks: BackgroundTasks, task, func, *args, **kwargs):
 def _make_celery():
     from .config import settings
     try:
-        import redis as redis_lib
-        # Quick connectivity check before creating Celery app
-        redis_url = settings.REDIS_URL or ""
-        if redis_url.startswith("rediss://"):
-            _sep = "&" if "?" in redis_url else "?"
-            redis_url = f"{redis_url}{_sep}ssl_cert_reqs=none"
-            
-        r = redis_lib.from_url(redis_url, socket_connect_timeout=1)
+        import redis
+        # 1. Configure SSL options for Upstash (rediss://)
+        redis_kwargs = {"socket_connect_timeout": 5}
+        if settings.REDIS_URL.startswith("rediss://"):
+            redis_kwargs["ssl_cert_reqs"] = None  # Disable certificate validation for cloud Redis
+        
+        # 2. Connectivity check
+        r = redis.from_url(settings.REDIS_URL, **redis_kwargs)
         r.ping()
 
         from celery import Celery
         app = Celery(
             "eventcraft",
-            broker=redis_url,
-            backend=redis_url,
+            broker=settings.REDIS_URL,
+            backend=settings.REDIS_URL,
             include=["app.tasks"],
         )
+        
+        # 3. Configure SSL for Celery (broker and backend)
         app.conf.update(
             task_serializer="json",
             result_serializer="json",
@@ -52,18 +54,21 @@ def _make_celery():
             task_always_eager=False,
             task_acks_late=True,
             worker_prefetch_multiplier=1,
-            # Retry failed tasks up to 3 times
             task_max_retries=3,
             task_default_retry_delay=30,
+            # If using SSL, Celery needs these settings
+            broker_use_ssl={'ssl_cert_reqs': None} if settings.REDIS_URL.startswith("rediss://") else None,
+            redis_backend_use_ssl={'ssl_cert_reqs': None} if settings.REDIS_URL.startswith("rediss://") else None,
         )
+        
         logger.info("✅ Celery connected to Redis")
         return app, True
     except Exception as e:
-        logger.warning(f"⚠️  Redis unavailable ({e}) — tasks will run synchronously")
+        logger.warning(f"⚠️ Redis unavailable ({e}) — tasks will run synchronously")
         return None, False
 
 
-celery_app, CELERY_AVAILABLE = _make_celery()
+celery_app, CELERY_AVAILABLE = None, False
 
 
 def run_async(func, *args, **kwargs):
@@ -82,23 +87,34 @@ def _generate_rationales(event_id: str, team_data: List[Dict], rules: Dict):
 
     db = SessionLocal()
     try:
+        # --- FIX: Ensure every team dict has a 'members' key ---
+        for team_dict in team_data:
+            if "members" not in team_dict:
+                team_dict["members"] = [] 
+
+        # Now pass the safe data to the LLM
         rationales = llm.generate_all_team_rationales(team_data, rules)
 
         for team_dict in team_data:
             team = db.query(models.Team).filter(models.Team.id == team_dict["id"]).first()
             if team:
-                r = rationales.get(team_dict["name"], "")
-                # Use static fallback if LLM returned an error
+                # Use .get() to avoid KeyError if the name is missing
+                r = rationales.get(team_dict.get("name", "Unknown Team"), "")
+                
+                # Use static fallback if LLM returned an error or is empty
                 if not r or r.startswith("["):
                     from .routers.teams import STATIC_RATIONALES
+                    # Safe index calculation
                     idx = next(
-                        (i for i, t in enumerate(team_data) if t["id"] == team_dict["id"]), 0
+                        (i for i, t in enumerate(team_data) if t.get("id") == team_dict["id"]), 0
                     )
                     r = STATIC_RATIONALES[idx % len(STATIC_RATIONALES)]
+                
                 team.rationale = r
 
         db.commit()
 
+       
         log = models.ActivityLog(
             event_id=event_id,
             message=f"AI rationales generated for {len(team_data)} teams",
@@ -167,9 +183,20 @@ def _send_bulk_email(
 
 
 
+
 # ── Register as Celery tasks ─────────────────────────────────────────────────
 
+class MockTask:
+    """Fakes the Celery task interface so safe_execute doesn't crash."""
+    def __init__(self, func):
+        self.func = func
+    
+    def apply_async(self, args=None, kwargs=None):
+        # When Celery isn't there, we just run the function directly
+        return self.func(*(args or []), **(kwargs or {}))
+
 if CELERY_AVAILABLE and celery_app:
+    # Register as actual Celery tasks
     generate_team_rationales_task = celery_app.task(
         name="tasks.generate_rationales",
         bind=False,
@@ -180,6 +207,6 @@ if CELERY_AVAILABLE and celery_app:
         bind=False,
     )(_send_bulk_email)
 else:
-    # Plain functions — called synchronously
-    generate_team_rationales_task = None
-    send_bulk_email_task = None
+    # Use the Mock wrapper so the code never sees a 'None' value
+    generate_team_rationales_task = MockTask(_generate_rationales)
+    send_bulk_email_task = MockTask(_send_bulk_email)

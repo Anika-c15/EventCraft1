@@ -27,7 +27,21 @@ export const Teams: React.FC = () => {
   useEffect(() => {
     if (eventId) loadTeams()
   }, [eventId])
+  
 
+    useEffect(() => {
+    // Check if any team is currently in the "Generating" state
+    const isGenerating = teams.some(t => t.rationale === 'Generating AI insights...');
+    
+    if (isGenerating) {
+      const interval = setInterval(() => {
+        console.log("Polling for updated AI rationales...");
+        loadTeams(); 
+      }, 2000); // Polls the server every 2 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [teams]);
   // Lock formation controls once stage has advanced past Team Formation (index > 1)
   // or once any team is approved
   const stageIndex = dashboardStats?.current_stage_index ?? 0
@@ -46,6 +60,24 @@ export const Teams: React.FC = () => {
       setLoading(false)
     }
   }
+
+  
+  useEffect(() => {
+    // 1. Establish connection (adjust URL to match your backend port)
+    const socket = new WebSocket('ws://localhost:8000/ws/' + eventId);
+
+    // 2. Listen for the backend signal
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "rationales_ready") {
+        console.log("AI Insights ready! Refreshing teams...");
+        loadTeams(); // Automatically triggers a re-fetch of the updated teams
+      }
+    };
+
+    return () => socket.close();
+  }, [eventId]);
+  // -----------------------------
 
   const handleFormTeams = async () => {
     if (!eventId) return
@@ -162,8 +194,10 @@ export const Teams: React.FC = () => {
                       AI Rationale
                     </p>
                     <p className="text-sm text-gray-600 leading-relaxed">
-                      {team.rationale || 'Generating rationale...'}
-                    </p>
+  {team.rationale === 'Generating AI insights...' 
+    ? <span className="animate-pulse text-gray-400">Generating AI insights...</span> 
+    : team.rationale}
+</p>
                   </div>
                 </Card>
               )
