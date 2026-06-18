@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '')
 
 function getToken(): string | null {
   return localStorage.getItem('ec_token')
@@ -445,7 +445,7 @@ export const socialScrapingApi = {
     return request<any[]>(`/api/events/${eventId}/social-scraping/social-posts${query}`)
   },
 
-  verifyPostManually: (eventId: string, postId: string, data: { likes: number; shares: number; approve: boolean }) =>
+  verifyPostManually: (eventId: string, postId: string, data: { likes: number; shares: number; approve: boolean; rejection_reason?: string }) =>
     request<any>(`/api/events/${eventId}/social-scraping/social-posts/${postId}/verify`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -462,6 +462,22 @@ export const socialScrapingApi = {
   
   resetCampaign: (eventId: string) =>
     request<{ status: string; message: string }>(`/api/events/${eventId}/social-scraping/reset-campaign`, { method: 'POST' }),
+
+  retryPostProof: async (eventId: string, teamId: string, postId: string, screenshotFile?: File) => {
+    const formData = new FormData()
+    if (screenshotFile) {
+      formData.append('screenshot_file', screenshotFile)
+    }
+    const res = await fetch(`${BASE_URL}/api/events/${eventId}/social-scraping/teams/${teamId}/social-posts/${postId}/retry`, {
+      method: 'PUT',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Retry failed' }))
+      throw new Error(err.detail || 'Retry failed')
+    }
+    return res.json()
+  },
 }
 
 

@@ -190,6 +190,20 @@ def _migrate_db():
                     print("🚀 Migrated: added screenshot_hash to social_posts")
                 except Exception as col_err:
                     print(f"⚠️ Could not add screenshot_hash to social_posts: {col_err}")
+            if "rejection_reason" not in columns_sp:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE social_posts ADD COLUMN rejection_reason TEXT"))
+                    print("🚀 Migrated: added rejection_reason to social_posts")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add rejection_reason to social_posts: {col_err}")
+            if "retry_count" not in columns_sp:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE social_posts ADD COLUMN retry_count INTEGER DEFAULT 0"))
+                    print("🚀 Migrated: added retry_count to social_posts")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add retry_count to social_posts: {col_err}")
 
         # ── agent_messages table migrations ─────────────────────────────────
         if "agent_messages" in existing_tables:
