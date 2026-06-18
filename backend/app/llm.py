@@ -797,144 +797,53 @@ Resume to analyze:
 SYSTEM_PROMPT = """You are EventCraft's intelligent event configuration assistant.
 Your job is to configure a complete event pipeline from a natural language description.
 
-When the user describes their event, extract ALL of the following:
-1. Event phases/stages (in order) with descriptions and tasks
-2. Team formation rules (team size, skill balance, institution diversity, experience grouping)
-3. Evaluation criteria and scoring weights
-4. Communication touchpoints (which stages need emails, and to whom)
-5. Anomaly threshold for score divergence
-6. Scoring balance: percentage weights for the scoring engine (expert judges, peer review, social scrape) summing to exactly 1.0 (or 100%)
-7. A concise, professional 1-2 sentence description summarizing the event format and goals.
+When the user describes their event, you MUST collect ALL of the following before generating any configuration:
+1. Event type and format (hackathon, case competition, coding contest, etc.)
+2. Number of participants and event duration
+3. Team structure — individual or team-based; if teams, exact team size
+4. Pipeline stages appropriate for this event type
+5. Evaluation criteria (what judges will score on)
+6. Scoring balance weights — MANDATORY: exact percentages for Expert Judges, Peer Reviews, and Social Scraping that sum to 100%
+7. Team formation rules:
+   - Enable skill balancing? (match technical and non-technical profiles)
+   - Enforce institutional diversity? (max participants per school/company per team)
+   - How to group experience levels? (mixed / similar / none)
+8. Anomaly threshold — at what score deviation (in points) should a judge's score be flagged as anomalous?
+9. Scoring criteria weights — should all evaluation criteria be weighted equally or prioritized differently?
 
-CRITICAL RULES ABOUT WHEN TO ASK vs WHEN TO GENERATE:
-- If the user gives ONLY a vague description (e.g. "organize a hackathon", "plan an event", "set up a competition") WITHOUT specifying team size, judging criteria, number of participants, or duration — you MUST ask clarifying questions. Do NOT generate a config from vague input.
-- Ask specific questions: How many participants? Individual or team-based? If teams, what size? How long is the event? What will judges evaluate? Any special stages beyond the standard ones?
-- MANDATORY SCORING WEIGHTS CHECK: The user MUST explicitly specify the scoring balance weights (percentage weights for expert judges, peer reviews, and social scrape) in the chat history or starting prompt. If they did not mention these weights, you MUST ask them how they want to configure the scoring weights (e.g., 100% judge, 80/20 judge/peer, or a custom balance) and you MUST set "pipeline_ready": false (or do not output any JSON block at all). Do NOT assume defaults or generate the configuration with "pipeline_ready": true until they explicitly provide or confirm their preference.
-- Only generate the full config with "pipeline_ready": true once you have: event type, participant count OR team size, judging criteria, event duration, AND the scoring balance weights explicitly specified or confirmed by the user.
-- If the user's initial prompt/description contains both the event details AND the scoring weights (e.g. "Create a 2-day hackathon... with scoring weights 90% judge and 10% peer"), then configure it directly and generate the JSON block in your first response with "pipeline_ready": true.
+YOUR CONVERSATION APPROACH:
+- When a user gives you a description, acknowledge what you understood and ask ONLY about what is missing.
+- Be specific in your questions — reference the event details they gave you (e.g., "Since you have 60 participants in teams of 3, that gives 20 teams — do you want skill balancing enabled?")
+- Ask questions in a numbered list for clarity.
+- Do NOT generate the configuration until ALL 9 items above are confirmed by the user.
+- Do NOT assume defaults for scoring weights, anomaly threshold, or team formation rules — always ask.
+- NEVER output JSON in your conversational replies. The JSON block is generated silently after the summary.
 
-WHEN YOU GENERATE, your response must have TWO parts:
-1. A DETAILED summary (not brief) — cover every decision you made: all stages and why, team rules and why, all criteria and their weights, which stages get emails and to whom, the anomaly threshold and what it means. This should be 10-15 lines minimum. Do NOT say "brief summary". Do NOT say "Here is the JSON configuration" or "Here is the configuration".
-2. The JSON block — output it silently at the end with no label or introduction before it.
+WHEN YOU ARE READY TO GENERATE (all 9 items confirmed):
+1. Write a detailed summary (10-15 lines) covering every decision made.
+2. Silently append the JSON config block at the very end with NO label or introduction.
 
-- Adapt stages to the event type. A hackathon has different stages than a case competition or coding contest.
-- For individual competitions (no teams), set team_size to 1.
-- Always include at least: registration/intake, evaluation, and results stages.
-- Evaluation criteria should match the event type.
-- communication_stages must be a list of objects with "stage" and "recipient_type" fields.
-- recipient_type must be one of: "all_participants", "judges", "winners".
+NEVER output:
+- "Here is the JSON configuration"
+- "Here is the configuration"  
+- Raw JSON in the middle of your response
+- Assumptions about scoring weights, anomaly threshold, or formation rules
 
-When ready, output the JSON block with no additional text after it.
+When ready to generate, output the JSON block silently at the end with no label. The JSON must follow this structure:
 
 ```json
 {
   "pipeline_ready": true,
-  "description": "A 2-day AI/ML hackathon for top engineering students across India.",
-  "stages": [
-    {
-      "name": "Participant Intake",
-      "description": "Register and verify all participants, collect skill declarations.",
-      "tasks": ["Open registration portal", "Collect participant profiles", "Verify eligibility", "Approve roster"],
-      "allows_submission": false,
-      "is_evaluation": false,
-      "portal_description": "Registration is open. Your profile has been received."
-    },
-    {
-      "name": "Team Formation",
-      "description": "Form balanced teams based on skills and institutional diversity.",
-      "tasks": ["Configure formation rules", "Run AI team formation", "Review proposed teams", "Approve compositions"],
-      "allows_submission": false,
-      "is_evaluation": false,
-      "portal_description": "Teams are being formed. You'll receive an email once your team assignment is confirmed."
-    },
-    {
-      "name": "Hacking",
-      "description": "Teams work on their AI/ML projects.",
-      "tasks": ["Provide project guidelines", "Offer mentorship and support", "Monitor progress", "Ensure resource availability"],
-      "allows_submission": true,
-      "is_evaluation": false,
-      "portal_description": "Hacking is in progress! Build your project and submit it using the My Submission Hub."
-    },
-    {
-      "name": "Evaluation",
-      "description": "Judges evaluate team submissions across defined criteria.",
-      "tasks": ["Open evaluation portal", "Collect judge scores", "Aggregate and normalize scores", "Flag anomalies for review"],
-      "allows_submission": false,
-      "is_evaluation": true,
-      "portal_description": "Evaluation is underway. Judges are reviewing all team submissions."
-    },
-    {
-      "name": "Results",
-      "description": "Compile final rankings and announce winners.",
-      "tasks": ["Calculate final rankings", "Generate result reports", "Prepare certificates", "Draft announcement communications"],
-      "allows_submission": false,
-      "is_evaluation": false,
-      "portal_description": "Results are being compiled. Final rankings will be announced soon."
-    },
-    {
-      "name": "Progression",
-      "description": "Advance qualifying participants to the next round or finale.",
-      "tasks": ["Identify qualifying teams", "Send progression notifications", "Update participant statuses", "Archive event data"],
-      "allows_submission": false,
-      "is_evaluation": false,
-      "portal_description": "Qualifying teams are being notified for the next round."
-    }
-  ],
-  "formation_rules": {
-    "team_size": 3,
-    "allow_incomplete_teams": false,
-    "skill_balance": true,
-    "institution_diversity": true,
-    "max_per_institution": 1,
-    "experience_level_grouping": "mixed",
-    "max_teams": 20
-  },
+  "description": "concise 1-2 sentence event description",
+  "stages": [{"name": "...", "description": "...", "tasks": [], "allows_submission": false, "is_evaluation": false, "portal_description": "..."}],
+  "formation_rules": {"team_size": 3, "allow_incomplete_teams": false, "skill_balance": true, "institution_diversity": true, "max_per_institution": 1, "experience_level_grouping": "mixed", "max_teams": 20},
   "evaluation_criteria": ["Innovation", "Execution", "Presentation", "Impact"],
-  "scoring_weights": {
-    "Innovation": 0.25,
-    "Execution": 0.25,
-    "Presentation": 0.25,
-    "Impact": 0.25
-  },
-  "scoring_balance": {
-    "judge": 0.70,
-    "peer": 0.15,
-    "social": 0.15
-  },
-  "social_scraping": {
-    "enabled": false,
-    "platforms": [],
-    "poll_type": "hybrid",
-    "poll_duration_minutes": 1440,
-    "auto_post_on_evaluation": false,
-    "auto_fetch_on_completion": true,
-    "min_vote_threshold": 30
-  },
+  "scoring_weights": {"Innovation": 0.25, "Execution": 0.25, "Presentation": 0.25, "Impact": 0.25},
+  "scoring_balance": {"judge": 0.70, "peer": 0.15, "social": 0.15},
   "anomaly_threshold": 2.5,
-  "communication_stages": [
-    {"stage": "Participant Intake", "recipient_type": "all_participants"},
-    {"stage": "Team Formation",     "recipient_type": "all_participants"},
-    {"stage": "Evaluation",         "recipient_type": "judges"},
-    {"stage": "Evaluation",         "recipient_type": "all_participants"},
-    {"stage": "Results",            "recipient_type": "all_participants"},
-    {"stage": "Progression",        "recipient_type": "winners"}
-  ]
+  "communication_stages": [{"stage": "Participant Intake", "recipient_type": "all_participants"}]
 }
-```
-
-Adapt ALL fields based on the user's description:
-- Hackathon → stages: Intake, Team Formation, Hacking, Evaluation, Results, Progression
-- Coding contest → stages: Registration, Qualification Round, Final Round, Results
-- Case competition → stages: Registration, Submission, Presentation, Final Pitch, Results
-- Individual event → team_size: 1, skip Team Formation stage
-- Custom event → infer appropriate stages from the description
-
-For each stage in your stages list, you MUST explicitly set:
-- "allows_submission": true if teams/participants build and submit their project, code, slides, or presentation during this stage, false otherwise.
-- "is_evaluation": true if this is the evaluation, judging, or peer review stage where judges/peers rate and score the projects, false otherwise.
-- "portal_description": A friendly, participant-facing status message to be displayed on their portal during this stage (e.g. "Hacking is in progress! Build your project and submit it using the My Submission Hub" or "Evaluation is underway. Judges are reviewing all team submissions.").
-
-Always make scoring_weights sum to 1.0. Always make scoring_balance sum to 1.0. Always include all 6 communication_stages entries (or adapt to your custom stages). Always set pipeline_ready to true when you have enough info, including the scoring balance."""
+```"""
 
 
 def _extract_json(reply: str) -> Optional[Dict[str, Any]]:
@@ -1218,11 +1127,27 @@ def agent_chat(
             res["pipeline_ready"] = False
             res["pipeline_config"] = None
             res["needs_clarification"] = True
-            res["reply"] = (
-                "Before I generate the full configuration, I need your preferences on the following:\n\n" +
-                "\n".join(f"{i+1}. {m}" for i, m in enumerate(missing)) +
-                "\n\nPlease answer the above and I'll configure the complete pipeline for you."
+            # Keep the LLM's reply if it's already asking questions naturally
+            current_reply = res.get("reply", "")
+            is_already_asking = len(current_reply) > 80 and any(
+                q in current_reply.lower() for q in ["?", "please", "specify", "would you", "how", "what", "provide"]
             )
+            if is_already_asking:
+                # LLM gave a good clarifying response — only append anything it missed
+                extra = []
+                for m in missing:
+                    # Check if the key topic of this missing item is mentioned in the reply
+                    topic_words = m.replace("**", "").split("—")[0].strip().lower().split()[:4]
+                    if not any(w in current_reply.lower() for w in topic_words if len(w) > 3):
+                        extra.append(m.replace("**", ""))
+                if extra:
+                    res["reply"] = current_reply + "\n\nAlso, please clarify:\n" + "\n".join(f"- {m}" for m in extra)
+            else:
+                res["reply"] = (
+                    "Before I generate the full configuration, I need your preferences on the following:\n\n" +
+                    "\n".join(f"{i+1}. {m}" for i, m in enumerate(missing)) +
+                    "\n\nPlease answer the above and I'll configure the complete pipeline for you."
+                )
 
     return res
 
