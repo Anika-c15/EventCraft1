@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
 import { evaluationsApi, teamsApi, eventsApi } from '../api/client'
+import { useToast } from '../context/ToastAndConfirmContext'
 import { useAppContext } from '../context/AppContext'
 import { RadarChart } from '../components/RadarChart'
 
@@ -42,6 +43,7 @@ export const Evaluations: React.FC = () => {
   const [scores, setScores]           = useState<any[]>([])
   const [teams, setTeams]             = useState<any[]>([])
   const [showModal, setShowModal]     = useState(false)
+  const toast = useToast()
   const [showInvite, setShowInvite]   = useState(false)
   const [form, setForm]               = useState<any>({ judgeName: '', judgeEmail: '', teamId: '', notes: '' })
   const [loading, setLoading]         = useState(false)
@@ -61,7 +63,7 @@ export const Evaluations: React.FC = () => {
       const data = await evaluationsApi.listInvitations(eventId)
       setInvitations(data)
     } catch (e) {
-      console.error('Error fetching invitations:', e)
+      toast.error('Error fetching invitations: ' + e)
     } finally {
       setLoadingInvites(false)
     }
@@ -73,7 +75,7 @@ export const Evaluations: React.FC = () => {
       await evaluationsApi.revokeInvitation(eventId, inviteId)
       await loadInvitations()
     } catch (e: any) {
-      alert(e.message || 'Error revoking invitation')
+      toast.error(e.message || 'Error revoking invitation')
     }
   }
 
@@ -126,14 +128,14 @@ export const Evaluations: React.FC = () => {
         setCriteriaList(criteriaConfig)
       }
     } catch (err) {
-      console.error('Error loading event weights:', err)
+      toast.error('Error loading event weights: ' + err)
     }
   }
 
   const handleSaveWeights = async () => {
     const sum = tempWeights.judge + tempWeights.peer + tempWeights.social
     if (sum !== 100) {
-      alert(`Scoring weights must sum to exactly 100%. Currently they sum to ${sum}%.`)
+      toast.error(`Scoring weights must sum to exactly 100%. Currently they sum to ${sum}%.`)
       return
     }
     setIsSavingWeights(true)
@@ -144,7 +146,7 @@ export const Evaluations: React.FC = () => {
       await loadBiasMitigation()
       await loadDashboard()
     } catch (e: any) {
-      alert(e.message || 'Error updating scoring weights')
+      toast.error(e.message || 'Error updating scoring weights')
     } finally {
       setIsSavingWeights(false)
     }
@@ -156,20 +158,25 @@ export const Evaluations: React.FC = () => {
       const data = await evaluationsApi.getBiasMitigation(eventId)
       setMitigations(data)
     } catch (e) {
-      console.error('Error fetching bias mitigation:', e)
+      toast.error('Error fetching bias mitigation: ' + e)
     }
   }
 
   const handleSavePublicVote = async (teamId: string) => {
     const val = publicScores[teamId]
     if (!val || isNaN(parseFloat(val))) return
+    const num = parseFloat(val)
+    if (num < 0 || num > 10) {
+      toast.error('Social score must be between 0 and 10.')
+      return
+    }
     try {
-      await evaluationsApi.savePublicVote(eventId!, teamId, parseFloat(val))
+      await evaluationsApi.savePublicVote(eventId!, teamId, num)
       setPublicScores({ ...publicScores, [teamId]: '' })
       await loadBiasMitigation()
       await loadScores()
     } catch (e: any) {
-      alert(e.message || 'Error saving public score')
+      toast.error(e.message || 'Error saving public score')
     }
   }
 
@@ -184,7 +191,7 @@ export const Evaluations: React.FC = () => {
       await loadApprovals()
       await loadDashboard()
     } catch (e: any) {
-      alert(e.message || 'Error locking score')
+      toast.error(e.message || 'Error locking score')
     }
   }
 
@@ -238,25 +245,25 @@ export const Evaluations: React.FC = () => {
       await loadApprovals()
       await loadDashboard()
       await loadBiasMitigation()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
   }
 
   const handleConsolidate = async () => {
     if (!eventId) return
     try {
       const result = await evaluationsApi.consolidate(eventId)
-      alert(`Scores consolidated! ${result.rankings?.length ?? 0} teams ranked.`)
+      toast.success(`Scores consolidated! ${result.rankings?.length ?? 0} teams ranked.`)
       await loadApprovals()
       await loadDashboard()
       await loadBiasMitigation()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
   }
 
   const handleInviteJudge = async () => {
     if (!eventId || !inviteName || !inviteEmail) return
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(inviteEmail.trim())) {
-      alert('Please enter a valid email address for the judge.')
+      toast.error('Please enter a valid email address for the judge.')
       return
     }
     try {
@@ -269,7 +276,7 @@ export const Evaluations: React.FC = () => {
       if (!res.ok) throw new Error('Failed to generate invite')
       setInviteResult(await res.json())
       await loadInvitations()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast.error(e.message) }
   }
 
   const copyLink = () => {
@@ -501,14 +508,16 @@ export const Evaluations: React.FC = () => {
                           <div className="flex items-center justify-between mb-3">
                             <div>
                               <span className="font-semibold text-sm text-gray-800">{m.team_name}</span>
-                              {peerCount > 0 && (
+                              {peerCount > 0 && scoringWeights.peer > 0 && (
                                 <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 font-semibold px-1.5 py-0.5 rounded-full">
                                   {peerCount} peer {peerCount === 1 ? 'vote' : 'votes'}
                                 </span>
                               )}
                             </div>
                             {isLocked ? (
-                              <Badge variant="purple">Locked ({m.final_score.toFixed(2)})</Badge>
+                              <Badge variant={m.final_score > 10 || m.final_score < 0 ? 'danger' : 'purple'}>
+                                {m.final_score > 10 || m.final_score < 0 ? '⚠️ ' : ''}Locked ({m.final_score.toFixed(2)})
+                              </Badge>
                             ) : isFlagged ? (
                               <Badge variant="danger">Bias Flagged</Badge>
                             ) : hasPublic ? (
@@ -528,21 +537,29 @@ export const Evaluations: React.FC = () => {
                             </div>
 
                             {/* PUBLIC — combined social + peer */}
-                            <div className="bg-white p-2.5 rounded-lg border border-indigo-100 text-center">
-                              <span className="text-[9px] text-indigo-500 block uppercase tracking-wide font-semibold">Public ({scoringWeights.peer + scoringWeights.social}%)</span>
-                              <span className="text-sm font-bold text-indigo-700 block mt-0.5">
-                                {hasPublic ? m.public_vote_score.toFixed(2) : '—'}
-                              </span>
-                              <span className="text-[9px] text-gray-400">
-                                {m.social_vote_score != null && m.peer_avg != null
-                                  ? `S:${m.social_vote_score.toFixed(1)} P:${m.peer_avg.toFixed(1)}`
-                                  : m.social_vote_score != null
-                                  ? `Social: ${m.social_vote_score.toFixed(1)}`
-                                  : m.peer_avg != null
-                                  ? `Peer: ${m.peer_avg.toFixed(1)}`
-                                  : 'No data yet'}
-                              </span>
-                            </div>
+                            {(scoringWeights.peer + scoringWeights.social) === 0 ? (
+                              <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-center">
+                                <span className="text-[9px] text-gray-400 block uppercase tracking-wide font-semibold">Public (0%)</span>
+                                <span className="text-sm font-bold text-gray-400 block mt-0.5">—</span>
+                                <span className="text-[9px] text-gray-400">Not configured</span>
+                              </div>
+                            ) : (
+                              <div className="bg-white p-2.5 rounded-lg border border-indigo-100 text-center">
+                                <span className="text-[9px] text-indigo-500 block uppercase tracking-wide font-semibold">Public ({scoringWeights.peer + scoringWeights.social}%)</span>
+                                <span className="text-sm font-bold text-indigo-700 block mt-0.5">
+                                  {hasPublic ? m.public_vote_score.toFixed(2) : '—'}
+                                </span>
+                                <span className="text-[9px] text-gray-400">
+                                  {m.social_vote_score != null && m.peer_avg != null
+                                    ? `S:${m.social_vote_score.toFixed(1)} P:${m.peer_avg.toFixed(1)}`
+                                    : m.social_vote_score != null
+                                    ? `Social: ${m.social_vote_score.toFixed(1)}`
+                                    : m.peer_avg != null
+                                    ? `Peer: ${m.peer_avg.toFixed(1)}`
+                                    : 'No data yet'}
+                                </span>
+                              </div>
+                            )}
 
                             {/* AI PROPOSED */}
                             <div className="bg-white p-2.5 rounded-lg border border-orange-100 text-center">
@@ -562,21 +579,29 @@ export const Evaluations: React.FC = () => {
                               <p className="text-[10px] text-gray-400 font-medium mb-1.5 uppercase tracking-wide">
                                 Social Score Input {m.social_vote_score != null ? `(current: ${m.social_vote_score.toFixed(1)})` : '(not set)'}
                               </p>
-                              <div className="flex gap-2">
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  max="10"
-                                  placeholder="Social/scrape score (0-10)..."
-                                  value={publicScores[m.team_id] || ''}
-                                  onChange={(e) => setPublicScores({ ...publicScores, [m.team_id]: e.target.value })}
-                                  className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                                />
-                                <Button size="sm" variant="secondary" onClick={() => handleSavePublicVote(m.team_id)}>
-                                  Save
-                                </Button>
-                              </div>
+                              {scoringWeights.social === 0 ? (
+                                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                  <span className="text-[10px] text-gray-400 italic">
+                                    Social scoring is disabled (weight set to 0%). Configure scoring weights to enable.
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max="10"
+                                    placeholder="Social/scrape score (0-10)..."
+                                    value={publicScores[m.team_id] || ''}
+                                    onChange={(e) => setPublicScores({ ...publicScores, [m.team_id]: e.target.value })}
+                                    className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                                  />
+                                  <Button size="sm" variant="secondary" onClick={() => handleSavePublicVote(m.team_id)}>
+                                    Save
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -592,26 +617,30 @@ export const Evaluations: React.FC = () => {
                           )}
 
                           {/* Lock controls */}
-                          {hasPublic && !isLocked && !isClosed && (
+                          {!isLocked && !isClosed && (
                             <div className="space-y-2.5">
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="primary"
-                                  className="flex-1 text-xs"
-                                  onClick={() => handleLockScore(m.team_id, m.ai_proposed_score, m.bias_rationale)}
-                                >
-                                  Accept & Lock AI Score
-                                </Button>
-                              </div>
+                              {/* Accept AI Score — only when a public/AI score exists */}
+                              {hasPublic && (
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    className="flex-1 text-xs"
+                                    onClick={() => handleLockScore(m.team_id, m.ai_proposed_score, m.bias_rationale)}
+                                  >
+                                    Accept & Lock AI Score
+                                  </Button>
+                                </div>
+                              )}
 
-                              <div className="flex gap-2 border-t border-gray-100/50 pt-2">
+                              {/* Override — always available to admin */}
+                              <div className={`flex gap-2 ${hasPublic ? 'border-t border-gray-100/50 pt-2' : ''}`}>
                                 <input
                                   type="number"
                                   step="0.05"
                                   min="0"
                                   max="10"
-                                  placeholder="Override score..."
+                                  placeholder="Override score (0-10)..."
                                   value={customScores[m.team_id] || ''}
                                   onChange={(e) => setCustomScores({ ...customScores, [m.team_id]: e.target.value })}
                                   className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
@@ -621,9 +650,13 @@ export const Evaluations: React.FC = () => {
                                   variant="secondary"
                                   onClick={() => {
                                     const val = customScores[m.team_id]
-                                    if (val && !isNaN(parseFloat(val))) {
-                                      handleLockScore(m.team_id, parseFloat(val), m.bias_rationale || undefined)
+                                    if (!val || isNaN(parseFloat(val))) return
+                                    const num = parseFloat(val)
+                                    if (num < 0 || num > 10) {
+                                      toast.error('Override score must be between 0 and 10.')
+                                      return
                                     }
+                                    handleLockScore(m.team_id, num, m.bias_rationale || undefined)
                                   }}
                                 >
                                   Override

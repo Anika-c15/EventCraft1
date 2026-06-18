@@ -198,11 +198,11 @@ class TeamSubmissionFinal(BaseModel):
 
 
 class PublicVoteInput(BaseModel):
-    public_vote_score: float  # the social scrape score (0-10)
+    public_vote_score: float = Field(..., ge=0.0, le=10.0, description="Social scrape score (0–10)")
 
 
 class LockScoreRequest(BaseModel):
-    final_score: float
+    final_score: float = Field(..., ge=0.0, le=10.0, description="Final locked score (0–10)")
     bias_rationale: Optional[str] = None
 
 
@@ -268,6 +268,14 @@ class ScoreSubmit(BaseModel):
     judge_email: str
     scores: Dict[str, float]  # {"innovation": 7, "execution": 8, ...}
     notes: Optional[str] = None
+
+    @field_validator('scores')
+    @classmethod
+    def validate_score_range(cls, v: Dict[str, float]) -> Dict[str, float]:
+        for key, val in v.items():
+            if not (0.0 <= val <= 10.0):
+                raise ValueError(f"Score '{key}' must be between 0 and 10, got {val}")
+        return v
 
 
 class EvaluationScoreOut(BaseModel):

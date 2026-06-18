@@ -185,8 +185,9 @@ async def submit_score_committee(
     payload: ScoreSubmit,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee),
 ):
-    """Committee/admin score submission — no auth required for demo convenience."""
+    """Committee/admin score submission — requires authentication."""
     return _save_score(event_id, payload, db, background_tasks)
 
 
@@ -573,6 +574,16 @@ def update_public_vote(
         combined = avg(social_vote_score, peer_avg)
     """
     _enforce_evaluations_active(event_id, db)
+
+    # Block if social scoring weight is 0%
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    social_weight = 0.0
+    if event.scoring_weights:
+        social_weight = event.scoring_weights.get("social", 0.0)
+    if social_weight == 0:
+        raise HTTPException(400, "Social scoring is not allowed because its scoring weight is set to 0%")
 
     team = db.query(models.Team).filter(
         models.Team.id == team_id,
