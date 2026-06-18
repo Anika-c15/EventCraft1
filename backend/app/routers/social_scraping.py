@@ -560,7 +560,10 @@ async def submit_social_post(
     ).order_by(SocialPost.created_at.desc()).first()
     
     if last_post:
-        delta = datetime.datetime.utcnow() - last_post.created_at
+        last_created = last_post.created_at
+        if last_created.tzinfo is not None:
+            last_created = last_created.replace(tzinfo=None)
+        delta = datetime.datetime.utcnow() - last_created
         if delta.total_seconds() < 30:
             wait_time = int(30 - delta.total_seconds())
             raise HTTPException(400, f"Please wait {wait_time} seconds before submitting another link.")
