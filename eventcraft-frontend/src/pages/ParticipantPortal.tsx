@@ -178,7 +178,16 @@ export const ParticipantPortal: React.FC = () => {
   const [showroom, setShowroom] = useState<any[]>([])
 
   // Tabs state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission' | 'social'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission' | 'social'>(() => {
+    const saved = localStorage.getItem(`ec_active_tab_${token || 'default'}`)
+    return (saved as any) || 'dashboard'
+  })
+
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem(`ec_active_tab_${token || 'default'}`, activeTab)
+    }
+  }, [activeTab, token])
 
   // Submission Hub Form State
   const [projectTitle, setProjectTitle] = useState('')
