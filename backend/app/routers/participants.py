@@ -494,6 +494,20 @@ async def parse_resume(
     filename = (file.filename or "").lower()
     file_bytes = await file.read()
 
+    # ── Check if participant intake phase is still open ───────────────────────
+    stages = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).order_by(models.PipelineStage.order_index).all()
+
+    if stages:
+        active_stage = next((s for s in stages if s.status == models.StageStatus.active), None)
+        # Find intake/registration stage (first stage or one with "intake"/"register" in name)
+        intake_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("intake", "register", "registration", "participant"))]
+        intake_stage = intake_stages[0] if intake_stages else stages[0]
+
+        if active_stage and active_stage.order_index > intake_stage.order_index:
+            raise HTTPException(400, f"Participant intake is closed. The event has moved to the '{active_stage.name}' stage. Registration is no longer accepted.")
+
     # ── Format validation ──────────────────────────────────────────────────────
     allowed_extensions = (".pdf", ".txt", ".doc", ".docx")
     if not any(filename.endswith(ext) for ext in allowed_extensions):

@@ -59,6 +59,13 @@ export const CandidatePortal: React.FC = () => {
     setEventSearchError('')
     try {
       const res = await eventsApi.verifyEventName(eventNameInput.trim())
+      // Check if intake is still open before allowing resume upload
+      const intakeStatus = await eventsApi.getIntakeStatus(res.event_id)
+      if (!intakeStatus.intake_open) {
+        setEventSearchError(intakeStatus.reason)
+        setSearchingEvent(false)
+        return
+      }
       setActiveEventId(res.event_id)
       setActiveEvent({ id: res.event_id, name: res.event_name })
       setPageState('upload')
@@ -95,7 +102,9 @@ export const CandidatePortal: React.FC = () => {
       setProfile(extracted)
       setPageState('review')
     } else {
-      setErrorMessage(error || 'Could not process resume.')
+      // Check if it's an intake closed error — show a special state
+      const msg = error || 'Could not process resume.'
+      setErrorMessage(msg)
       setPageState('error')
     }
   }
@@ -187,7 +196,11 @@ export const CandidatePortal: React.FC = () => {
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
               />
               {eventSearchError && (
-                <div className="mt-2 flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                <div className={`mt-2 flex items-start gap-1.5 text-xs rounded-lg px-3 py-2 ${
+                  eventSearchError.toLowerCase().includes('closed') || eventSearchError.toLowerCase().includes('no longer')
+                    ? 'text-yellow-700 bg-yellow-50 border border-yellow-100'
+                    : 'text-red-600 bg-red-50 border border-red-100'
+                }`}>
                   <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
                   {eventSearchError}
                 </div>
@@ -251,24 +264,31 @@ export const CandidatePortal: React.FC = () => {
         {/* ERROR */}
         {pageState === 'error' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-4">
-            <AlertCircle size={44} className="text-red-400 mx-auto" />
-            <p className="text-base font-semibold text-gray-800">Could not process resume</p>
-            <p className="text-sm text-gray-500">
-              {errorMessage || (fileName
-                ? <>The file <strong>{fileName}</strong> could not be read.</>
-                : 'Something went wrong.'
-              )}
-              <br />Please ensure:
-            </p>
-            <ul className="text-xs text-gray-500 text-left space-y-1 bg-gray-50 rounded-lg px-4 py-3">
-              <li>• File is a PDF, TXT, DOC, or DOCX</li>
-              <li>• PDF is text-based, not a scanned image</li>
-              <li>• File is a valid resume/CV document</li>
-              <li>• File is under 5MB</li>
-            </ul>
-            <button onClick={() => setPageState('upload')} className="flex items-center gap-2 mx-auto text-sm text-primary font-medium hover:underline">
-              <RefreshCw size={14} /> Try Again
-            </button>
+            {errorMessage?.toLowerCase().includes('intake is closed') || errorMessage?.toLowerCase().includes('intake closed') || errorMessage?.toLowerCase().includes('no longer accepted') ? (
+              <>
+                <div className="w-14 h-14 bg-yellow-50 rounded-2xl flex items-center justify-center mx-auto">
+                  <AlertCircle size={28} className="text-yellow-500" />
+                </div>
+                <p className="text-base font-semibold text-gray-800">Registration Closed</p>
+                <p className="text-sm text-gray-500 leading-relaxed">{errorMessage}</p>
+                <p className="text-xs text-gray-400">Follow the event's announcements to stay updated on future opportunities.</p>
+              </>
+            ) : (
+              <>
+                <AlertCircle size={44} className="text-red-400 mx-auto" />
+                <p className="text-base font-semibold text-gray-800">Could not process resume</p>
+                <p className="text-sm text-gray-500">{errorMessage || 'Something went wrong.'}</p>
+                <ul className="text-xs text-gray-500 text-left space-y-1 bg-gray-50 rounded-lg px-4 py-3">
+                  <li>• File is a PDF, TXT, DOC, or DOCX</li>
+                  <li>• PDF is text-based, not a scanned image</li>
+                  <li>• File is a valid resume/CV document</li>
+                  <li>• File is under 5MB</li>
+                </ul>
+                <button onClick={() => setPageState('upload')} className="flex items-center gap-2 mx-auto text-sm text-primary font-medium hover:underline">
+                  <RefreshCw size={14} /> Try Again
+                </button>
+              </>
+            )}
           </div>
         )}
 

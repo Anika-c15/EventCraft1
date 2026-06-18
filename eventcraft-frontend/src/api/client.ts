@@ -88,6 +88,7 @@ export const eventsApi = {
   getDemoPortal: () => request<{ token: string; event_id: string }>('/api/events/public/demo-portal', {}, true),
   getActiveEvent: () => request<{ event_id: string; event_name: string }>('/api/events/public/active-event', {}, true),
   verifyEventName: (name: string) => request<{ event_id: string; event_name: string }>(`/api/events/public/verify-name?name=${encodeURIComponent(name)}`, {}, true),
+  getIntakeStatus: (eventId: string) => request<{ intake_open: boolean; reason: string }>(`/api/events/public/intake-status?event_id=${encodeURIComponent(eventId)}`, {}, true),
   create: (name: string, description?: string) =>
     request<any>('/api/events', { method: 'POST', body: JSON.stringify({ name, description }) }),
   get: (id: string) => request<any>(`/api/events/${id}`),
