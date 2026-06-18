@@ -513,7 +513,7 @@ async def submit_social_post(
                 if existing_with_hash:
                     raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
                 
-                screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+                screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
                 duplicate.screenshot_url = screenshot_url
                 duplicate.screenshot_hash = file_hash
                 duplicate.status = "pending_review"
@@ -587,7 +587,7 @@ async def submit_social_post(
             if existing_with_hash:
                 raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
                 
-            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
             status = "pending_review"
         except HTTPException:
             raise
@@ -673,7 +673,7 @@ async def upload_post_proof(
         if existing_with_hash:
             raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
             
-        screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+        screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
         
         post.screenshot_url = screenshot_url
         post.screenshot_hash = file_hash
