@@ -41,7 +41,7 @@ export const Teams: React.FC = () => {
       const data = await teamsApi.list(eventId)
       setTeams(data)
     } catch (e: any) {
-      console.error(e)
+      toast.error(e.message || 'Error loading teams')
     } finally {
       setLoading(false)
     }

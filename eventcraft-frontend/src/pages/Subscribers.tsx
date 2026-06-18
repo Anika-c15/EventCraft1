@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Bell, Trash2, Send, Users, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
 import { subscribersApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
 
 export const Subscribers: React.FC = () => {
   const { eventId, eventName: currentEventName } = useAppContext()
@@ -13,6 +14,7 @@ export const Subscribers: React.FC = () => {
   const [notifyFailed, setNotifyFailed] = useState(0)
   const [showForm, setShowForm] = useState(false)
   const [notifying, setNotifying] = useState(false)
+  const toast = useToast()
 
   const loadSubscribers = useCallback(async () => {
     if (!eventId) return
@@ -20,7 +22,7 @@ export const Subscribers: React.FC = () => {
       const data = await subscribersApi.list(eventId)
       setSubscribers(data)
     } catch (e) {
-      console.error('Failed to load subscribers', e)
+      toast.error('Failed to load subscribers: ' + e)
     } finally {
       setLoading(false)
     }
