@@ -49,3 +49,6 @@ ehthumbs.db
 *.swo
 *.suo
 *.user
+
+# ── Static Uploads ────────────────────────────────────────────────────────────
+backend/static/uploads/

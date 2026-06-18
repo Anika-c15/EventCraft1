@@ -565,6 +565,7 @@ def update_public_vote(
     event_id: str,
     team_id: str,
     payload: PublicVoteInput,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
@@ -598,6 +599,14 @@ def update_public_vote(
     _recompute_combined_public(team, db)
     db.commit()
     db.refresh(team)
+
+    background_tasks.add_task(broadcast, event_id, {
+        "type": "public_score_updated",
+        "team_id": team_id,
+        "social_vote_score": team.social_vote_score,
+        "public_vote_score": team.public_vote_score,
+    })
+
     return {
         "message": "Social vote score saved",
         "social_vote_score": team.social_vote_score,

@@ -34,7 +34,7 @@ const defaultForm = (cList: any[]) => {
 }
 
 export const Evaluations: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard, dashboardStats } = useAppContext()
+  const { eventId, loadApprovals, loadDashboard, dashboardStats, lastWsMessage } = useAppContext()
 
   const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
   const isClosed = dashboardStats?.is_evaluation_closed ?? false
@@ -81,6 +81,7 @@ export const Evaluations: React.FC = () => {
 
   // AI Bias Mitigation & Public Consensus State
   const [mitigations, setMitigations] = useState<any[]>([])
+  const [loadingMitigations, setLoadingMitigations] = useState(false)
   const [publicScores, setPublicScores] = useState<{ [key: string]: string }>({})
   const [customScores, setCustomScores] = useState<{ [key: string]: string }>({})
 
@@ -154,11 +155,14 @@ export const Evaluations: React.FC = () => {
 
   const loadBiasMitigation = async () => {
     if (!eventId) return
+    setLoadingMitigations(true)
     try {
       const data = await evaluationsApi.getBiasMitigation(eventId)
       setMitigations(data)
     } catch (e) {
       toast.error('Error fetching bias mitigation: ' + e)
+    } finally {
+      setLoadingMitigations(false)
     }
   }
 
@@ -197,6 +201,9 @@ export const Evaluations: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
+      setTeams([])
+      setScores([])
+      setMitigations([])
       loadScores()
       teamsApi.list(eventId).then(setTeams).catch(() => setTeams([]))
       loadBiasMitigation()
@@ -209,6 +216,25 @@ export const Evaluations: React.FC = () => {
   useEffect(() => {
     setForm(defaultForm(criteriaList))
   }, [criteriaList])
+
+  // Listen to WebSocket messages to automatically reload when scores/mitigations change
+  useEffect(() => {
+    if (!lastWsMessage) return
+    const { type } = lastWsMessage
+    if (
+      type === 'score_submitted' ||
+      type === 'anomaly_flagged' ||
+      type === 'rationales_ready' ||
+      type === 'score_locked' ||
+      type === 'public_score_updated' ||
+      type === 'dashboard_update' ||
+      (type === 'social:pipeline_step' && lastWsMessage.status === 'success')
+    ) {
+      loadScores()
+      loadBiasMitigation()
+      loadDashboard()
+    }
+  }, [lastWsMessage])
 
   const loadScores = async () => {
     if (!eventId) return
@@ -288,6 +314,15 @@ export const Evaluations: React.FC = () => {
   }
 
   const getTeamName = (id: string) => teams.find((t) => t.id === id)?.name ?? id
+
+  if (!dashboardStats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32">
+        <RefreshCw className="animate-spin text-primary mb-3" size={32} />
+        <p className="text-sm text-gray-500">Loading evaluations...</p>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -491,7 +526,9 @@ export const Evaluations: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                {mitigations.length === 0 ? (
+                {loadingMitigations ? (
+                  <div className="py-12 text-center text-sm text-gray-400">Loading evaluation balance data...</div>
+                ) : mitigations.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-6">No approved/active teams to evaluate yet.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
