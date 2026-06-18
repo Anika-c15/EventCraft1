@@ -169,18 +169,42 @@ def get_public_active_event(db: Session = Depends(get_db)):
 def verify_event_name(name: str, db: Session = Depends(get_db)):
     """Public — checks if an event name matches any registered event (case-insensitive) and returns its ID and name."""
     clean_name = name.strip().lower()
-    
-    # Try exact match first
     event = db.query(models.Event).filter(models.Event.name.ilike(clean_name)).first()
-    
-    # If not found, try a substring match
     if not event:
         event = db.query(models.Event).filter(models.Event.name.ilike(f"%{clean_name}%")).first()
-        
     if not event:
         raise HTTPException(404, "No matching event found")
-        
     return {"event_id": event.id, "event_name": event.name}
+
+
+@router.get("/public/intake-status")
+def get_intake_status(event_id: str, db: Session = Depends(get_db)):
+    """Public — returns whether participant intake is still open for an event."""
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+
+    stages = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).order_by(models.PipelineStage.order_index).all()
+
+    if not stages:
+        return {"intake_open": False, "reason": "The pipeline for this event has not been configured yet."}
+
+    active_stage = next((s for s in stages if s.status == models.StageStatus.active), None)
+    intake_stages = [s for s in stages if any(kw in s.name.lower() for kw in ("intake", "register", "registration", "participant"))]
+    intake_stage = intake_stages[0] if intake_stages else stages[0]
+
+    if not active_stage:
+        return {"intake_open": False, "reason": "No active stage found for this event."}
+
+    if active_stage.order_index > intake_stage.order_index:
+        return {
+            "intake_open": False,
+            "reason": f"Participant intake is closed. The event has moved to the '{active_stage.name}' stage. Registration is no longer accepted."
+        }
+
+    return {"intake_open": True, "reason": ""}
 
 
 @router.get("/{event_id}", response_model=EventOut)
