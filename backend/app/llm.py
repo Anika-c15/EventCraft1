@@ -1140,19 +1140,21 @@ def agent_chat(
     history: List[Dict[str, str]],
     new_message: str,
 ) -> Dict[str, Any]:
-    """Wraps inner agent chat, forcing a clarifying question if scoring weights are not specified."""
+    """Wraps inner agent chat, enforcing ALL preferences are asked before generating."""
     res = _agent_chat_inner(history, new_message)
-    
+
     if res.get("reply"):
-        # Strip markdown code blocks if present
+        # ── Strip ALL JSON from reply — never show raw JSON to user ──────────
         reply_text = res["reply"]
+        # Remove ```json ... ``` blocks
         reply_text = re.sub(r"```json[\s\S]*?```", "", reply_text).strip()
+        # Remove ``` ... ``` blocks
         reply_text = re.sub(r"```[\s\S]*?```", "", reply_text).strip()
-        # Strip raw JSON if no code blocks were used
-        start = reply_text.find('{')
-        if start != -1:
-            reply_text = reply_text[:start].strip()
-        # Clean up any trailing intro phrases like "here is the configuration:"
+        # Remove any raw JSON object that starts with { — everything from first { onwards
+        brace_start = reply_text.find('{')
+        if brace_start != -1:
+            reply_text = reply_text[:brace_start].strip()
+        # Clean trailing intro phrases
         reply_text = re.sub(
             r"\s*(here is the |here's the |here is a |here's a |json configuration|json config|configuration|summary)[:\s]*$",
             "",
@@ -1160,19 +1162,68 @@ def agent_chat(
             flags=re.IGNORECASE
         ).strip()
         res["reply"] = reply_text
-    
+
+    # ── Hard enforcement: ALL preferences must be specified before generating ──
     if res.get("pipeline_ready") and res.get("pipeline_config"):
+        combined = " ".join(
+            [m.get("parts", "") for m in history] + [new_message]
+        ).lower()
+
+        missing = []
+
+        # 1. Team size / participant count
+        has_team_info = any(kw in combined for kw in [
+            "team of", "teams of", "team size", "participants", "people", "students",
+            "individual", "solo", "per team", "members per", "group of", "team size"
+        ])
+        if not has_team_info:
+            missing.append("**Team size or participant count** — How many participants? Individual or team-based? If teams, what size?")
+
+        # 2. Event duration
+        has_duration = any(kw in combined for kw in [
+            "day", "hour", "week", "48", "24", "72", "duration", "long", "weekend", "month"
+        ])
+        if not has_duration:
+            missing.append("**Event duration** — How long is the event?")
+
+        # 3. Evaluation criteria
+        has_criteria = any(kw in combined for kw in [
+            "judg", "evaluat", "criteria", "scor", "innovat", "execut", "present", "impact",
+            "criterion", "metric", "parameter"
+        ])
+        if not has_criteria:
+            missing.append("**Evaluation criteria** — What will judges evaluate? (e.g. Innovation, Execution, Presentation, Impact)")
+
+        # 4. Scoring balance weights (judge vs peer vs social)
         if not _user_has_specified_scoring(history, new_message):
+            missing.append("**Scoring balance weights** — How should the final score be calculated? (e.g. 100% Expert Judge, or 70% Judge / 15% Peer / 15% Social Scraping)")
+
+        # 5. Team formation rules
+        has_formation = any(kw in combined for kw in [
+            "skill balance", "institution diversity", "experience", "mixed", "similar",
+            "formation rule", "team rule", "diversity", "skill mix", "max per institution",
+            "institutional", "diverse"
+        ])
+        if not has_formation:
+            missing.append("**Team formation preferences** — Should teams be skill-balanced? Enforce institutional diversity? How should experience levels be grouped? (mixed / similar)")
+
+        # 6. Anomaly threshold
+        has_anomaly = any(kw in combined for kw in [
+            "anomaly", "threshold", "divergence", "deviation", "flag", "outlier"
+        ])
+        if not has_anomaly:
+            missing.append("**Anomaly threshold** — What score deviation should flag a judge's score as anomalous? (e.g. 2.0 or 2.5 points)")
+
+        if missing:
             res["pipeline_ready"] = False
             res["pipeline_config"] = None
             res["needs_clarification"] = True
-            
             res["reply"] = (
-                f"{res['reply']}\n\n"
-                "Please confirm how you would like to configure the scoring balance weights (Expert Judges vs Peer reviews vs Social scrape). "
-                "For example, you can say 'use default weights' (70% judge / 15% peer / 15% social) or specify a custom balance (e.g., '90% judge and 10% peer')."
+                "Before I generate the full configuration, I need your preferences on the following:\n\n" +
+                "\n".join(f"{i+1}. {m}" for i, m in enumerate(missing)) +
+                "\n\nPlease answer the above and I'll configure the complete pipeline for you."
             )
-            
+
     return res
 
 
