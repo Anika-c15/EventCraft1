@@ -429,6 +429,8 @@ class SocialPost(Base):
     shares = Column(Integer, default=0)
     screenshot_url = Column(String, nullable=True)
     screenshot_hash = Column(String, nullable=True)
+    rejection_reason = Column(String, nullable=True)  # Why the post was rejected (AI or admin)
+    retry_count = Column(Integer, default=0)            # How many times participant has retried
     last_scraped_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

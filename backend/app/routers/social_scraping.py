@@ -34,6 +34,7 @@ class PostVerifyPayload(BaseModel):
     likes: int
     shares: int
     approve: bool
+    rejection_reason: Optional[str] = None
 
 
 def check_social_scraping_allowed(event_id: str, db: Session):
@@ -76,8 +77,9 @@ def get_social_config(request: Request, event_id: str, db: Session = Depends(get
                 is_evaluation_stage = check_stage_is_evaluation_phase(active_stage.name, active_stage.description or "")
                 
         if is_evaluation_stage:
-            config = {**config, "enabled": True}
-        config = {**config, "social_weight": social_weight}
+            config = {**config, "enabled": True, "social_weight": social_weight}
+        else:
+            config = {**config, "enabled": False, "social_weight": social_weight}
         
     return config
 
@@ -513,7 +515,7 @@ async def submit_social_post(
                 if existing_with_hash:
                     raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
                 
-                screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+                screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
                 duplicate.screenshot_url = screenshot_url
                 duplicate.screenshot_hash = file_hash
                 duplicate.status = "pending_review"
@@ -560,7 +562,10 @@ async def submit_social_post(
     ).order_by(SocialPost.created_at.desc()).first()
     
     if last_post:
-        delta = datetime.datetime.utcnow() - last_post.created_at
+        last_created = last_post.created_at
+        if last_created.tzinfo is not None:
+            last_created = last_created.replace(tzinfo=None)
+        delta = datetime.datetime.utcnow() - last_created
         if delta.total_seconds() < 30:
             wait_time = int(30 - delta.total_seconds())
             raise HTTPException(400, f"Please wait {wait_time} seconds before submitting another link.")
@@ -587,7 +592,7 @@ async def submit_social_post(
             if existing_with_hash:
                 raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
                 
-            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
             status = "pending_review"
         except HTTPException:
             raise
@@ -673,7 +678,7 @@ async def upload_post_proof(
         if existing_with_hash:
             raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
             
-        screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename)
+        screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
         
         post.screenshot_url = screenshot_url
         post.screenshot_hash = file_hash
@@ -696,6 +701,85 @@ async def upload_post_proof(
         raise
     except Exception as e:
         raise HTTPException(500, f"Failed to upload screenshot: {str(e)}")
+
+
+@router.put("/teams/{team_id}/social-posts/{post_id}/retry")
+@limiter.limit("10/minute")
+async def retry_post_proof(
+    request: Request,
+    event_id: str,
+    team_id: str,
+    post_id: str,
+    background_tasks: BackgroundTasks,
+    screenshot_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    check_social_scraping_allowed(event_id, db)
+    
+    post = db.query(SocialPost).filter(
+        SocialPost.id == post_id,
+        SocialPost.team_id == team_id,
+        SocialPost.event_id == event_id
+    ).first()
+    
+    if not post:
+        raise HTTPException(404, "Social post not found.")
+
+    if post.status != "verification_failed":
+        raise HTTPException(400, "Only rejected posts can be retried.")
+
+    if (post.retry_count or 0) >= 3:
+        raise HTTPException(400, "Maximum limit of 3 retries reached for this post.")
+
+    screenshot_url = post.screenshot_url
+    file_hash = post.screenshot_hash
+    status = "pending"
+    
+    if screenshot_file:
+        try:
+            file_bytes = await screenshot_file.read()
+            
+            # Screenshot hash dedup
+            import hashlib
+            hasher = hashlib.sha256()
+            hasher.update(file_bytes)
+            file_hash = hasher.hexdigest()
+            
+            existing_with_hash = db.query(SocialPost).filter(
+                SocialPost.event_id == event_id,
+                SocialPost.screenshot_hash == file_hash,
+                SocialPost.url != post.url
+            ).first()
+            if existing_with_hash:
+                raise HTTPException(400, "This screenshot has already been used for another post/URL. Please upload a unique screenshot of your post.")
+                
+            screenshot_url = upload_screenshot(file_bytes, screenshot_file.filename, str(request.base_url))
+            status = "pending_review"
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Failed to upload screenshot: {str(e)}")
+
+    post.screenshot_url = screenshot_url
+    post.screenshot_hash = file_hash
+    post.status = status
+    post.rejection_reason = None
+    post.retry_count = (post.retry_count or 0) + 1
+    
+    db.commit()
+    db.refresh(post)
+    
+    if post.status in ["pending", "pending_review"]:
+        background_tasks.add_task(run_immediate_scrape, event_id)
+        
+    await broadcast(event_id, {
+        "type": "social:post_updated",
+        "post_id": post.id,
+        "status": post.status,
+        "screenshot_url": post.screenshot_url
+    })
+    
+    return post
 
 
 @router.delete("/teams/{team_id}/social-posts/{post_id}")
@@ -764,6 +848,8 @@ def get_all_social_posts(
             "likes": p.likes,
             "shares": p.shares,
             "screenshot_url": p.screenshot_url,
+            "rejection_reason": p.rejection_reason,
+            "retry_count": p.retry_count or 0,
             "last_scraped_at": p.last_scraped_at,
             "created_at": p.created_at
         })
@@ -794,8 +880,10 @@ async def verify_post_manually(
         post.status = "verified"
         post.likes = payload.likes
         post.shares = payload.shares
+        post.rejection_reason = None
     else:
         post.status = "verification_failed"
+        post.rejection_reason = payload.rejection_reason or "Manually rejected by admin."
 
     post.last_scraped_at = datetime.datetime.utcnow()
     db.commit()
@@ -1036,6 +1124,7 @@ async def scrape_pending_posts(event_id: str, db: Session) -> int:
                 # Reject if Gemini says the screenshot doesn't match the claimed URL
                 if not url_matches:
                     post.status = "verification_failed"
+                    post.rejection_reason = f"Screenshot does not match the submitted URL, or the verification code '{expected_token}' / hashtag '{event_hashtag}' was not found in the post."
                     post.last_scraped_at = datetime.datetime.utcnow()
                     db.commit()
                     print(f"[Screenshot OCR] URL mismatch — post={post.id} rejected")
@@ -1087,6 +1176,12 @@ async def scrape_pending_posts(event_id: str, db: Session) -> int:
 
                 if not has_token or not has_event:
                     post.status = "verification_failed"
+                    reasons = []
+                    if not has_token:
+                        reasons.append(f"verification code '{expected_token}'")
+                    if not has_event:
+                        reasons.append(f"hashtag '{event_hashtag}'")
+                    post.rejection_reason = "Required " + " and ".join(reasons) + " was not found in the post content."
                     post.last_scraped_at = datetime.datetime.utcnow()
                     db.commit()
                     await broadcast(event_id, {
@@ -1111,6 +1206,7 @@ async def scrape_pending_posts(event_id: str, db: Session) -> int:
                 print(f"[Gemini Vision URL post] post={post.id} platform={post.platform} likes={likes} reposts={reposts} url_matches={url_matches}")
                 if not url_matches:
                     post.status = "verification_failed"
+                    post.rejection_reason = f"Screenshot does not match the submitted URL, or the verification code '{expected_token}' / hashtag '{event_hashtag}' was not found in the post."
                     post.last_scraped_at = datetime.datetime.utcnow()
                     db.commit()
                     print(f"[Gemini Vision URL post] URL mismatch — post={post.id} rejected")
@@ -1138,6 +1234,7 @@ async def scrape_pending_posts(event_id: str, db: Session) -> int:
         except Exception as e:
             print(f"Error scraping post {post.id}: {str(e)}")
             post.status = "fetch_error"
+            post.rejection_reason = f"Scraping failed — make sure post is public and URL is correct. Error: {str(e)}"
             post.last_scraped_at = datetime.datetime.utcnow()
             db.commit()
             

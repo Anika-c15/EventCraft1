@@ -542,6 +542,12 @@ async def advance_stage_direct(
     elif to_index == 0:
         clear_event_teams_and_submissions(event_id, db)
 
+    # Always clear social posts when any stage change happens
+    # so submitted links are per-evaluation-window, not cumulative across overrides
+    db.query(models.SocialPost).filter(
+        models.SocialPost.event_id == event_id
+    ).delete()
+
     log = models.ActivityLog(
         event_id=event_id,
         message=f"Pipeline advanced: '{current_stage.name}' → '{next_stage.name}'",
@@ -621,6 +627,11 @@ async def set_stage_direct(
     elif to_index == 0:
         clear_event_teams_and_submissions(event_id, db)
 
+    # Always clear social posts on any stage override so links are per-window
+    db.query(models.SocialPost).filter(
+        models.SocialPost.event_id == event_id
+    ).delete()
+
     # Also log in ActivityLog
     log = models.ActivityLog(
         event_id=event_id,
@@ -653,7 +664,7 @@ async def set_stage_direct(
 
 def clear_event_teams_and_submissions(event_id: str, db: Session):
     """
-    Clears all teams, submissions, peer reviews, evaluation scores,
+    Clears all teams, submissions, peer reviews, evaluation scores, social posts,
     and resets participant team assignments and pending approvals for an event.
     """
     db.query(models.Participant).filter(
@@ -670,6 +681,10 @@ def clear_event_teams_and_submissions(event_id: str, db: Session):
     
     db.query(models.EvaluationScore).filter(
         models.EvaluationScore.event_id == event_id
+    ).delete()
+
+    db.query(models.SocialPost).filter(
+        models.SocialPost.event_id == event_id
     ).delete()
     
     db.query(models.Team).filter(

@@ -178,7 +178,16 @@ export const ParticipantPortal: React.FC = () => {
   const [showroom, setShowroom] = useState<any[]>([])
 
   // Tabs state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission' | 'social'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'showroom' | 'submission' | 'social'>(() => {
+    const saved = localStorage.getItem(`ec_active_tab_${token || 'default'}`)
+    return (saved as any) || 'dashboard'
+  })
+
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem(`ec_active_tab_${token || 'default'}`, activeTab)
+    }
+  }, [activeTab, token])
 
   // Submission Hub Form State
   const [projectTitle, setProjectTitle] = useState('')
@@ -291,6 +300,22 @@ export const ParticipantPortal: React.FC = () => {
       loadSocialPosts()
     } catch (err: any) {
       toast.error(err.message || 'Failed to upload screenshot.')
+    }
+  }
+
+  const [retryingPostId, setRetryingPostId] = useState<string | null>(null)
+
+  const handleRetry = async (postId: string, file: File) => {
+    if (retryingPostId) return  // Prevent double retry
+    setRetryingPostId(postId)
+    try {
+      await socialScrapingApi.retryPostProof(eventId!, data.team.id, postId, file)
+      toast.success('Your post has been resubmitted for verification! Our system will review the new screenshot shortly.')
+      loadSocialPosts()
+    } catch (err: any) {
+      toast.error(err.message || 'Retry failed. Please try again.')
+    } finally {
+      setRetryingPostId(null)
     }
   }
 
@@ -1556,9 +1581,12 @@ export const ParticipantPortal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Submissions Table/List */}
-                  <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">Submitted Links</h3>
+                  {/* Submissions List — card layout */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-gray-900 dark:text-white">Submitted Links</h3>
+                      <span className="text-[10px] text-gray-400">{socialPosts.length}/5 slots used</span>
+                    </div>
 
                     {socialPostsLoading ? (
                       <div className="py-8 text-center text-xs text-gray-500">
@@ -1570,94 +1598,160 @@ export const ParticipantPortal: React.FC = () => {
                         No social posts submitted yet. Use the form on the left to add one.
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-gray-100 dark:border-slate-800 text-[10px] font-bold text-gray-400 uppercase">
-                              <th className="py-2.5 pr-6 w-24">Platform</th>
-                              <th className="py-2.5 pr-6">Post URL</th>
-                              <th className="py-2.5 pr-6 w-44">Status</th>
-                              <th className="py-2.5 pr-6 w-36">Engagement</th>
-                              <th className="py-2.5 text-right w-24">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60 text-xs text-gray-700 dark:text-slate-300">
-                            {socialPosts.map((post) => (
-                              <tr key={post.id} className="border-b border-gray-100 dark:border-slate-800/60 last:border-0">
-                                <td className="py-3 pr-6 font-semibold text-gray-900 dark:text-white uppercase tracking-wider font-mono text-[10px] whitespace-nowrap">
+                      <div className="space-y-2.5">
+                        {socialPosts.map((post) => (
+                          <div
+                            key={post.id}
+                            className={`rounded-xl border p-3.5 transition-colors ${
+                              post.status === 'verified'
+                                ? 'border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-950/10'
+                                : post.status === 'verification_failed' || post.status === 'fetch_error'
+                                ? 'border-red-100 dark:border-red-900/30 bg-red-50/30 dark:bg-red-950/10'
+                                : post.status === 'pending_review'
+                                ? 'border-blue-100 dark:border-blue-900/30 bg-blue-50/20 dark:bg-blue-950/10'
+                                : 'border-gray-100 dark:border-slate-800 bg-gray-50/30 dark:bg-slate-800/20'
+                            }`}
+                          >
+                            {/* Row 1: Platform + URL + delete */}
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400 shrink-0">
                                   {post.platform}
-                                </td>
-                                <td className="py-3 pr-6 max-w-xs truncate">
-                                  <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium flex items-center gap-1">
-                                    {post.url}
-                                    <ExternalLink size={10} />
-                                  </a>
-                                </td>
-                                <td className="py-3 pr-6 whitespace-nowrap">
-                                  {post.status === 'pending' && (
-                                    <span className="bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
-                                      Scraping Pending
-                                    </span>
-                                  )}
-                                  {post.status === 'verified' && (
-                                    <span className="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
-                                      Verified
-                                    </span>
-                                  )}
-                                  {post.status === 'fetch_error' && (
-                                    <span className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap" title="Scrape failed. Please upload screenshot proof.">
-                                      Scrape Failed
-                                    </span>
-                                  )}
-                                  {post.status === 'pending_review' && (
-                                    <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-950/30 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
-                                      Awaiting Admin Review
-                                    </span>
-                                  )}
-                                  {post.status === 'verification_failed' && (
-                                    <span className="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900/40 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap">
-                                      Rejected
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3 pr-6 font-medium text-gray-500 font-mono text-[10px] whitespace-nowrap">
-                                  {post.status === 'verified' ? (
-                                    <span>{post.likes} likes, {post.shares} shares</span>
-                                  ) : post.status === 'pending_review' ? (
-                                    <span className="italic text-gray-400">Review pending</span>
-                                  ) : (
-                                    <span>—</span>
-                                  )}
-                                </td>
-                                <td className="py-3 text-right whitespace-nowrap">
-                                  <div className="flex items-center justify-end gap-2">
-                                    {!post.screenshot_url && post.status !== 'pending_review' && (
-                                      <label className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[9px] px-2 py-1 rounded transition-colors block whitespace-nowrap">
-                                        Upload Screenshot Proof
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0]
-                                            if (file) handleUploadProofLater(post.id, file)
-                                          }}
-                                        />
-                                      </label>
-                                    )}
-                                    <button
-                                      onClick={() => handleDeletePost(post.id)}
-                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 p-1.5 rounded transition-all"
-                                      title="Delete post link"
-                                    >
-                                      <Trash size={12} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                </span>
+                                <a
+                                  href={post.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline font-medium text-[11px] flex items-center gap-0.5 truncate max-w-[220px]"
+                                  title={post.url}
+                                >
+                                  <span className="truncate">{post.url}</span>
+                                  <ExternalLink size={9} className="shrink-0" />
+                                </a>
+                              </div>
+                              <button
+                                onClick={() => handleDeletePost(post.id)}
+                                className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-1 rounded transition-all shrink-0"
+                                title="Delete post link"
+                              >
+                                <Trash size={11} />
+                              </button>
+                            </div>
+
+                            {/* Row 2: Status badge + engagement */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {post.status === 'pending' && (
+                                <span className="bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-950/30 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                  Scraping Pending
+                                </span>
+                              )}
+                              {post.status === 'verified' && (
+                                <span className="bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-950/30 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                  ✓ Verified
+                                </span>
+                              )}
+                              {post.status === 'fetch_error' && (
+                                <span className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-950/30 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                  Scrape Failed
+                                </span>
+                              )}
+                              {post.status === 'pending_review' && (
+                                <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-950/30 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                  Awaiting Review
+                                </span>
+                              )}
+                              {post.status === 'verification_failed' && (
+                                <span className="bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-900/40 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                  Rejected
+                                </span>
+                              )}
+                              {post.status === 'verified' && (
+                                <span className="text-[9px] text-gray-500 font-mono">
+                                  {post.likes} likes · {post.shares} shares
+                                </span>
+                              )}
+                              {post.retry_count > 0 && (
+                                <span className="text-[9px] text-gray-400">
+                                  {post.retry_count} retr{post.retry_count === 1 ? 'y' : 'ies'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Row 3: Rejection reason (if any) */}
+                            {post.rejection_reason && (post.status === 'verification_failed' || post.status === 'fetch_error') && (
+                              <p className="text-[10px] text-red-600 dark:text-red-400 mt-2 leading-relaxed bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg px-2.5 py-1.5">
+                                <span className="font-bold">Why rejected: </span>{post.rejection_reason}
+                              </p>
+                            )}
+
+                            {/* Row 4: Action buttons for rejected/failed posts */}
+                            {(post.status === 'verification_failed' || post.status === 'fetch_error') && (
+                              <div className="mt-2.5 flex items-center gap-2">
+                                {(post.retry_count || 0) >= 3 ? (
+                                  <span className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 font-medium text-[9px] px-2.5 py-1.5 rounded-lg border border-red-100 dark:border-red-900/30">
+                                    ⚠️ Retry limit reached (max 3)
+                                  </span>
+                                ) : post.screenshot_url ? (
+                                  /* Already has a screenshot — offer to retry with a new one */
+                                  <label
+                                    className={`inline-flex items-center gap-1 cursor-pointer bg-orange-100 dark:bg-orange-950/30 hover:bg-orange-200 dark:hover:bg-orange-950/50 text-orange-700 dark:text-orange-400 font-bold text-[9px] px-2.5 py-1.5 rounded-lg transition-colors ${retryingPostId === post.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    title="Replace the old screenshot and resubmit for verification"
+                                  >
+                                    {retryingPostId === post.id ? 'Retrying…' : '↩ Retry with New Screenshot'}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={!!retryingPostId}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleRetry(post.id, file)
+                                        e.target.value = ''
+                                      }}
+                                    />
+                                  </label>
+                                ) : (
+                                  /* No screenshot yet — prompt them to upload one as proof */
+                                  <label
+                                    className={`inline-flex items-center gap-1 cursor-pointer bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 text-primary font-bold text-[9px] px-2.5 py-1.5 rounded-lg transition-colors ${retryingPostId === post.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    title="Upload a screenshot as proof and resubmit"
+                                  >
+                                    {retryingPostId === post.id ? 'Uploading…' : '📸 Upload Screenshot as Proof'}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={!!retryingPostId}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleRetry(post.id, file)
+                                        e.target.value = ''
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Upload proof button for pending/auto posts without screenshot */}
+                            {!post.screenshot_url && post.status !== 'pending_review' && post.status !== 'verification_failed' && post.status !== 'fetch_error' && (
+                              <div className="mt-2">
+                                <label className="cursor-pointer inline-flex items-center gap-1 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400 font-bold text-[9px] px-2.5 py-1.5 rounded-lg transition-colors">
+                                  📎 Upload Screenshot Proof
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) handleUploadProofLater(post.id, file)
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

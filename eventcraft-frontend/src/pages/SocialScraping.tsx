@@ -31,6 +31,8 @@ export const SocialScraping: React.FC = () => {
   const [modalShares, setModalShares] = useState<number>(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalSubmitting, setModalSubmitting] = useState(false)
+  const [modalRejectionReason, setModalRejectionReason] = useState<string>('')
+  const [modalRejectMode, setModalRejectMode] = useState(false)
 
   // Screenshot Preview state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -39,21 +41,13 @@ export const SocialScraping: React.FC = () => {
   const [filterPlatform, setFilterPlatform] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
-  // --- Data Loaders ───
-  const loadConfig = useCallback(async () => {
-    if (!eventId) return
-    try {
-      const data = await socialScrapingApi.getSocialConfig(eventId)
-      setConfig(data)
-    } catch (err: any) {
-      toastRef.current.error(`Failed to load config: ${err.message}`)
-    }
-  }, [eventId])
 
-  const loadPosts = useCallback(async () => {
+  const loadPosts = useCallback(async (currentConfig?: SocialConfig | null) => {
     if (!eventId) return
-    // Skip if config is loaded and social weight is 0 — backend returns 400 in this case
-    if (config !== null && config.social_weight === 0) return
+    // Use the passed-in config if available, otherwise fall back to state
+    const cfg = currentConfig !== undefined ? currentConfig : config
+    // Skip if social weight is 0 or scraping is disabled — backend returns 400 in this case
+    if (cfg !== null && (cfg.social_weight === 0 || cfg.enabled === false)) return
     setLoadingPosts(true)
     try {
       const data = await socialScrapingApi.listAllSocialPosts(eventId)
@@ -75,11 +69,19 @@ export const SocialScraping: React.FC = () => {
     }
   }, [eventId])
 
-  const loadAllData = useCallback(() => {
-    loadConfig()
-    loadPosts()
-    loadSummary()
-  }, [loadConfig, loadPosts, loadSummary])
+  const loadAllData = useCallback(async () => {
+    if (!eventId) return
+    // Load config first, then only load posts if social scraping is enabled
+    try {
+      const cfg = await socialScrapingApi.getSocialConfig(eventId)
+      setConfig(cfg)
+      // Pass the freshly loaded config directly — don't rely on stale state
+      loadPosts(cfg)
+      loadSummary()
+    } catch (err: any) {
+      toastRef.current.error(`Failed to load config: ${err.message}`)
+    }
+  }, [eventId, loadPosts, loadSummary])
 
   useEffect(() => {
     if (eventId) loadAllData()
@@ -162,6 +164,8 @@ export const SocialScraping: React.FC = () => {
     setSelectedPost(post)
     setModalLikes(post.likes || 0)
     setModalShares(post.shares || 0)
+    setModalRejectionReason('')
+    setModalRejectMode(false)
     setModalOpen(true)
   }
 
@@ -172,10 +176,13 @@ export const SocialScraping: React.FC = () => {
       await socialScrapingApi.verifyPostManually(eventId, selectedPost.id, {
         likes: modalLikes,
         shares: modalShares,
-        approve: approve
+        approve: approve,
+        rejection_reason: approve ? undefined : (modalRejectionReason.trim() || undefined)
       })
       toast.success(approve ? 'Post verification approved!' : 'Post marked as rejected.')
       setModalOpen(false)
+      setModalRejectMode(false)
+      setModalRejectionReason('')
       loadPosts()
       loadSummary()
     } catch (err: any) {
@@ -205,6 +212,19 @@ export const SocialScraping: React.FC = () => {
         <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Social Scraping Not Allowed</h3>
         <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed mb-4">
           Social scraping is not allowed because its scoring weight is set to 0% in the event's scoring configuration.
+        </p>
+      </div>
+    )
+  }
+
+  if (config && config.enabled === false) {
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-10 text-center max-w-lg mx-auto my-8 shadow-sm">
+        <Share2 size={36} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+        <h3 className="font-bold text-gray-700 dark:text-slate-300 mb-1">Not in Evaluation Stage</h3>
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+          Social Scraping is only active during the <strong>Evaluation</strong> phase of the pipeline.
+          The current stage is not an evaluation stage — advance the pipeline to unlock this dashboard.
         </p>
       </div>
     )
@@ -316,76 +336,103 @@ export const SocialScraping: React.FC = () => {
               <p className="text-xs text-gray-400 dark:text-slate-500">No submissions found matching filters.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-slate-800/60 text-gray-400 uppercase text-[10px] font-bold">
-                    <th className="py-2.5">Team</th>
-                    <th className="py-2.5">Platform</th>
-                    <th className="py-2.5">URL</th>
-                    <th className="py-2.5 text-center">Likes</th>
-                    <th className="py-2.5 text-center">Reposts</th>
-                    <th className="py-2.5">Status</th>
-                    <th className="py-2.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-slate-800/50">
-                  {filteredPosts.map((post) => (
-                    <tr key={post.id} className="text-gray-700 dark:text-slate-300 hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
-                      <td className="py-3 font-semibold">{post.team_name}</td>
-                      <td className="py-3 capitalize font-medium">{post.platform}</td>
-                      <td className="py-3 max-w-[150px] truncate">
-                        <a
-                          href={post.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline font-medium flex items-center gap-0.5"
+            <div className="space-y-2.5">
+              {filteredPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className={`rounded-xl border p-3.5 transition-colors ${
+                    post.status === 'verified'
+                      ? 'border-green-100 dark:border-green-900/30 bg-green-50/20 dark:bg-green-950/10'
+                      : post.status === 'verification_failed'
+                      ? 'border-red-100 dark:border-red-900/30 bg-red-50/20 dark:bg-red-950/10'
+                      : post.status === 'fetch_error'
+                      ? 'border-orange-100 dark:border-orange-900/30 bg-orange-50/20 dark:bg-orange-950/10'
+                      : post.status === 'pending_review'
+                      ? 'border-blue-100 dark:border-blue-900/30 bg-blue-50/10 dark:bg-blue-950/10'
+                      : 'border-gray-100 dark:border-slate-800/80 bg-white dark:bg-slate-900'
+                  }`}
+                >
+                  {/* Row 1: Team + Platform + URL + action buttons */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <span className="font-bold text-[11px] text-gray-900 dark:text-white">{post.team_name}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500 font-mono">{post.platform}</span>
+                      <a
+                        href={post.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-medium text-[10px] flex items-center gap-0.5"
+                        title={post.url}
+                      >
+                        Link <ExternalLink size={9} />
+                      </a>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {post.screenshot_url && (
+                        <button
+                          onClick={() => setPreviewUrl(post.screenshot_url)}
+                          className="text-gray-500 hover:text-gray-700 bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 p-1.5 rounded transition-colors border border-gray-200/40"
+                          title="View screenshot proof"
                         >
-                          Link <ExternalLink size={10} />
-                        </a>
-                      </td>
-                      <td className="py-3 text-center font-mono font-semibold">{post.likes}</td>
-                      <td className="py-3 text-center font-mono font-semibold">{post.shares}</td>
-                      <td className="py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                          post.status === 'verified' ? 'bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200/50' :
-                          post.status === 'fetch_error' ? 'bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400 border border-orange-200/50' :
-                          post.status === 'pending_review' ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-200/50' :
-                          post.status === 'verification_failed' ? 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200/50' :
-                          'bg-gray-50 text-gray-600 border border-gray-200'
-                        }`}>
-                          {post.status === 'fetch_error' ? 'Fetch Error' : post.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {post.screenshot_url && (
-                            <button
-                              onClick={() => setPreviewUrl(post.screenshot_url)}
-                              className="text-gray-500 hover:text-gray-700 bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 p-1.5 rounded transition-colors text-[10px] font-bold flex items-center gap-0.5 border border-gray-200/30"
-                              title="View screenshot upload proof"
-                            >
-                              <Eye size={12} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => openVerifyModal(post)}
-                            className="text-primary hover:text-orange-700 bg-orange-50/50 dark:bg-orange-950/10 hover:bg-orange-50 p-1.5 rounded transition-colors text-[10px] font-bold flex items-center gap-0.5 border border-orange-200/30"
-                          >
-                            Verify
-                          </button>
-                          <button
-                            onClick={() => handleDeletePost(post.team_id, post.id)}
-                            className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/10 hover:bg-red-50 p-1.5 rounded transition-colors text-[10px] font-bold border border-red-200/30"
-                          >
-                            <Trash size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          <Eye size={11} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openVerifyModal(post)}
+                        className="text-primary hover:text-orange-700 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100 px-2 py-1 rounded transition-colors text-[9px] font-bold border border-orange-200/30"
+                      >
+                        Verify
+                      </button>
+                      <button
+                        onClick={() => handleDeletePost(post.team_id, post.id)}
+                        className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded transition-colors border border-red-200/30"
+                        title="Delete post"
+                      >
+                        <Trash size={11} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Status badge + engagement + retry count */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                      post.status === 'verified' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200/60' :
+                      post.status === 'fetch_error' ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border border-orange-200/60' :
+                      post.status === 'pending_review' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200/60' :
+                      post.status === 'verification_failed' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200/60' :
+                      'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200'
+                    }`}>
+                      {post.status === 'fetch_error' ? 'Fetch Error' : post.status.replace(/_/g, ' ')}
+                    </span>
+                    {post.status === 'verified' && (
+                      <span className="text-[9px] text-gray-400 font-mono">
+                        {post.likes} likes · {post.shares} reposts
+                      </span>
+                    )}
+                    {post.status !== 'verified' && (
+                      <span className="text-[9px] text-gray-400 font-mono">
+                        {post.likes}L / {post.shares}R
+                      </span>
+                    )}
+                    {post.retry_count > 0 && (
+                      <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
+                        {post.retry_count} retr{post.retry_count === 1 ? 'y' : 'ies'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Row 3: Rejection reason box */}
+                  {post.rejection_reason && (post.status === 'verification_failed' || post.status === 'fetch_error') && (
+                    <div className="mt-2 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg px-2.5 py-1.5">
+                      <p className="text-[9px] text-red-600 dark:text-red-400 leading-relaxed">
+                        <span className="font-bold">Rejection reason: </span>{post.rejection_reason}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -491,27 +538,53 @@ export const SocialScraping: React.FC = () => {
               </div>
             </div>
 
+            {/* Rejection reason — shown when admin clicks Reject first */}
+            {modalRejectMode && (
+              <div className="border border-red-200/60 dark:border-red-800/30 bg-red-50/30 dark:bg-red-950/10 rounded-lg p-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                <label className="block text-[10px] font-bold text-red-600 dark:text-red-400 uppercase">Rejection Reason (shown to participant)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Screenshot is blurry, verification code missing"
+                  value={modalRejectionReason}
+                  onChange={(e) => setModalRejectionReason(e.target.value)}
+                  maxLength={150}
+                  className="w-full text-xs bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800/50 rounded p-2 focus:outline-none focus:ring-1 focus:ring-red-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                />
+                <p className="text-[9px] text-gray-400">{modalRejectionReason.length}/150 characters. Leave blank to use a default message.</p>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <Button
-                onClick={() => setModalOpen(false)}
+                onClick={() => { setModalOpen(false); setModalRejectMode(false); setModalRejectionReason('') }}
                 variant="secondary"
                 className="flex-1 text-xs font-semibold py-2 rounded-lg"
               >
                 Cancel
               </Button>
-              <Button
-                onClick={() => handleVerifySubmit(false)}
-                disabled={modalSubmitting}
-                className="flex-1 bg-red-500 text-white hover:bg-red-600 text-xs font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-              >
-                <ShieldAlert size={12} /> Reject
-              </Button>
+              {modalRejectMode ? (
+                <Button
+                  onClick={() => handleVerifySubmit(false)}
+                  disabled={modalSubmitting}
+                  className="flex-1 bg-red-500 text-white hover:bg-red-600 text-xs font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <ShieldAlert size={12} /> {modalSubmitting ? 'Rejecting…' : 'Confirm Reject'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setModalRejectMode(true)}
+                  disabled={modalSubmitting}
+                  className="flex-1 bg-red-500 text-white hover:bg-red-600 text-xs font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <ShieldAlert size={12} /> Reject
+                </Button>
+              )}
               <Button
                 onClick={() => handleVerifySubmit(true)}
                 disabled={modalSubmitting}
                 className="flex-1 bg-primary text-white hover:bg-orange-600 text-xs font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5"
               >
-                <Check size={12} /> Verify Post
+                <Check size={12} /> {modalSubmitting ? 'Saving…' : 'Verify Post'}
               </Button>
             </div>
           </div>
