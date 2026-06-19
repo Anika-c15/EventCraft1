@@ -119,7 +119,7 @@ def form_teams_endpoint(
         db.delete(t)
     db.flush()
 
-    # Also clear old pending team-formation approvals
+   # Also clear old pending team-formation approvals
     db.query(models.Approval).filter(
         models.Approval.event_id == event_id,
         models.Approval.type == models.ApprovalType.team_formation,
@@ -127,7 +127,9 @@ def form_teams_endpoint(
     ).delete()
     db.flush()
 
+    # EXACTLY 4 spaces of indentation for these lines:
     created_teams = []
+    ai_team_payload = [] 
 
     # 1. Loop through and create teams WITHOUT calling the AI yet
     for comp in team_compositions:
@@ -147,14 +149,21 @@ def form_teams_endpoint(
 
         created_teams.append(team)
 
-    # 2. AFTER the loop, trigger the AI in the background
+        # 2. Add the rich data directly to our payload list
+        # comp["members"] already contains name, institution, skills, and level!
+        ai_team_payload.append({
+            "id": team.id,
+            "name": team.name,
+            "members": comp["members"] 
+        })
+
+    # 3. AFTER the loop, trigger the AI in the background using the rich payload
     safe_execute(
         background_tasks,
         generate_team_rationales_task,
         _generate_rationales,
         event_id=event_id,
-        # We pass the list of teams we just created
-        team_data=[{"id": t.id, "name": t.name} for t in created_teams],
+        team_data=ai_team_payload, # <--- We pass the detailed payload here!
         rules=rules
     )
 
