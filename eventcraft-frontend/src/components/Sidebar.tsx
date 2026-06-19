@@ -53,8 +53,7 @@ export const Sidebar: React.FC = () => {
   }
 
   // Show Live Leaderboard only from Evaluation phase onwards
-  const stage = dashboardStats?.current_stage?.toLowerCase() || ''
-  const scoresLocked = stage.includes('eval') || stage.includes('result') || stage.includes('progression') || (dashboardStats?.current_stage_index !== undefined && dashboardStats.current_stage_index >= 2)
+  const scoresLocked = dashboardStats?.is_evaluation_unlocked === true || dashboardStats?.is_evaluation_closed === true
 
 
 
