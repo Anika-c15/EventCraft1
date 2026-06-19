@@ -5,9 +5,16 @@ import {
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import { eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
 import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
+
+const formatDate = (iso: string) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString()
+}
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -53,6 +60,19 @@ export const Settings: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const isOwner = eventDetails && user && eventDetails.owner_id === user.id
 
+  // Completion Status State
+  const [statusLoading, setStatusLoading] = useState(false)
+
+  // Transfer Ownership States
+  const [selectedCoAdminEmail, setSelectedCoAdminEmail] = useState('')
+  const [leaveCompletely, setLeaveCompletely] = useState(true)
+  const [otpModalOpen, setOtpModalOpen] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [transferStatus, setTransferStatus] = useState<any>(null)
+  const [transferLoading, setTransferLoading] = useState(false)
+
+  const acceptedCoAdmins = invites.filter(inv => inv.is_accepted)
+
   const loadEventDetails = async (targetId: string) => {
     try {
       const data = await eventsApi.get(targetId)
@@ -78,9 +98,131 @@ export const Settings: React.FC = () => {
     }
   }
 
+  const loadTransferStatus = async (targetId: string) => {
+    try {
+      const data = await eventsApi.getTransferOwnershipStatus(targetId)
+      setTransferStatus(data)
+    } catch (err) {
+      console.error("Failed to load transfer status:", err)
+    }
+  }
+
+  const handleCompleteEvent = async () => {
+    if (!eventId) return
+    const ok = await confirm({
+      title: "Complete & Lock Event?",
+      message: "This will freeze all submissions, scores, voting, and Q&A. " +
+               "Participants and judges will see a read-only view. " +
+               "You can reopen the event later if needed.",
+      type: "warning",
+      confirmText: "Yes, Complete Event",
+      cancelText: "Cancel",
+    })
+    if (!ok) return
+
+    setStatusLoading(true)
+    try {
+      await eventsApi.complete(eventId)
+      toast.success("Event has been completed and locked.")
+      await loadAll(eventId)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to complete event")
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleReopenEvent = async () => {
+    if (!eventId) return
+    const ok = await confirm({
+      title: "Reopen Event?",
+      message: "This will unlock the event for modifications. " +
+               "Participants and judges will regain write access to submissions, " +
+               "voting, and Q&A. Are you sure?",
+      type: "warning",
+      confirmText: "Yes, Reopen Event",
+      cancelText: "Keep Locked",
+    })
+    if (!ok) return
+
+    setStatusLoading(true)
+    try {
+      await eventsApi.reopen(eventId)
+      toast.success("Event has been reopened.")
+      await loadAll(eventId)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reopen event")
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleInitiateTransfer = async () => {
+    if (!eventId) return
+    setTransferLoading(true)
+    try {
+      await eventsApi.transferOwnershipInitiateOtp(eventId)
+      toast.success("Verification code sent to your email.")
+      setOtpCode('')
+      setOtpModalOpen(true)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send verification code")
+    } finally {
+      setTransferLoading(false)
+    }
+  }
+
+  const handleConfirmTransferOtp = async () => {
+    if (!eventId || !selectedCoAdminEmail) return
+    setTransferLoading(true)
+    try {
+      await eventsApi.transferOwnershipInitiateConfirm(eventId, {
+        new_owner_id: selectedCoAdminEmail,
+        leave_completely: leaveCompletely,
+        otp: otpCode.trim()
+      })
+      toast.success("Ownership transfer initiated successfully.")
+      setOtpModalOpen(false)
+      setSelectedCoAdminEmail('')
+      await loadTransferStatus(eventId)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to confirm ownership transfer")
+    } finally {
+      setTransferLoading(false)
+    }
+  }
+
+  const handleCancelTransfer = async () => {
+    if (!eventId) return
+    const ok = await confirm({
+      title: "Cancel Transfer?",
+      message: "Are you sure you want to cancel the pending ownership transfer request?",
+      type: "warning",
+      confirmText: "Yes, Cancel",
+      cancelText: "No, Keep Pending"
+    })
+    if (!ok) return
+
+    setTransferLoading(true)
+    try {
+      await eventsApi.cancelTransferOwnership(eventId)
+      toast.success("Transfer request cancelled.")
+      await loadTransferStatus(eventId)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel transfer")
+    } finally {
+      setTransferLoading(false)
+    }
+  }
+
   const loadAll = async (targetId: string) => {
     setLoading(true)
-    await Promise.all([loadEventDetails(targetId), loadInvites(targetId), loadEventsList()])
+    await Promise.all([
+      loadEventDetails(targetId),
+      loadInvites(targetId),
+      loadEventsList(),
+      loadTransferStatus(targetId)
+    ])
     setLoading(false)
   }
 
@@ -312,17 +454,17 @@ export const Settings: React.FC = () => {
       type="text"
       value={editEventName}
       onChange={(e) => setEditEventName(e.target.value)}
-      // Lock input if it's already edited or if the user isn't the owner
-      disabled={isNameLocked || !isOwner}
+      // Lock input if it's already edited or if the user isn't the owner or if event is completed
+      disabled={isNameLocked || !isOwner || eventDetails?.is_completed}
       className={`flex-1 border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${
-        isNameLocked || !isOwner
+        isNameLocked || !isOwner || eventDetails?.is_completed
           ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-400' 
           : 'bg-white border-gray-300 text-gray-900 dark:bg-slate-950 dark:border-slate-700 dark:text-white'
       }`}
     />
     
     {/* STRICT REMOVAL: Only render the button if it is NOT locked */}
-    {isOwner && !isNameLocked && (
+    {isOwner && !isNameLocked && !eventDetails?.is_completed && (
       <Button
         variant="primary"
         onClick={handleUpdateName}
@@ -375,7 +517,7 @@ export const Settings: React.FC = () => {
                             <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
                               Description
                             </span>
-                            {!isEditingDesc && isOwner && (
+                            {!isEditingDesc && isOwner && !eventDetails?.is_completed && (
                               <button
                                 onClick={() => setIsEditingDesc(true)}
                                 className="text-xs font-bold text-primary hover:underline cursor-pointer"
@@ -454,11 +596,103 @@ export const Settings: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-400 py-4">No event details available.</p>
-                    )}
+                    ) : null}
                   </div>
                 </Card>
+
+                {/* Event Status & Lock Card */}
+                <div className="mt-6">
+                  <Card>
+                    <div className="p-2 space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 pb-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          eventDetails?.is_completed 
+                            ? 'bg-rose-50 dark:bg-rose-950/25 text-rose-500' 
+                            : 'bg-emerald-50 dark:bg-emerald-950/25 text-emerald-500'
+                        }`}>
+                          <Lock size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white text-base">Event Status & Lock</h3>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Lock the event as read-only or reopen it.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 pt-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                              Status
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {eventDetails?.is_completed ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/50 dark:border-rose-900/30">
+                                  <Lock size={12} /> Completed & Locked
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-900/30">
+                                  Active & Unlocked
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {eventDetails?.is_completed && eventDetails?.completed_at && (
+                            <div className="text-right">
+                              <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                Completed At
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-slate-400 font-semibold">
+                                {formatDate(eventDetails.completed_at)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                          {eventDetails?.is_completed 
+                            ? `This event is currently finalized. All administrative functions, scoring submissions, team formation, and user portal updates are frozen in a read-only state. You can reopen the event to resume modifications (reopened ${eventDetails.reopen_count ?? 0} of 2 times).`
+                            : "Completing the event will lock all write operations. Judges and participants will only be able to view details. Standings and rankings will be locked."}
+                        </p>
+
+                        <div className="pt-2">
+                          {isOwner ? (
+                            eventDetails?.is_completed ? (
+                              <div className="space-y-2">
+                                <Button
+                                  variant="primary"
+                                  onClick={handleReopenEvent}
+                                  disabled={statusLoading || (eventDetails.reopen_count ?? 0) >= 2}
+                                  className="w-full sm:w-auto font-bold rounded-xl shadow-md transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {statusLoading ? 'Reopening...' : 'Reopen Event'}
+                                </Button>
+                                {(eventDetails.reopen_count ?? 0) >= 2 && (
+                                  <p className="text-xs font-semibold text-red-650 text-red-600 dark:text-red-400">
+                                    ⚠️ Reopen limit reached. You can only reopen an event up to 2 times.
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <Button
+                                variant="danger"
+                                onClick={handleCompleteEvent}
+                                disabled={statusLoading}
+                                className="w-full sm:w-auto font-bold rounded-xl shadow-md bg-red-600 hover:bg-red-700 transition-all hover:scale-[1.02]"
+                              >
+                                {statusLoading ? 'Locking...' : 'Complete & Lock Event'}
+                              </Button>
+                            )
+                          ) : (
+                            <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                              <span>Only the event owner/creator can change the completion status of this event.</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
               </div>
 
               {/* Admin Profile Card */}
@@ -564,7 +798,7 @@ export const Settings: React.FC = () => {
                                 </span>
                               )}
 
-                              {isOwner && (
+                              {isOwner && !eventDetails?.is_completed && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveInvite(inv.id, inv.email)}
@@ -581,6 +815,123 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
                 </Card>
+
+                {/* Transfer Ownership Card */}
+                {isOwner && (
+                  <Card>
+                    <div className="p-2 space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 pb-4">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/25 text-primary flex items-center justify-center">
+                          <User size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white text-base">Transfer Ownership & Leave</h3>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Hand over ownership of this event workspace to a co-admin.</p>
+                        </div>
+                      </div>
+
+                      {transferStatus ? (
+                        <div className="space-y-4 pt-2">
+                          <div className="flex items-start gap-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 p-4 rounded-2xl">
+                            <AlertCircle className="text-orange-500 mt-0.5 flex-shrink-0" size={18} />
+                            <div className="space-y-1 text-xs">
+                              <p className="font-bold text-orange-800 dark:text-orange-355">Pending Ownership Transfer</p>
+                              <p className="text-orange-755 dark:text-orange-400">
+                                You initiated a transfer request to <strong>{transferStatus.new_owner_email || transferStatus.new_owner_id}</strong>.
+                                The target co-admin must claim ownership from their dashboard.
+                              </p>
+                              <p className="text-gray-400 mt-1">
+                                Action after transfer: <strong>{transferStatus.leave_completely ? 'Leave workspace' : 'Stay as co-admin'}</strong>
+                              </p>
+                              <p className="text-gray-400">
+                                Expires at: <strong>{formatDate(transferStatus.expires_at)}</strong>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-2">
+                            <Button
+                              variant="danger-outline"
+                              onClick={handleCancelTransfer}
+                              disabled={transferLoading}
+                              className="font-bold rounded-xl text-xs py-2.5 px-4"
+                            >
+                              {transferLoading ? 'Cancelling...' : 'Cancel Transfer Request'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4 pt-2">
+                          {acceptedCoAdmins.length === 0 ? (
+                            <div className="flex items-start gap-2.5 text-xs text-gray-500 dark:text-slate-400 bg-gray-50/50 dark:bg-slate-800/50 p-4 rounded-xl border border-gray-150 dark:border-slate-850">
+                              <Info size={16} className="mt-0.5 text-gray-400 flex-shrink-0" />
+                              <span>There are no active co-administrators to transfer ownership to. Invite a team member using their email first.</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                  Select Target Co-Admin
+                                </label>
+                                <select
+                                  value={selectedCoAdminEmail}
+                                  onChange={(e) => setSelectedCoAdminEmail(e.target.value)}
+                                  className="w-full border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 animate-scale-up"
+                                >
+                                  <option value="">-- Choose a co-admin --</option>
+                                  {acceptedCoAdmins.map((inv) => (
+                                    <option key={inv.id} value={inv.email}>
+                                      {inv.email}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                  Post-Transfer Action
+                                </label>
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name="leave_action"
+                                      checked={leaveCompletely}
+                                      onChange={() => setLeaveCompletely(true)}
+                                      className="accent-primary"
+                                    />
+                                    Leave workspace completely
+                                  </label>
+                                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      name="leave_action"
+                                      checked={!leaveCompletely}
+                                      onChange={() => setLeaveCompletely(false)}
+                                      className="accent-primary"
+                                    />
+                                    Stay in workspace as co-admin
+                                  </label>
+                                </div>
+                              </div>
+
+                              <div className="pt-2 border-t border-gray-50 dark:border-slate-800/80">
+                                <Button
+                                  variant="primary"
+                                  onClick={handleInitiateTransfer}
+                                  disabled={!selectedCoAdminEmail || transferLoading}
+                                  className="font-bold rounded-xl text-xs py-2.5 px-4"
+                                >
+                                  {transferLoading ? 'Processing...' : 'Transfer Ownership'}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
               </div>
 
               {/* Invite Form Card */}
@@ -598,36 +949,42 @@ export const Settings: React.FC = () => {
                     </div>
 
                     {isOwner ? (
-                      <form onSubmit={handleInvite} className="space-y-4 pt-1">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                            Email Address
-                          </label>
-                          <input
-                            type="email"
-                            placeholder="colleague@email.com"
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                            className="w-full border border-gray-200 dark:border-slate-700 bg-transparent dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            required
-                          />
+                      eventDetails?.is_completed ? (
+                        <div className="text-xs text-rose-600 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl p-4 leading-relaxed">
+                          ⚠️ This event is completed and locked. Co-administrators cannot be invited.
                         </div>
+                      ) : (
+                        <form onSubmit={handleInvite} className="space-y-4 pt-1">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                              Email Address
+                            </label>
+                            <input
+                              type="email"
+                              placeholder="colleague@email.com"
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              className="w-full border border-gray-200 dark:border-slate-700 bg-transparent dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              required
+                            />
+                          </div>
 
-                        {inviteError && (
-                          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/25 border border-red-100 dark:border-red-900/35 rounded-lg px-2.5 py-2">
-                            {inviteError}
-                          </p>
-                        )}
+                          {inviteError && (
+                            <p className="text-xs text-red-500 bg-red-50 dark:bg-rose-950/25 border border-red-100 dark:border-rose-900/35 rounded-lg px-2.5 py-2">
+                              {inviteError}
+                            </p>
+                          )}
 
-                        <Button
-                          type="submit"
-                          variant="primary"
-                          className="w-full py-2.5 text-sm font-semibold rounded-xl"
-                          disabled={inviteLoading || !inviteEmail}
-                        >
-                          {inviteLoading ? 'Sending Invitation...' : 'Send Invitation'}
-                        </Button>
-                      </form>
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            className="w-full py-2.5 text-sm font-semibold rounded-xl"
+                            disabled={inviteLoading || !inviteEmail}
+                          >
+                            {inviteLoading ? 'Sending Invitation...' : 'Send Invitation'}
+                          </Button>
+                        </form>
+                      )
                     ) : (
                       <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl p-4 leading-relaxed">
                         ⚠️ Only the administrator who created this event workspace can invite other co-administrators or revoke pending invitations.
@@ -768,6 +1125,60 @@ export const Settings: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* OTP Verification Modal */}
+      <Modal
+        isOpen={otpModalOpen}
+        onClose={() => setOtpModalOpen(false)}
+        title="Verify Ownership Transfer"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+            For security, we sent a verification code to your email (<strong>{user?.email}</strong>). Please enter the 6-digit code below to authorize the transfer.
+          </p>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Verification Code
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 123456"
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+              className="w-full border border-gray-200 dark:border-slate-700 bg-transparent dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 tracking-widest text-center font-bold text-lg"
+              maxLength={6}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setOtpModalOpen(false)}
+              className="flex-1 font-bold rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmTransferOtp}
+              disabled={otpCode.length !== 6 || transferLoading}
+              className="flex-1 font-bold rounded-xl"
+            >
+              {transferLoading ? 'Verifying...' : 'Verify & Confirm'}
+            </Button>
+          </div>
+          
+          <div className="text-center">
+            <button
+              onClick={handleInitiateTransfer}
+              className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+            >
+              Resend Code
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

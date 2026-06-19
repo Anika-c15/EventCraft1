@@ -40,7 +40,9 @@ const emptyForm = {
 }
 
 export const Participants: React.FC = () => {
-  const { eventId } = useAppContext()
+  const { eventId, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const toast = useToast()
   const confirm = useConfirm()
   const navigate = useNavigate()
@@ -205,8 +207,8 @@ export const Participants: React.FC = () => {
           <Button
             variant="secondary"
             onClick={handleSendPortalLinks}
-            disabled={sendingLinks || participants.length === 0}
-            title="Email each participant their unique portal link"
+            disabled={sendingLinks || participants.length === 0 || isCompleted}
+            title={isCompleted ? 'Event is completed and locked' : 'Email each participant their unique portal link'}
           >
             <Send size={15} />
             {sendingLinks ? 'Sending...' : 'Send Portal Links'}
@@ -214,12 +216,12 @@ export const Participants: React.FC = () => {
           <Button
             variant="secondary"
             onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
+            disabled={importing || isCompleted}
           >
             <Upload size={15} />
             {importing ? 'Importing...' : 'Bulk Import'}
           </Button>
-          <Button variant="primary" onClick={() => setShowAddModal(true)}>
+          <Button variant="primary" onClick={() => setShowAddModal(true)} disabled={isCompleted}>
             <Plus size={15} />
             Add Participant
           </Button>
@@ -330,12 +332,14 @@ export const Participants: React.FC = () => {
                             </button>
                           </>
                         )}
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {!isCompleted && (
+                          <button
+                            onClick={() => handleDelete(p.id)}
+                            className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

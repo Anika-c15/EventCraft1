@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Send, Bot, User, RefreshCw, CheckCircle, Sparkles, ArrowRight, Settings, Users, Mail, GitBranch } from 'lucide-react'
+import { Send, Bot, User, RefreshCw, CheckCircle, Sparkles, ArrowRight, Settings, Users, Mail, GitBranch, Info } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -15,7 +15,9 @@ interface Message {
 }
 
 export const Agent: React.FC = () => {
-  const { eventId } = useAppContext()
+  const { eventId, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -120,7 +122,7 @@ export const Agent: React.FC = () => {
               Pipeline Configured
             </Badge>
           )}
-          <Button variant="secondary" size="sm" onClick={clearHistory}>
+          <Button variant="secondary" size="sm" onClick={clearHistory} disabled={isCompleted}>
             <RefreshCw size={14} />
             Clear Chat
           </Button>
@@ -231,6 +233,18 @@ export const Agent: React.FC = () => {
             </div>
           </div>
         </Card>
+      )}
+
+      {isCompleted && (
+        <div className="mb-4 bg-blue-50/80 border border-blue-100/50 rounded-xl p-3.5 flex items-start gap-2.5">
+          <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="space-y-0.5">
+            <p className="text-xs font-bold text-blue-800">Agent is in Read-Only Mode</p>
+            <p className="text-xs text-blue-700 leading-relaxed">
+              This event is completed and locked. You can still ask the agent questions or query results, but configuration changes cannot be applied.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Chat Area */}

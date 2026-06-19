@@ -11,7 +11,9 @@ import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
 import { SocialConfig, SocialCampaignSummary } from '../types'
 
 export const SocialScraping: React.FC = () => {
-  const { eventId, lastWsMessage } = useAppContext()
+  const { eventId, lastWsMessage, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const toast = useToast()
   const toastRef = useRef(toast)
   toastRef.current = toast
@@ -248,7 +250,7 @@ export const SocialScraping: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <Button
             onClick={handleScrapeTick}
-            disabled={actionScraping || posts.length === 0}
+            disabled={actionScraping || posts.length === 0 || isCompleted}
             className="flex items-center gap-1.5 bg-primary text-white hover:bg-orange-600 text-xs px-3.5 py-2 font-semibold transition-all"
           >
             <RefreshCw size={14} className={actionScraping ? 'animate-spin' : ''} />
@@ -256,7 +258,7 @@ export const SocialScraping: React.FC = () => {
           </Button>
           <Button
             onClick={handleResetCampaign}
-            disabled={actionResetting}
+            disabled={actionResetting || isCompleted}
             variant="ghost"
             className="flex items-center gap-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs px-3.5 py-2 font-semibold transition-all border border-red-100 dark:border-red-950/30"
           >
@@ -381,17 +383,20 @@ export const SocialScraping: React.FC = () => {
                       )}
                       <button
                         onClick={() => openVerifyModal(post)}
-                        className="text-primary hover:text-orange-700 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100 px-2 py-1 rounded transition-colors text-[9px] font-bold border border-orange-200/30"
+                        disabled={isCompleted}
+                        className="text-primary hover:text-orange-700 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100 px-2 py-1 rounded transition-colors text-[9px] font-bold border border-orange-200/30 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Verify
                       </button>
-                      <button
-                        onClick={() => handleDeletePost(post.team_id, post.id)}
-                        className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded transition-colors border border-red-200/30"
-                        title="Delete post"
-                      >
-                        <Trash size={11} />
-                      </button>
+                      {!isCompleted && (
+                        <button
+                          onClick={() => handleDeletePost(post.team_id, post.id)}
+                          className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded transition-colors border border-red-200/30"
+                          title="Delete post"
+                        >
+                          <Trash size={11} />
+                        </button>
+                      )}
                     </div>
                   </div>
 

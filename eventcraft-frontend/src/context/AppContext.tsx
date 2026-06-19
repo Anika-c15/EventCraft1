@@ -111,7 +111,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleWsMessage = useCallback((msg: any) => {
     switch (msg.type) {
       case 'event_updated':
-        loadEventsList(); break
+      case 'event_completed':
+      case 'event_reopened':
+      case 'transfer_initiated':
+      case 'transfer_completed':
+        loadEventsList(); loadDashboard(); loadActivityLog(); break
       case 'approval_resolved':
       case 'approval_created':
         loadApprovals(); loadDashboard(); break

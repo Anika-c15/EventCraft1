@@ -34,10 +34,12 @@ const defaultForm = (cList: any[]) => {
 }
 
 export const Evaluations: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard, dashboardStats, lastWsMessage } = useAppContext()
+  const { eventId, loadApprovals, loadDashboard, dashboardStats, lastWsMessage, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
 
   const isEvaluationPhase = dashboardStats?.is_evaluation_unlocked ?? false
-  const isClosed = dashboardStats?.is_evaluation_closed ?? false
+  const isClosed = (dashboardStats?.is_evaluation_closed ?? false) || isCompleted
 
   const [criteriaList, setCriteriaList] = useState<any[]>(criteriaConfig)
   const [scores, setScores]           = useState<any[]>([])
@@ -337,7 +339,7 @@ export const Evaluations: React.FC = () => {
             <Button variant="secondary" onClick={() => { setTempWeights(scoringWeights); setShowWeightsConfig(true) }} disabled={isClosed}>
               <Sliders size={15} /> Configure Scoring
             </Button>
-            <Button variant="secondary" onClick={handleConsolidate}>
+            <Button variant="secondary" onClick={handleConsolidate} disabled={isCompleted}>
               <RefreshCw size={15} /> Consolidate Scores
             </Button>
             <Button variant="secondary" onClick={() => { setInviteResult(null); setInviteName(''); setInviteEmail(''); setShowInvite(true) }} disabled={isClosed}>
@@ -533,7 +535,9 @@ export const Evaluations: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {mitigations.map((m: any) => {
+                      const isPublicNeeded = (scoringWeights.peer ?? 0) > 0 || (scoringWeights.social ?? 0) > 0
                       const hasPublic = m.public_vote_score !== null && m.public_vote_score !== undefined
+                      const canAcceptScore = !isPublicNeeded || hasPublic
                       const isLocked = m.final_score !== null && m.final_score !== undefined
                       const deviation = hasPublic ? Math.abs(m.judge_avg - m.public_vote_score) : 0
                       const isFlagged = deviation > 2.0
@@ -557,7 +561,7 @@ export const Evaluations: React.FC = () => {
                               </Badge>
                             ) : isFlagged ? (
                               <Badge variant="danger">Bias Flagged</Badge>
-                            ) : hasPublic ? (
+                            ) : (hasPublic || !isPublicNeeded) ? (
                               <Badge variant="success">Balanced</Badge>
                             ) : (
                               <Badge variant="yellow">Pending Public Vote</Badge>
@@ -656,8 +660,8 @@ export const Evaluations: React.FC = () => {
                           {/* Lock controls */}
                           {!isLocked && !isClosed && (
                             <div className="space-y-2.5">
-                              {/* Accept AI Score — only when a public/AI score exists */}
-                              {hasPublic && (
+                              {/* Accept AI Score — only when a public/AI score exists or isn't required */}
+                              {canAcceptScore && (
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
@@ -671,7 +675,7 @@ export const Evaluations: React.FC = () => {
                               )}
 
                               {/* Override — always available to admin */}
-                              <div className={`flex gap-2 ${hasPublic ? 'border-t border-gray-100/50 pt-2' : ''}`}>
+                              <div className={`flex gap-2 ${canAcceptScore ? 'border-t border-gray-100/50 pt-2' : ''}`}>
                                 <input
                                   type="number"
                                   step="0.05"
@@ -819,7 +823,7 @@ export const Evaluations: React.FC = () => {
                       </div>
                       <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{invite.judge_email}</p>
                     </div>
-                    {!invite.is_revoked && (
+                    {!invite.is_revoked && !isCompleted && (
                       <button
                         onClick={() => handleRevokeInvitation(invite.id)}
                         className="text-[10px] bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 hover:text-red-700 px-2 py-1 rounded font-medium transition-colors"

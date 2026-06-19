@@ -109,26 +109,40 @@ export const CandidatePortal: React.FC = () => {
     }
   }
 
-  const handleSubmit = (targetEventId?: string) => {
+  const handleSubmit = async (targetEventId?: string) => {
     if (!profile.name || !profile.email) return
-    addApproval({
-      type: 'Candidate Registration',
-      status: 'pending',
-      description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution || 'No institution'}. Skills: ${profile.skills || 'N/A'}. Level: ${profile.level}. AI Fit Score: ${profile.fit_score ?? 'N/A'}/100. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
-      payload: {
-        name: profile.name,
-        email: profile.email,
-        institution: profile.institution,
-        level: profile.level,
-        skills: profile.skills,
-        summary: profile.summary,
-        fit_score: profile.fit_score,
-        fit_breakdown: profile.fit_breakdown,
-        strengths: profile.strengths,
-        flags: profile.flags,
-      },
-    }, targetEventId || activeEventId)
-    setPageState('submitted')
+    const id = targetEventId || activeEventId
+    setPageState('extracting')
+    try {
+      const intakeStatus = await eventsApi.getIntakeStatus(id)
+      if (!intakeStatus.intake_open) {
+        setErrorMessage(intakeStatus.reason || 'Participant intake is closed for this event.')
+        setPageState('error')
+        return
+      }
+
+      await addApproval({
+        type: 'Candidate Registration',
+        status: 'pending',
+        description: `New candidate registration from ${profile.name} (${profile.email}) — ${profile.institution || 'No institution'}. Skills: ${profile.skills || 'N/A'}. Level: ${profile.level}. AI Fit Score: ${profile.fit_score ?? 'N/A'}/100. Submitted via Resume Portal. Please review and approve to add to participant roster.`,
+        payload: {
+          name: profile.name,
+          email: profile.email,
+          institution: profile.institution,
+          level: profile.level,
+          skills: profile.skills,
+          summary: profile.summary,
+          fit_score: profile.fit_score,
+          fit_breakdown: profile.fit_breakdown,
+          strengths: profile.strengths,
+          flags: profile.flags,
+        },
+      }, id)
+      setPageState('submitted')
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to submit registration.')
+      setPageState('error')
+    }
   }
 
   const handleVerifyAndSubmit = async () => {
@@ -137,7 +151,7 @@ export const CandidatePortal: React.FC = () => {
     if (!input) return
     try {
       const res = await eventsApi.verifyEventName(input)
-      handleSubmit(res.event_id)
+      await handleSubmit(res.event_id)
       setShowVerifyModal(false)
       setVerifyInput('')
     } catch {

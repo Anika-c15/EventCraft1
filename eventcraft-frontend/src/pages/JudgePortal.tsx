@@ -8,7 +8,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import {
   CheckCircle, ClipboardList, Send, Star, Github, Youtube,
   ExternalLink, Sun, Moon, Bot, Sparkles, BookOpen,
-  ChevronDown, ChevronUp, Loader2,
+  ChevronDown, ChevronUp, Loader2, Lock,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -220,6 +220,18 @@ export const JudgePortal: React.FC = () => {
           </div>
         </div>
 
+        {portalData?.event_completed && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 flex items-start gap-3 shadow-sm mb-6">
+            <Lock className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0 animate-pulse" size={18} />
+            <div>
+              <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">This event is completed and locked</h4>
+              <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-0.5">
+                All team submissions and evaluation scores are finalized and read-only.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Scoring Criteria */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-5 mb-6 transition-colors duration-200">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">Scoring Criteria</h2>
@@ -352,11 +364,12 @@ export const JudgePortal: React.FC = () => {
                         teamId={team.id}
                         senderName={portalData.judge_email}
                         senderRole="judge"
+                        disabled={portalData.event_completed === true}
                       />
                     </div>
                   </div>
 
-                  {!isScored && (
+                  {!isScored && !portalData.event_completed && (
                     <Button variant="primary" size="sm" onClick={() => openScoring(team)} className="flex-shrink-0">
                       <ClipboardList size={14} className="mr-1" />
                       Score
@@ -446,6 +459,7 @@ export const JudgePortal: React.FC = () => {
                       </div>
                       <input
                         type="range" min={0} max={10} step={0.5} value={val}
+                        disabled={portalData.event_completed}
                         onChange={(e) => setScores({ ...scores, [key]: parseFloat(e.target.value) })}
                         className="w-full"
                         style={{ background: `linear-gradient(to right, #E8450A ${val * 10}%, #e5e7eb ${val * 10}%)` }}
@@ -466,6 +480,7 @@ export const JudgePortal: React.FC = () => {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                disabled={portalData.event_completed}
                 rows={3}
                 className="w-full border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none placeholder:text-gray-400 dark:placeholder:text-slate-500"
                 placeholder="Additional observations..."
@@ -474,7 +489,7 @@ export const JudgePortal: React.FC = () => {
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="secondary" onClick={() => setScoringTeam(null)}>Cancel</Button>
-              <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
+              <Button variant="primary" onClick={handleSubmit} disabled={submitting || portalData.event_completed}>
                 <Send size={14} />
                 {submitting ? 'Submitting...' : 'Submit Score'}
               </Button>

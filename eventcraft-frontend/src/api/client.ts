@@ -115,6 +115,28 @@ export const eventsApi = {
     }),
   delete: (id: string) =>
     request<any>(`/api/events/${id}`, { method: 'DELETE' }),
+  complete: (id: string) =>
+    request<any>(`/api/events/${id}/complete`, { method: 'POST' }),
+  reopen: (id: string) =>
+    request<any>(`/api/events/${id}/reopen`, { method: 'POST' }),
+  transferOwnershipInitiateOtp: (id: string) =>
+    request<any>(`/api/events/${id}/transfer-ownership/initiate/request-otp`, { method: 'POST' }),
+  transferOwnershipInitiateConfirm: (id: string, payload: { new_owner_id: string; leave_completely: boolean; otp: string }) =>
+    request<any>(`/api/events/${id}/transfer-ownership/initiate/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getTransferOwnershipStatus: (id: string) =>
+    request<any>(`/api/events/${id}/transfer-ownership/status`),
+  cancelTransferOwnership: (id: string) =>
+    request<any>(`/api/events/${id}/transfer-ownership/cancel`, { method: 'POST' }),
+  transferOwnershipClaimOtp: (id: string) =>
+    request<any>(`/api/events/${id}/transfer-ownership/claim/request-otp`, { method: 'POST' }),
+  transferOwnershipClaimConfirm: (id: string, payload: { otp: string }) =>
+    request<any>(`/api/events/${id}/transfer-ownership/claim/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 }
 
 // ── Participants ───────────────────────────────────────────────────────────────

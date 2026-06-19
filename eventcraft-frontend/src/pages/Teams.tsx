@@ -16,7 +16,9 @@ const teamColors = [
 ]
 
 export const Teams: React.FC = () => {
-  const { eventId, loadApprovals, loadDashboard, approvals, dashboardStats } = useAppContext()
+  const { eventId, loadApprovals, loadDashboard, approvals, dashboardStats, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const toast = useToast()
   const confirm = useConfirm()
   const navigate = useNavigate()
@@ -46,7 +48,7 @@ export const Teams: React.FC = () => {
   // or once any team is approved
   const stageIndex = dashboardStats?.current_stage_index ?? 0
   const teamsApproved = teams.some(t => t.status === 'Approved' || t.status === 'Active')
-  const formationLocked = stageIndex > 1 || teamsApproved
+  const formationLocked = stageIndex > 1 || teamsApproved || isCompleted
 
   const loadTeams = async () => {
     if (!eventId) return
@@ -123,7 +125,7 @@ export const Teams: React.FC = () => {
         <div className="flex items-center gap-2">
           {formationLocked ? (
             <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg flex items-center gap-1.5">
-              <CheckCircle size={13} className="text-green-500" /> Teams locked — formation complete
+              <CheckCircle size={13} className="text-green-500" /> {isCompleted ? 'Teams locked — event completed' : 'Teams locked — formation complete'}
             </span>
           ) : (
             <>

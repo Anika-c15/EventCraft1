@@ -54,7 +54,9 @@ const RECIPIENT_TYPES = [
 ]
 
 export const Communications: React.FC = () => {
-  const { eventId } = useAppContext()
+  const { eventId, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const toast = useToast()
   const [comms, setComms] = useState<any[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -143,7 +145,7 @@ export const Communications: React.FC = () => {
             {sentCount} sent · {draftCount} drafts · {scheduledCount} scheduled
           </p>
         </div>
-        <Button variant="primary" onClick={() => setShowModal(true)}>
+        <Button variant="primary" onClick={() => setShowModal(true)} disabled={isCompleted}>
           <Plus size={15} />
           New Communication
         </Button>
@@ -213,7 +215,7 @@ export const Communications: React.FC = () => {
                       {c.status === 'Draft' && (
                         <Button variant="primary" size="sm"
                           onClick={() => handleSend(c.id)}
-                          disabled={sending === c.id}>
+                          disabled={sending === c.id || isCompleted}>
                           <Send size={12} />
                           {sending === c.id ? 'Sending...' : 'Send'}
                         </Button>
@@ -260,7 +262,7 @@ export const Communications: React.FC = () => {
               placeholder="e.g. Deadline is tomorrow at 11:59 PM" />
           </div>
 
-          <Button variant="secondary" onClick={handleDraftWithAI} disabled={drafting} className="w-full justify-center">
+          <Button variant="secondary" onClick={handleDraftWithAI} disabled={drafting || isCompleted} className="w-full justify-center">
             <Sparkles size={15} />
             {drafting ? 'Drafting with AI...' : 'Draft with Gemini AI'}
           </Button>
@@ -279,7 +281,7 @@ export const Communications: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="secondary" onClick={handleSaveDraft}>Save as Draft</Button>
+            <Button variant="secondary" onClick={handleSaveDraft} disabled={isCompleted}>Save as Draft</Button>
           </div>
         </div>
       </Modal>

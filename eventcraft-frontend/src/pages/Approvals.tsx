@@ -35,7 +35,9 @@ const typeVariant = (type: string) => {
 }
 
 export const Approvals: React.FC = () => {
-  const { approvals, loadApprovals, resolveApproval } = useAppContext()
+  const { approvals, loadApprovals, resolveApproval, eventId, eventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
 
   useEffect(() => {
     loadApprovals()
@@ -90,11 +92,13 @@ export const Approvals: React.FC = () => {
                 </p>
                 <div className="flex items-center gap-2">
                   <Button variant="danger-outline" size="sm"
-                    onClick={() => resolveApproval(approval.id, 'rejected')}>
+                    onClick={() => resolveApproval(approval.id, 'rejected')}
+                    disabled={isCompleted}>
                     <XCircle size={14} />Reject
                   </Button>
                   <Button variant="primary" size="sm"
-                    onClick={() => resolveApproval(approval.id, 'approved')}>
+                    onClick={() => resolveApproval(approval.id, 'approved')}
+                    disabled={isCompleted}>
                     <CheckCircle size={14} />Approve
                   </Button>
                 </div>

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { Users, UserCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, ArrowRight, Bell, X } from 'lucide-react'
+import { Users, UserCheck, ShieldAlert, AlertTriangle, CheckCircle, XCircle, ArrowRight, Bell, X, Lock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import { StatCardSkeleton, CardItemSkeleton } from '../components/ui/Skeleton'
 import { useAppContext } from '../context/AppContext'
+import { useToast } from '../context/ToastAndConfirmContext'
+import { eventsApi } from '../api/client'
 
 const formatDate = (iso: string) => {
   if (!iso) return ''
@@ -74,12 +77,21 @@ export const Dashboard: React.FC = () => {
     dashboardStats, loadDashboard,
     activityLog, loadActivityLog,
     lastWsMessage,
-   
+    user, eventsList, eventName
   } = useAppContext()
 
   const [approvalBanner, setApprovalBanner] = useState<string | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [approvalsLoading, setApprovalsLoading] = useState(true)
+
+  // Transfer Claim States
+  const toast = useToast()
+  const [transferRequest, setTransferRequest] = useState<any>(null)
+  const [claimModalOpen, setClaimModalOpen] = useState(false)
+  const [claimOtp, setClaimOtp] = useState('')
+  const [claimLoading, setClaimLoading] = useState(false)
+
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
 
   // Form states for creating a new event when none are active
   // Form states for creating a new event when none are active
@@ -87,6 +99,47 @@ export const Dashboard: React.FC = () => {
   const [newEventDesc, setNewEventDesc] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  const loadTransferRequest = async (targetId: string) => {
+    try {
+      const data = await eventsApi.getTransferOwnershipStatus(targetId)
+      setTransferRequest(data)
+    } catch (err) {
+      console.error("Failed to load transfer request status on dashboard:", err)
+    }
+  }
+
+  const handleRequestClaimOtp = async () => {
+    if (!eventId) return
+    setClaimLoading(true)
+    try {
+      await eventsApi.transferOwnershipClaimOtp(eventId)
+      toast.success("Verification code sent to your email.")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send verification code")
+    } finally {
+      setClaimLoading(false)
+    }
+  }
+
+  const handleConfirmClaimOtp = async () => {
+    if (!eventId) return
+    setClaimLoading(true)
+    try {
+      await eventsApi.transferOwnershipClaimConfirm(eventId, {
+        otp: claimOtp.trim()
+      })
+      toast.success("Congratulations! You are now the owner of this workspace.")
+      setClaimModalOpen(false)
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to claim ownership")
+    } finally {
+      setClaimLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!eventId) {
@@ -100,6 +153,7 @@ export const Dashboard: React.FC = () => {
       loadDashboard(),
       loadApprovals(),
       loadActivityLog(),
+      loadTransferRequest(eventId)
     ]).finally(() => {
       setStatsLoading(false)
       setApprovalsLoading(false)
@@ -222,7 +276,14 @@ export const Dashboard: React.FC = () => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            {currentEvent?.is_completed && (
+              <Badge variant="danger" className="text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Lock size={10} /> Completed & Locked
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1">
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse" />
             <span className="text-sm text-gray-500 dark:text-slate-400">
@@ -233,6 +294,31 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="text-sm text-gray-500 dark:text-slate-400">{today}</div>
       </div>
+
+      {/* ── Transfer Ownership Claim Banner ── */}
+      {transferRequest && user && transferRequest.new_owner_id === user.id && transferRequest.status === 'pending' && (
+        <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl p-5 shadow-lg shadow-orange-500/10 animate-fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <ShieldAlert size={20} className="text-white" />
+            </div>
+            <div className="space-y-0.5">
+              <p className="font-bold text-sm">Action Required: Claim Ownership</p>
+              <p className="text-xs text-orange-50 leading-relaxed">
+                The current owner has initiated a transfer request to hand over ownership of <strong>{eventName}</strong> to you. 
+                Accepting this will make you the primary administrator of this workspace.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => setClaimModalOpen(true)}
+            className="font-bold text-xs bg-white text-orange-600 border-none hover:bg-orange-50 px-5 py-2.5 rounded-xl flex-shrink-0 shadow-md cursor-pointer"
+          >
+            Claim Ownership Now
+          </Button>
+        </div>
+      )}
 
       {/* ── Approval notification banner ── */}
       {approvalBanner && (
@@ -451,6 +537,62 @@ export const Dashboard: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Claim Ownership Modal */}
+      <Modal
+        isOpen={claimModalOpen}
+        onClose={() => setClaimModalOpen(false)}
+        title="Claim Workspace Ownership"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+            To finalize the ownership transfer, you must verify your email address. Click the button below to receive a 6-digit code on <strong>{user?.email}</strong>.
+          </p>
+
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleRequestClaimOtp}
+              disabled={claimLoading}
+              className="w-full text-xs font-semibold py-2.5 rounded-xl"
+            >
+              Send Verification Code
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t border-gray-50 dark:border-slate-800/80 pt-3">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Enter 6-Digit Code
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 123456"
+              value={claimOtp}
+              onChange={(e) => setClaimOtp(e.target.value)}
+              className="w-full border border-gray-200 dark:border-slate-700 bg-transparent dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 tracking-widest text-center font-bold text-lg"
+              maxLength={6}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setClaimModalOpen(false)}
+              className="flex-1 font-bold rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmClaimOtp}
+              disabled={claimOtp.length !== 6 || claimLoading}
+              className="flex-1 font-bold rounded-xl"
+            >
+              {claimLoading ? 'Claiming...' : 'Verify & Claim'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

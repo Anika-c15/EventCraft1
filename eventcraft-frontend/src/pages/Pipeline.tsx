@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { eventsApi } from '../api/client'
 import { useAppContext } from '../context/AppContext'
-import { useToast } from '../context/ToastAndConfirmContext'
+import { useToast, useConfirm } from '../context/ToastAndConfirmContext'
 
 const stageIcon = (name: string) => {
   if (name.toLowerCase().includes('intake') || name.toLowerCase().includes('participant')) return <UserPlus size={20} />
@@ -34,8 +34,11 @@ const formatDate = (iso?: string) => {
 }
 
 export const Pipeline: React.FC = () => {
-  const { eventId, loadApprovals, approvals } = useAppContext()
+  const { eventId, loadApprovals, approvals, eventsList, loadEventsList } = useAppContext()
+  const currentEvent = eventsList?.find((e: any) => e.id === eventId)
+  const isCompleted = currentEvent?.is_completed === true
   const toast = useToast()
+  const confirm = useConfirm()
   const [stages, setStages] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [requesting, setRequesting] = useState(false)
@@ -104,6 +107,27 @@ export const Pipeline: React.FC = () => {
     }
   }
 
+  const handleCompleteEvent = async () => {
+    if (!eventId) return
+    const ok = await confirm({
+      title: "Complete & Lock Event?",
+      message: "This is the final stage of the pipeline. Advancing will finalize and lock the event as read-only. This will freeze all submissions, scores, voting, and Q&A. Are you sure?",
+      type: "warning",
+      confirmText: "Yes, Complete Event",
+      cancelText: "Cancel",
+    });
+    if (!ok) return
+
+    try {
+      await eventsApi.complete(eventId)
+      toast.success('Event has been completed and locked!')
+      await loadEventsList()
+      await load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to complete event')
+    }
+  }
+
   const completedCount = stages.filter((s) => s.status === 'completed').length
   const activeStage = stages.find((s) => s.status === 'active')
   const isLastStage = stages.length > 0 && completedCount === stages.length - 1 &&
@@ -126,12 +150,22 @@ export const Pipeline: React.FC = () => {
               <span className="text-sm font-medium text-green-700">Active: {activeStage.name}</span>
             </div>
           )}
-          {!isLastStage && (
+          {isLastStage ? (
+            <Button
+              variant="primary"
+              onClick={handleCompleteEvent}
+              disabled={isCompleted}
+              title={isCompleted ? 'Event is completed and locked' : ''}
+            >
+              <CheckCircle size={15} />
+              {isCompleted ? 'Completed & Locked' : 'Complete & Lock Event'}
+            </Button>
+          ) : (
             <Button
               variant="primary"
               onClick={handleRequestAdvance}
-              disabled={requesting || hasPendingProgression}
-              title={hasPendingProgression ? 'Approve the pending progression first' : ''}
+              disabled={requesting || hasPendingProgression || isCompleted}
+              title={isCompleted ? 'Event is completed and locked' : hasPendingProgression ? 'Approve the pending progression first' : ''}
             >
               <Shield size={15} />
               {requesting ? 'Requesting...' : 'Request Stage Advance'}
@@ -291,10 +325,25 @@ export const Pipeline: React.FC = () => {
                           variant="primary"
                           size="sm"
                           onClick={handleRequestAdvance}
-                          disabled={requesting || hasPendingProgression}
+                          disabled={requesting || hasPendingProgression || isCompleted}
+                          title={isCompleted ? 'Event is completed and locked' : ''}
                         >
                           <ArrowRight size={13} />
                           Advance
+                        </Button>
+                      </div>
+                    )}
+                    {stage.status === 'active' && idx === stages.length - 1 && (
+                      <div className="mt-3">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleCompleteEvent}
+                          disabled={isCompleted}
+                          title={isCompleted ? 'Event is completed and locked' : ''}
+                        >
+                          <CheckCircle size={13} className="mr-1" />
+                          Complete Event
                         </Button>
                       </div>
                     )}
@@ -338,7 +387,8 @@ export const Pipeline: React.FC = () => {
               <select
                 value={selectedStageName}
                 onChange={(e) => setSelectedStageName(e.target.value)}
-                className="flex-1 max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                disabled={isCompleted}
+                className="flex-1 max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select target stage...</option>
                 {stages.map((s) => (
@@ -350,7 +400,7 @@ export const Pipeline: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={handleOverrideStage}
-                disabled={overriding || !selectedStageName}
+                disabled={overriding || !selectedStageName || isCompleted}
                 className="hover:bg-gray-100"
               >
                 {overriding ? 'Overriding...' : 'Override Active Phase'}
