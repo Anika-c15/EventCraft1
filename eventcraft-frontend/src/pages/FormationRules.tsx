@@ -228,6 +228,7 @@ export const FormationRules: React.FC = () => {
             <input
               type="text"
               value={rules.eventName}
+              disabled
               onChange={(e) => setRules({ ...rules, eventName: e.target.value })}
               className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
