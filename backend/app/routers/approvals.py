@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import require_committee
+from ..guards import require_event_not_completed
 from ..schemas import ApprovalOut, ApprovalResolve, ApprovalCreate
 from .. import models
 from ..ws import broadcast
@@ -33,6 +34,7 @@ def create_approval(
     payload: ApprovalCreate,
     db: Session = Depends(get_db),
 ):
+    require_event_not_completed(event_id, db)
     approval = models.Approval(
         event_id=event_id,
         type=payload.type,
@@ -55,6 +57,7 @@ async def resolve_approval(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     approval = db.query(models.Approval).filter(
         models.Approval.id == approval_id,
         models.Approval.event_id == event_id,

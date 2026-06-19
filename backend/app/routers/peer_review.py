@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import decode_portal_token
+from ..guards import require_event_not_completed
 from ..schemas import PeerReviewCreate, PeerReviewOut
 from .. import models
 
@@ -87,6 +88,7 @@ def submit_peer_review(
     Requires a valid participant portal token in the query string.
     One review per (from_team → to_team) pair.  Self-voting is blocked.
     """
+    require_event_not_completed(event_id, db)
     check_peer_review_allowed(event_id, db)
     participant = _resolve_participant(token, event_id, db)
 

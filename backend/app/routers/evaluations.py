@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..auth import require_committee, create_judge_token, decode_judge_token
+from ..guards import require_event_not_completed
 from ..schemas import ScoreSubmit, EvaluationScoreOut, PublicVoteInput, LockScoreRequest
 from ..config import settings
 from .. import models, llm
@@ -188,6 +189,7 @@ async def submit_score_committee(
     _: models.User = Depends(require_committee),
 ):
     """Committee/admin score submission — requires authentication."""
+    require_event_not_completed(event_id, db)
     return _save_score(event_id, payload, db, background_tasks)
 
 
@@ -197,6 +199,7 @@ def consolidate_scores(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     unresolved = db.query(models.Approval).filter(
         models.Approval.event_id == event_id,
         models.Approval.type == models.ApprovalType.score_override,
@@ -332,6 +335,7 @@ async def invite_judge(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     """
     Generate a signed JWT link for a judge and email it to them.
     The judge clicks the link and can submit scores without creating an account.
@@ -478,6 +482,7 @@ async def judge_submit_score(
     token: str = Query(...),
     db: Session = Depends(get_db),
 ):
+    require_event_not_completed(event_id, db)
     """
     Public score submission via judge link token.
     No account required — token IS the credential.
@@ -536,6 +541,7 @@ def revoke_judge_invitation(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     """Revoke a specific judge invitation, deactivating their link immediately."""
     invitation = db.query(models.JudgeInvitation).filter(
         models.JudgeInvitation.id == invite_id,
@@ -569,6 +575,7 @@ def update_public_vote(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     """
     Admin endpoint: save the social-scraping score (0-10) for a team.
     After saving, the combined public_vote_score is recomputed:
@@ -745,6 +752,7 @@ async def lock_composite_score(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     _enforce_evaluations_active(event_id, db)
 
     team = db.query(models.Team).filter(

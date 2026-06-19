@@ -83,6 +83,58 @@ def _migrate_db():
                     print("🚀 Migrated: added scoring_weights to events")
                 except Exception as col_err:
                     print(f"⚠️ Could not add scoring_weights to events: {col_err}")
+            if "is_completed" not in columns_events:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE events ADD COLUMN is_completed BOOLEAN DEFAULT FALSE"))
+                    print("🚀 Migrated: added is_completed to events")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add is_completed to events: {col_err}")
+            if "completed_at" not in columns_events:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE events ADD COLUMN completed_at TIMESTAMP"))
+                    print("🚀 Migrated: added completed_at to events")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add completed_at to events: {col_err}")
+            if "reopen_count" not in columns_events:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE events ADD COLUMN reopen_count INTEGER DEFAULT 0"))
+                    print("🚀 Migrated: added reopen_count to events")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add reopen_count to events: {col_err}")
+
+        # ── otp_verifications table migrations ───────────────────────────────
+        if "otp_verifications" in existing_tables:
+            columns_otp = [col["name"] for col in inspector.get_columns("otp_verifications")]
+            if "purpose" not in columns_otp:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE otp_verifications ADD COLUMN purpose VARCHAR(50) DEFAULT 'registration'"))
+                    print("🚀 Migrated: added purpose to otp_verifications")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add purpose to otp_verifications: {col_err}")
+
+        # ── event_transfer_requests table ────────────────────────────────────
+        if "event_transfer_requests" not in existing_tables:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE event_transfer_requests (
+                            id              TEXT PRIMARY KEY,
+                            event_id        TEXT NOT NULL REFERENCES events(id),
+                            old_owner_id    TEXT NOT NULL REFERENCES users(id),
+                            new_owner_id    TEXT NOT NULL REFERENCES users(id),
+                            leave_completely BOOLEAN DEFAULT TRUE,
+                            status          TEXT DEFAULT 'pending',
+                            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at      TIMESTAMP NOT NULL
+                        )
+                    """))
+                print("🚀 Migrated: created event_transfer_requests table")
+            except Exception as tbl_err:
+                print(f"⚠️ Could not create event_transfer_requests table: {tbl_err}")
 
         # ── peer_reviews table ──────────────────────────────────────────────
         if "peer_reviews" not in existing_tables:

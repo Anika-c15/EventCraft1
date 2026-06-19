@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 from ..database import get_db
 from ..auth import require_committee
+from ..guards import require_event_not_completed
 from .. import models
 from ..email_service import send_email
 from ..config import settings
@@ -43,6 +44,7 @@ async def post_message(
     payload: QAMessageIn,
     db: Session = Depends(get_db),
 ):
+    require_event_not_completed(event_id, db)
     # check if first message from judge/committee to this team
     is_first_message = False
     if payload.sender_role in ("judge", "committee"):
@@ -129,6 +131,7 @@ def delete_message(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     msg = db.query(models.QAMessage).filter(
         models.QAMessage.id == message_id
     ).first()
@@ -144,6 +147,7 @@ async def clear_messages(
     team_id: str,
     db: Session = Depends(get_db),
 ):
+    require_event_not_completed(event_id, db)
     db.query(models.QAMessage).filter(
         models.QAMessage.event_id == event_id,
         models.QAMessage.team_id == team_id,

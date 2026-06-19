@@ -111,3 +111,14 @@ def require_committee(current_user: models.User = Depends(get_current_user)) -> 
     if current_user.role not in (models.UserRole.admin, models.UserRole.committee):
         raise HTTPException(status_code=403, detail="Committee access required")
     return current_user
+
+
+def require_event_owner(event_id: str, db: Session, current_user: models.User) -> models.User:
+    """Verify that the current user is the owner of the specified event."""
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    if event.owner_id != current_user.id:
+        raise HTTPException(403, "Only the event owner can perform this action")
+    return current_user
+

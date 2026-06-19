@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..auth import require_committee, decode_portal_token
+from ..guards import require_event_not_completed
 from ..schemas import TeamOut, TeamSubmissionDraft, TeamSubmissionFinal
 from .. import models, llm
 from ..team_formation import form_teams
@@ -62,6 +63,7 @@ def form_teams_endpoint(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -210,6 +212,7 @@ def clear_teams(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -378,6 +381,8 @@ def rename_team(
     if not participant or not participant.team_id:
         raise HTTPException(404, "No team assigned to this participant")
 
+    require_event_not_completed(participant.event_id, db)
+
     team = db.query(models.Team).filter(models.Team.id == participant.team_id).first()
     if not team:
         raise HTTPException(404, "Team not found")
@@ -442,6 +447,8 @@ def save_submission_draft(
     if not participant:
         raise HTTPException(404, "Participant not found")
 
+    require_event_not_completed(participant.event_id, db)
+
     active_stage = db.query(models.PipelineStage).filter(
         models.PipelineStage.event_id == participant.event_id,
         models.PipelineStage.status == models.StageStatus.active
@@ -496,6 +503,8 @@ def submit_final_submission(
     participant = db.query(models.Participant).filter(models.Participant.id == participant_id).first()
     if not participant:
         raise HTTPException(404, "Participant not found")
+
+    require_event_not_completed(participant.event_id, db)
 
     active_stage = db.query(models.PipelineStage).filter(
         models.PipelineStage.event_id == participant.event_id,

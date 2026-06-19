@@ -4,12 +4,14 @@ from typing import List
 import os
 
 from ..database import get_db
-from ..auth import require_committee
+from ..auth import require_committee, require_event_owner
+from ..guards import require_event_not_completed
 from ..schemas import (
     EventCreate, EventUpdate, EventOut, StageOut, DashboardStats, 
     FormationRulesUpdate, StageSetPayload,
     CommitteeInviteCreate, CommitteeInviteOut,
-    ScoringWeightsUpdate
+    ScoringWeightsUpdate, TransferInitiatePayload, TransferClaimPayload,
+    EventTransferRequestOut
 )
 from .. import models
 from ..email_service import send_email
@@ -184,6 +186,9 @@ def get_intake_status(event_id: str, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(404, "Event not found")
 
+    if event.is_completed:
+        return {"intake_open": False, "reason": "This event has been completed and locked. Registration is closed."}
+
     stages = db.query(models.PipelineStage).filter(
         models.PipelineStage.event_id == event_id
     ).order_by(models.PipelineStage.order_index).all()
@@ -231,6 +236,7 @@ def update_event_name(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event: 
         raise HTTPException(404, "Event not found")
@@ -265,6 +271,7 @@ def update_event(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -380,6 +387,7 @@ def update_formation_rules(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -413,6 +421,7 @@ def update_scoring_weights(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -451,6 +460,7 @@ def advance_stage(
     _: models.User = Depends(require_committee),
 ):
     """Create an approval request to advance the pipeline stage."""
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -499,6 +509,7 @@ async def advance_stage_direct(
     _: models.User = Depends(require_committee),
 ):
     """Directly advance the pipeline stage without an approval gate."""
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -574,6 +585,7 @@ async def set_stage_direct(
     _: models.User = Depends(require_committee),
 ):
     """Directly set the pipeline stage to a specific stage by name (for debugging/testing)."""
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -783,6 +795,7 @@ async def create_invite(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event: 
         raise HTTPException(404, "Event not found")
@@ -828,6 +841,7 @@ def delete_invite(
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     invite = db.query(models.CommitteeInvitation).filter(
         models.CommitteeInvitation.id == invite_id, 
         models.CommitteeInvitation.event_id == event_id
@@ -843,3 +857,437 @@ def delete_invite(
     db.delete(invite)
     db.commit()
     return {"message": "Invite removed"}
+
+
+# ── Event Completion & Ownership Transfer Endpoints ─────────────────────────
+
+@router.post("/{event_id}/complete", response_model=EventOut)
+def complete_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    
+    require_event_owner(event_id, db, current_user)
+    
+    if event.is_completed:
+        raise HTTPException(400, "Event is already completed")
+        
+    from datetime import datetime
+    event.is_completed = True
+    event.completed_at = datetime.utcnow()
+    
+    # Only mark all stages as completed if completing from the final pipeline stage
+    stages = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).order_by(models.PipelineStage.order_index).all()
+    
+    current_idx = event.current_stage_index
+    is_last_stage = (current_idx == len(stages) - 1)
+    
+    if is_last_stage:
+        for stage in stages:
+            stage.status = models.StageStatus.completed
+            if not stage.completed_at:
+                stage.completed_at = datetime.utcnow()
+            
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Event '{event.name}' has been completed & locked by the owner.",
+        log_type="success",
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(event)
+    
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_completed", "is_completed": True})
+    except Exception:
+        pass
+        
+    return event
+
+
+@router.post("/{event_id}/reopen", response_model=EventOut)
+def reopen_event(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+    
+    require_event_owner(event_id, db, current_user)
+    
+    reopen_cnt = event.reopen_count or 0
+    if reopen_cnt >= 2:
+        raise HTTPException(400, "This event has reached the maximum number of reopenings (2 times).")
+        
+    event.is_completed = False
+    event.completed_at = None
+    event.reopen_count = reopen_cnt + 1
+    
+    # Restore stage status based on event.current_stage_index
+    stages = db.query(models.PipelineStage).filter(
+        models.PipelineStage.event_id == event_id
+    ).order_by(models.PipelineStage.order_index).all()
+    
+    from datetime import datetime
+    current_idx = event.current_stage_index
+    for i, stage in enumerate(stages):
+        if i < current_idx:
+            stage.status = models.StageStatus.completed
+            if not stage.completed_at:
+                stage.completed_at = datetime.utcnow()
+        elif i == current_idx:
+            stage.status = models.StageStatus.active
+            stage.completed_at = None
+        else:
+            stage.status = models.StageStatus.pending
+            stage.completed_at = None
+
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Event '{event.name}' has been reopened by the owner.",
+        log_type="warning",
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(event)
+    
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "event_reopened", "is_completed": False})
+    except Exception:
+        pass
+        
+    return event
+
+
+@router.post("/{event_id}/transfer-ownership/initiate/request-otp")
+async def transfer_ownership_initiate_request_otp(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    require_event_owner(event_id, db, current_user)
+    
+    import random
+    import string
+    from datetime import datetime, timedelta
+    
+    db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == current_user.email,
+        models.OTPVerification.purpose == "transfer_initiate"
+    ).delete()
+    
+    otp = ''.join(random.choices(string.digits, k=6))
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    otp_record = models.OTPVerification(
+        email=current_user.email,
+        otp=otp,
+        expires_at=expires_at,
+        purpose="transfer_initiate"
+    )
+    db.add(otp_record)
+    db.commit()
+    
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    
+    await send_email(
+        to_email=current_user.email,
+        subject="EventCraft — Transfer Ownership Verification",
+        body=f"""Hi {current_user.name},
+
+You initiated a request to transfer ownership of your event '{event.name}'.
+
+Your verification code is:
+
+🔐 {otp}
+
+This code is valid for 10 minutes.
+Do not share this code with anyone.
+
+Regards,
+EventCraft Team"""
+    )
+    return {"message": "OTP sent to your email."}
+
+
+@router.post("/{event_id}/transfer-ownership/initiate/confirm")
+def transfer_ownership_initiate_confirm(
+    event_id: str,
+    payload: TransferInitiatePayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    require_event_owner(event_id, db, current_user)
+    
+    target_user = db.query(models.User).filter(
+        (models.User.id == payload.new_owner_id) | (models.User.email == payload.new_owner_id)
+    ).first()
+    if not target_user:
+        raise HTTPException(404, "Target co-admin user not found")
+        
+    invite = db.query(models.CommitteeInvitation).filter(
+        models.CommitteeInvitation.event_id == event_id,
+        models.CommitteeInvitation.email == target_user.email,
+        models.CommitteeInvitation.is_accepted == True
+    ).first()
+    if not invite:
+        raise HTTPException(400, "Target user must be a registered co-admin who accepted the invitation to this event")
+        
+    from datetime import datetime, timedelta
+    record = db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == current_user.email,
+        models.OTPVerification.purpose == "transfer_initiate",
+        models.OTPVerification.is_verified == False
+    ).order_by(models.OTPVerification.created_at.desc()).first()
+    
+    if not record or record.otp != payload.otp:
+        raise HTTPException(400, "Invalid or expired verification code")
+        
+    if datetime.utcnow() > record.expires_at.replace(tzinfo=None):
+        raise HTTPException(400, "Verification code has expired. Please request a new one")
+        
+    record.is_verified = True
+    
+    db.query(models.EventTransferRequest).filter(
+        models.EventTransferRequest.event_id == event_id,
+        models.EventTransferRequest.status == "pending"
+    ).update({"status": "cancelled"})
+    
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    transfer_req = models.EventTransferRequest(
+        event_id=event_id,
+        old_owner_id=current_user.id,
+        new_owner_id=target_user.id,
+        leave_completely=payload.leave_completely,
+        status="pending",
+        expires_at=expires_at
+    )
+    db.add(transfer_req)
+    db.commit()
+    
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "transfer_initiated", "new_owner_id": payload.new_owner_id})
+    except Exception:
+        pass
+        
+    return {"message": "Transfer initiated. The new owner must now claim ownership from their dashboard.", "transfer_id": transfer_req.id}
+
+
+@router.get("/{event_id}/transfer-ownership/status")
+def get_transfer_ownership_status(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    from datetime import datetime
+    req = db.query(models.EventTransferRequest).filter(
+        models.EventTransferRequest.event_id == event_id,
+        models.EventTransferRequest.status == "pending"
+    ).first()
+    
+    if req:
+        if datetime.utcnow() > req.expires_at.replace(tzinfo=None):
+            req.status = "expired"
+            db.commit()
+            return None
+        return {
+            "id": req.id,
+            "event_id": req.event_id,
+            "old_owner_id": req.old_owner_id,
+            "new_owner_id": req.new_owner_id,
+            "leave_completely": req.leave_completely,
+            "status": req.status,
+            "created_at": req.created_at,
+            "expires_at": req.expires_at,
+            "new_owner_name": req.new_owner.name if req.new_owner else "",
+            "new_owner_email": req.new_owner.email if req.new_owner else ""
+        }
+    return None
+
+
+@router.post("/{event_id}/transfer-ownership/cancel")
+def cancel_transfer_ownership(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    require_event_owner(event_id, db, current_user)
+    
+    req = db.query(models.EventTransferRequest).filter(
+        models.EventTransferRequest.event_id == event_id,
+        models.EventTransferRequest.status == "pending"
+    ).first()
+    
+    if not req:
+        raise HTTPException(400, "No pending transfer request found")
+        
+    req.status = "cancelled"
+    db.commit()
+    
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "transfer_cancelled"})
+    except Exception:
+        pass
+        
+    return {"message": "Transfer request cancelled successfully"}
+
+
+@router.post("/{event_id}/transfer-ownership/claim/request-otp")
+async def claim_transfer_ownership_request_otp(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    from datetime import datetime
+    req = db.query(models.EventTransferRequest).filter(
+        models.EventTransferRequest.event_id == event_id,
+        models.EventTransferRequest.new_owner_id == current_user.id,
+        models.EventTransferRequest.status == "pending"
+    ).first()
+    
+    if not req:
+        raise HTTPException(400, "No pending transfer request found for you to claim")
+        
+    if datetime.utcnow() > req.expires_at.replace(tzinfo=None):
+        req.status = "expired"
+        db.commit()
+        raise HTTPException(400, "The transfer request has expired. Please ask the owner to send a new request")
+        
+    import random
+    import string
+    from datetime import datetime, timedelta
+    
+    db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == current_user.email,
+        models.OTPVerification.purpose == "transfer_claim"
+    ).delete()
+    
+    otp = ''.join(random.choices(string.digits, k=6))
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    otp_record = models.OTPVerification(
+        email=current_user.email,
+        otp=otp,
+        expires_at=expires_at,
+        purpose="transfer_claim"
+    )
+    db.add(otp_record)
+    db.commit()
+    
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    
+    await send_email(
+        to_email=current_user.email,
+        subject="EventCraft — Claim Ownership Verification",
+        body=f"""Hi {current_user.name},
+
+You initiated a claim for ownership of the event '{event.name}'.
+
+Your verification code is:
+
+🔐 {otp}
+
+This code is valid for 10 minutes.
+Do not share this code with anyone.
+
+Regards,
+EventCraft Team"""
+    )
+    return {"message": "OTP sent to your email."}
+
+
+@router.post("/{event_id}/transfer-ownership/claim/confirm")
+def transfer_ownership_claim_confirm(
+    event_id: str,
+    payload: TransferClaimPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    from datetime import datetime
+    
+    req = db.query(models.EventTransferRequest).filter(
+        models.EventTransferRequest.event_id == event_id,
+        models.EventTransferRequest.new_owner_id == current_user.id,
+        models.EventTransferRequest.status == "pending"
+    ).first()
+    
+    if not req:
+        raise HTTPException(400, "No pending transfer request found for you to claim")
+        
+    if datetime.utcnow() > req.expires_at.replace(tzinfo=None):
+        req.status = "expired"
+        db.commit()
+        raise HTTPException(400, "The transfer request has expired. Please ask the owner to initiate a new one")
+        
+    record = db.query(models.OTPVerification).filter(
+        models.OTPVerification.email == current_user.email,
+        models.OTPVerification.purpose == "transfer_claim",
+        models.OTPVerification.is_verified == False
+    ).order_by(models.OTPVerification.created_at.desc()).first()
+    
+    if not record or record.otp != payload.otp:
+        raise HTTPException(400, "Invalid or expired verification code")
+        
+    if datetime.utcnow() > record.expires_at.replace(tzinfo=None):
+        raise HTTPException(400, "Verification code has expired. Please request a new one")
+        
+    record.is_verified = True
+    
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Event not found")
+        
+    old_owner = db.query(models.User).filter(models.User.id == req.old_owner_id).first()
+    
+    event.owner_id = current_user.id
+    req.status = "claimed"
+    
+    if req.leave_completely:
+        if old_owner:
+            db.query(models.CommitteeInvitation).filter(
+                models.CommitteeInvitation.event_id == event_id,
+                models.CommitteeInvitation.email == old_owner.email
+            ).delete()
+    else:
+        if old_owner:
+            existing_inv = db.query(models.CommitteeInvitation).filter(
+                models.CommitteeInvitation.event_id == event_id,
+                models.CommitteeInvitation.email == old_owner.email
+            ).first()
+            if not existing_inv:
+                new_inv = models.CommitteeInvitation(
+                    event_id=event_id,
+                    email=old_owner.email,
+                    is_accepted=True
+                )
+                db.add(new_inv)
+            else:
+                existing_inv.is_accepted = True
+                
+    log = models.ActivityLog(
+        event_id=event_id,
+        message=f"Ownership of '{event.name}' transferred from {old_owner.name if old_owner else 'previous owner'} to {current_user.name}.",
+        log_type="success",
+    )
+    db.add(log)
+    db.commit()
+    
+    try:
+        from ..ws import broadcast_sync
+        broadcast_sync(event_id, {"type": "transfer_completed", "new_owner_id": current_user.id})
+    except Exception:
+        pass
+        
+    return {"message": "Ownership claimed successfully!"}

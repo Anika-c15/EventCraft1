@@ -81,6 +81,9 @@ class EventOut(BaseModel):
     current_stage: Optional[str] = None
     owner_id: Optional[str] = None
     owner_name: Optional[str] = None
+    is_completed: bool = False
+    completed_at: Optional[datetime] = None
+    reopen_count: int = 0
 
     class Config:
         from_attributes = True
@@ -434,6 +437,7 @@ class PortalData(BaseModel):
     showroom_teams: List[ShowroomTeam] = []  # other teams visible in showroom
     leaderboard: List[Dict[str, Any]] = []
     scoring_weights: Optional[Dict[str, float]] = None
+    event_completed: bool = False
 
 
 class StageSetPayload(BaseModel):
@@ -498,4 +502,29 @@ class SetPostIdPayload(BaseModel):
 
 class ManualVotesPayload(BaseModel):
     votes: Dict[str, int]
+
+
+# ── Ownership Transfer Schemas ───────────────────────────────────────────────
+
+class TransferInitiatePayload(BaseModel):
+    new_owner_id: str
+    leave_completely: bool = True
+    otp: str
+
+class TransferClaimPayload(BaseModel):
+    otp: str
+
+class EventTransferRequestOut(BaseModel):
+    id: str
+    event_id: str
+    old_owner_id: str
+    new_owner_id: str
+    leave_completely: bool
+    status: str
+    created_at: datetime
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True
+
 

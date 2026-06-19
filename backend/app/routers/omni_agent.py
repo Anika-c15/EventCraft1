@@ -589,11 +589,22 @@ def chat_omni(
     if user_ctx["role"] == "admin":
         action_type = _parse_action(raw_reply)
         if action_type:
-            action_result = _execute_action(action_type, event_id, db)
-            display_reply = _strip_action_block(raw_reply)
-            # Append the result message to the reply
-            if action_result.get("message"):
+            event = db.query(models.Event).filter(models.Event.id == event_id).first()
+            is_completed = event.is_completed if event else False
+            
+            if is_completed and action_type not in ("show_scores", "social_status"):
+                display_reply = _strip_action_block(raw_reply)
+                action_result = {
+                    "success": False,
+                    "error": "This event is completed and locked. State changes cannot be applied.",
+                    "message": "⚠️ This event is completed and locked. State changes cannot be applied."
+                }
                 display_reply = display_reply + "\n\n" + action_result["message"]
+            else:
+                action_result = _execute_action(action_type, event_id, db)
+                display_reply = _strip_action_block(raw_reply)
+                if action_result.get("message"):
+                    display_reply = display_reply + "\n\n" + action_result["message"]
 
     # Save to history database
     user_msg = models.AgentMessage(

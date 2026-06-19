@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, SessionLocal
 from ..auth import require_committee
+from ..guards import require_event_not_completed
 from ..schemas import CommunicationCreate, CommunicationOut, DraftCommunicationRequest
 from .. import models, llm
 from ..email_service import send_email, send_bulk_emails
@@ -33,6 +34,7 @@ def draft_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(404, "Event not found")
@@ -92,6 +94,7 @@ def create_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     comm = models.Communication(
         event_id=event_id,
         recipient=payload.recipient,
@@ -115,6 +118,7 @@ async def send_communication(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     comm = db.query(models.Communication).filter(
         models.Communication.id == comm_id,
         models.Communication.event_id == event_id,
@@ -225,6 +229,7 @@ async def send_portal_links(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     from ..config import settings
 
     event = db.query(models.Event).filter(models.Event.id == event_id).first()

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ..database import get_db, SessionLocal
 from ..auth import require_committee
+from ..guards import require_event_not_completed
 from .. import models, schemas
 from ..models import Event, Team, SocialPost
 from ..config import settings
@@ -93,6 +94,7 @@ def update_social_config(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -466,6 +468,7 @@ async def submit_social_post(
     screenshot_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     # 1. Detect Platform
@@ -643,6 +646,7 @@ async def upload_post_proof(
     screenshot_file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     post = db.query(SocialPost).filter(
@@ -714,6 +718,7 @@ async def retry_post_proof(
     screenshot_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     post = db.query(SocialPost).filter(
@@ -791,6 +796,7 @@ async def delete_social_post(
     post_id: str,
     db: Session = Depends(get_db)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     post = db.query(SocialPost).filter(
@@ -866,6 +872,7 @@ async def verify_post_manually(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     post = db.query(SocialPost).filter(
@@ -910,6 +917,7 @@ async def scrape_tick(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     scraped_count = await scrape_pending_posts(event_id, db)
     return {"status": "success", "scraped_count": scraped_count}
@@ -924,6 +932,7 @@ async def calculate_social_scores(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     
     background_tasks.add_task(broadcast, event_id, {
@@ -956,6 +965,7 @@ async def run_full_pipeline(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     # Background scrape followed by score calculation
     await scrape_tick(event_id, db)
@@ -1045,6 +1055,7 @@ def reset_campaign_data(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee)
 ):
+    require_event_not_completed(event_id, db)
     check_social_scraping_allowed(event_id, db)
     db.query(SocialPost).filter(SocialPost.event_id == event_id).delete()
     

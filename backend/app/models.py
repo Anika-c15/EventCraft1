@@ -103,6 +103,9 @@ class Event(Base):
     formation_rules = Column(JSON, nullable=True)
     scoring_weights = Column(JSON, nullable=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+    is_completed = Column(Boolean, default=False, server_default="0")
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    reopen_count = Column(Integer, default=0, server_default="0")
 
     owner = relationship("User")
 
@@ -279,6 +282,7 @@ class OTPVerification(Base):
     is_verified = Column(Boolean, default=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    purpose = Column(String, default="registration")  # "registration" | "transfer_initiate" | "transfer_claim"
 
 class AgentMessage(Base):
     """Stores the conversational agent chat history for dynamic event config."""
@@ -360,6 +364,33 @@ class CommitteeInvitation(Base):
     @property
     def event_name(self) -> Optional[str]:
         return self.event.name if self.event else None
+
+# ── Ownership Transfer ─────────────────────────────────────────────────────────
+
+class TransferStatus(str, enum.Enum):
+    pending = "pending"
+    claimed = "claimed"
+    cancelled = "cancelled"
+    expired = "expired"
+
+
+class EventTransferRequest(Base):
+    __tablename__ = "event_transfer_requests"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    event_id = Column(String, ForeignKey("events.id"), nullable=False)
+    old_owner_id = Column(String, ForeignKey("users.id"), nullable=False)
+    new_owner_id = Column(String, ForeignKey("users.id"), nullable=False)
+    leave_completely = Column(Boolean, default=True)
+    status = Column(String, default="pending")  # pending | claimed | cancelled | expired
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    event = relationship("Event")
+    old_owner = relationship("User", foreign_keys=[old_owner_id])
+    new_owner = relationship("User", foreign_keys=[new_owner_id])
+
+
 
 class SocialPollStatus(str, enum.Enum):
     draft = "draft"

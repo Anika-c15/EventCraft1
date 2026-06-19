@@ -12,6 +12,7 @@ from docx import Document
 
 from ..database import get_db
 from ..auth import require_committee, create_portal_token, decode_portal_token
+from ..guards import require_event_not_completed
 from ..schemas import ParticipantCreate, ParticipantOut, CSVImportResult, PortalData, TeamSubmissionUpdate, TeamOut
 from .. import models
 from .. import llm
@@ -51,6 +52,7 @@ async def add_participant(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     from ..email_service import send_portal_link_email
 
     event = _get_event(event_id, db)
@@ -108,6 +110,7 @@ def delete_participant(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     p = (
         db.query(models.Participant)
         .filter(
@@ -136,6 +139,7 @@ async def import_csv(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     _get_event(event_id, db)
 
     content = await file.read()
@@ -213,6 +217,7 @@ def regenerate_portal_tokens(
     db: Session = Depends(get_db),
     _: models.User = Depends(require_committee),
 ):
+    require_event_not_completed(event_id, db)
     """Regenerate portal tokens for any participants missing them."""
     participants = db.query(models.Participant).filter(
         models.Participant.event_id == event_id,
@@ -385,8 +390,8 @@ def get_portal(
             submission_portal_active = check_stage_allows_submission(current_stage.name, current_stage.description or "")
         results_phase_active = check_stage_is_results_phase(current_stage.name, current_stage.description or "")
 
-    # Only return the real leaderboard to participants if the results phase is active
-    final_leaderboard = leaderboard_entries if results_phase_active else []
+    # Only return the real leaderboard to participants if the results phase is active or event is completed
+    final_leaderboard = leaderboard_entries if (results_phase_active or event.is_completed) else []
 
     return PortalData(
         participant=participant,
@@ -402,6 +407,7 @@ def get_portal(
         showroom_teams=showroom_teams,
         leaderboard=final_leaderboard,
         scoring_weights=event.scoring_weights,
+        event_completed=event.is_completed,
     )
 
 
@@ -412,6 +418,7 @@ def update_team_submission(
     payload: TeamSubmissionUpdate,
     db: Session = Depends(get_db),
 ):
+    require_event_not_completed(event_id, db)
     """Update team submission links (github_link, demo_link) and optionally lock the submission."""
     participant_id = decode_portal_token(token)
     if not participant_id:
@@ -490,6 +497,7 @@ async def parse_resume(
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
+    require_event_not_completed(event_id, db)
     event = _get_event(event_id, db)
     filename = (file.filename or "").lower()
     file_bytes = await file.read()
