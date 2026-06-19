@@ -478,6 +478,7 @@ export const ParticipantPortal: React.FC = () => {
     participant, team, current_stage, current_stage_description, key_dates, event_name,
     progression_eligible, scoring_phase_active, submission_portal_active,
     results_phase_active,
+    event_completed,
   } = data
 
   const isPhase3 = results_phase_active ?? false
@@ -492,11 +493,11 @@ export const ParticipantPortal: React.FC = () => {
   const currentStageLower = (current_stage || '').toLowerCase()
   const isTeamFormationPhase = currentStageLower.includes('team') || currentStageLower.includes('formation')
   const isEvalOrLater = isPhase2 || isPhase3 || currentStageLower.includes('eval') || currentStageLower.includes('result') || currentStageLower.includes('progression')
-  const canRenameTeam = isTeamFormationPhase && !isEvalOrLater
+  const canRenameTeam = isTeamFormationPhase && !isEvalOrLater && !event_completed
 
   const teammates = (team?.members || []).filter((m: any) => m.id !== participant.id)
   const votedCount = showroom.filter(t => t.my_vote !== null && t.my_vote !== undefined).length
-  const isClosed = isPhase3
+  const isClosed = isPhase3 || event_completed
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#F9F8F6] dark:bg-slate-955 dark:bg-slate-950 transition-colors duration-200">
@@ -598,82 +599,20 @@ export const ParticipantPortal: React.FC = () => {
               </div>
               {(isPhase1 || !isSocialVotingEnabled) && <Lock size={12} className="text-gray-400" />}
             </button>
-          </nav>
 
-          {/* Live Mini Leaderboard Widget — Phase Gated */}
-          {/* Phase 1: Hidden entirely */}
-          {/* Phase 2: Locked & Obfuscated */}
-          {isPhase2 && (
-            <div className="pt-4 border-t border-gray-100 space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  🏆 Top Standings <Lock size={10} className="text-gray-400" />
-                </span>
-                <span className="text-[9px] font-semibold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">
-                  Fluctuating
-                </span>
-              </div>
-              <div className="space-y-1 opacity-60 select-none pointer-events-none filter blur-[1.5px]">
-                {[1, 2, 3].map((rank) => (
-                  <div
-                    key={rank}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs border border-transparent text-gray-400"
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-mono text-[10px] text-gray-400 font-bold w-3">
-                        {rank}
-                      </span>
-                      <span>Team ••••••••</span>
-                    </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">
-                      Score: 9.••
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* Phase 3: Fully Revealed */}
-          {isPhase3 && data?.leaderboard && data.leaderboard.length > 0 && (
-            <div className="pt-4 border-t border-gray-100 space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  🏆 Top Standings
-                </span>
-                <span className="flex h-1.5 w-1.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-                </span>
-              </div>
-              <div className="space-y-1">
-                {data.leaderboard.slice(0, 5).map((item: any) => {
-                  const isMyTeam = team && item.team_id === team.id
-                  return (
-                    <div
-                      key={item.team_id}
-                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all duration-200 ${isMyTeam
-                        ? 'border border-primary/30 bg-orange-50/30 shadow-[0_0_8px_rgba(232,69,10,0.1)] text-gray-900 font-semibold'
-                        : 'border border-transparent hover:bg-gray-50 text-gray-500 hover:text-gray-900'
-                        }`}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-mono text-[10px] text-gray-400 font-bold w-3 flex-shrink-0">
-                          {item.rank}
-                        </span>
-                        <span className="truncate">{item.team_name}</span>
-                      </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${isMyTeam
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-600'
-                        }`}>
-                        {item.score !== null && item.score !== undefined ? item.score.toFixed(2) : '—'}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+            {(isPhase2 || isPhase3 || event_completed) && (
+              <a
+                id="live-leaderboard-sidebar-button"
+                href={`/live-leaderboard${eventId ? `?event=${eventId}` : ''}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-slate-200 transition-all cursor-pointer"
+              >
+                <Trophy size={14} className="text-primary" />
+                <span>Live Leaderboard</span>
+              </a>
+            )}
+          </nav>
         </div>
 
         {/* Theme Toggle Button */}
@@ -698,6 +637,17 @@ export const ParticipantPortal: React.FC = () => {
 
       {/* Main Panel Content Area Workspace */}
       <div className="flex-1 overflow-y-auto p-8">
+        {event_completed && (
+          <div className="max-w-5xl mx-auto mb-6 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+            <Lock className="text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0 animate-pulse" size={18} />
+            <div>
+              <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-300">This event is completed and locked</h4>
+              <p className="text-xs text-amber-700/90 dark:text-amber-400/90 mt-0.5">
+                All submissions, peer reviews, team settings, and chat logs are finalized and read-only.
+              </p>
+            </div>
+          </div>
+        )}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             {/* Welcome Banner */}
@@ -707,8 +657,12 @@ export const ParticipantPortal: React.FC = () => {
               <p className="text-sm opacity-80">{participant.email}</p>
               <div className="flex items-center gap-4 mt-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
-                  <span className="text-sm font-medium">{event_name} — Active</span>
+                  {event_completed ? (
+                    <CheckCircle className="text-white" size={14} />
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-green-300 animate-pulse" />
+                  )}
+                  <span className="text-sm font-medium">{event_name} — {event_completed ? 'Completed' : 'Active'}</span>
                 </div>
                 {scoring_phase_active && showroom.length > 0 && (
                   <div className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-0.5">
@@ -797,26 +751,32 @@ export const ParticipantPortal: React.FC = () => {
                 {/* Current Stage */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <h2 className="font-semibold text-gray-900">Current Event Stage</h2>
+                    {event_completed ? (
+                      <CheckCircle className="text-purple-600 dark:text-purple-400 animate-none" size={16} />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    )}
+                    <h2 className="font-semibold text-gray-900 dark:text-white">Current Event Stage</h2>
                   </div>
-                  <div className="bg-orange-50 border border-orange-100 rounded-lg p-4">
-                    <p className="text-sm font-bold text-primary">{current_stage || 'Participant Intake'}</p>
-                    <p className="text-xs text-orange-700 mt-1">
-                      {current_stage_description || (
-                        current_stage === 'Team Formation'
-                          ? "Teams are being formed. You'll receive an email once your team assignment is confirmed."
-                          : current_stage === 'Evaluation'
-                            ? 'Evaluation is underway. Judges are reviewing all team submissions.'
-                            : current_stage === 'Results'
-                              ? 'Results are being compiled. Final rankings will be announced soon.'
-                              : current_stage === 'Progression'
-                                ? 'Qualifying teams are being notified for the next round.'
-                                : scoring_phase_active
-                                  ? 'Scoring phase active — peer voting and judge evaluation in progress.'
-                                  : submission_portal_active || current_stage?.toLowerCase().includes('hack')
-                                    ? 'Hacking is in progress! Build your project and submit it using the My Submission Hub.'
-                                    : 'Registration is open. Your profile has been received.'
+                  <div className={`${event_completed ? 'bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30' : 'bg-orange-50 border border-orange-100'} rounded-lg p-4`}>
+                    <p className={`text-sm font-bold ${event_completed ? 'text-purple-900 dark:text-purple-300' : 'text-primary'}`}>{event_completed ? 'Event Completed' : (current_stage || 'Participant Intake')}</p>
+                    <p className={`text-xs ${event_completed ? 'text-purple-700 dark:text-purple-400' : 'text-orange-700'} mt-1`}>
+                      {event_completed ? 'The event has been successfully completed.' : (
+                        current_stage_description || (
+                          current_stage === 'Team Formation'
+                            ? "Teams are being formed. You'll receive an email once your team assignment is confirmed."
+                            : current_stage === 'Evaluation'
+                              ? 'Evaluation is underway. Judges are reviewing all team submissions.'
+                              : current_stage === 'Results'
+                                ? 'Results are being compiled. Final rankings will be announced soon.'
+                                : current_stage === 'Progression'
+                                  ? 'Qualifying teams are being notified for the next round.'
+                                  : scoring_phase_active
+                                    ? 'Scoring phase active — peer voting and judge evaluation in progress.'
+                                    : submission_portal_active || current_stage?.toLowerCase().includes('hack')
+                                      ? 'Hacking is in progress! Build your project and submit it using the My Submission Hub.'
+                                      : 'Registration is open. Your profile has been received.'
+                        )
                       )}
                     </p>
                   </div>
@@ -943,13 +903,13 @@ export const ParticipantPortal: React.FC = () => {
                   senderName={participant.name}
                   senderRole="team"
                   onNewMessage={(msg) => setQaNotification(msg)}
-                  disabled={team.submission_status !== 'Submitted'}
+                  disabled={team.submission_status !== 'Submitted' || event_completed === true}
                 />
               </div>
             )}
 
             {/* Lower Dashboard Row */}
-            {isPhase3 && team && team.final_score !== null && team.final_score !== undefined ? (
+            {(isPhase3 || event_completed) && team && team.final_score !== null && team.final_score !== undefined ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
                 {/* Final Scoring & Rationale Card */}
                 {(() => {
@@ -1083,7 +1043,7 @@ export const ParticipantPortal: React.FC = () => {
             </div>
 
             {/* Live Leaderboard — available from evaluation phase onwards */}
-            {(isPhase2 || isPhase3) && (
+            {(isPhase2 || isPhase3 || event_completed) && (
               <a
                 href={`/live-leaderboard${eventId ? `?event=${eventId}` : ''}`}
                 target="_blank"
@@ -1096,11 +1056,13 @@ export const ParticipantPortal: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      Live Leaderboard
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      {(isPhase3 || event_completed)
+                        ? 'Final rankings are live — see where your team stands!'
+                        : 'Live Leaderboard'}
+                      {(isPhase2 && !isPhase3 && !event_completed) && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                      {isPhase3
+                      {isPhase3 || event_completed
                         ? 'Final rankings are live — see where your team stands!'
                         : 'Scores are coming in — watch the live rankings update in real time!'}
                     </p>
@@ -1210,8 +1172,139 @@ export const ParticipantPortal: React.FC = () => {
 
         {activeTab === 'submission' && (
           <div className="space-y-6 max-w-5xl mx-auto">
-            {/* ── Project Submission Portal ── */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            {event_completed ? (
+              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-800/60 p-6">
+                <div className="flex items-center gap-2.5 mb-6 border-b border-gray-100 dark:border-slate-800 pb-4">
+                  <Folder className="text-primary" size={20} />
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Submitted Project Showcase</h2>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Your team's finalized submission for {event_name}.</p>
+                  </div>
+                </div>
+
+                {!team || !team.project_title ? (
+                  <div className="text-center py-16 px-4">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Folder size={24} className="text-gray-400 dark:text-slate-500" />
+                    </div>
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-slate-350 mb-2">No Project Submitted</h3>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                      Your team did not finalize a project submission before the event was completed.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Project Header Card */}
+                    <div className="bg-gradient-to-br from-orange-50 to-red-50 dark:from-slate-800/30 dark:to-slate-900/30 rounded-2xl p-6 border border-orange-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[10px] font-bold text-primary dark:text-primary-400 uppercase tracking-widest block mb-1">Finalized Project</span>
+                        <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">{projectTitle}</h3>
+                        <p className="text-xs text-gray-500 dark:text-slate-450 mt-1">Submitted by team <strong className="text-gray-700 dark:text-slate-300">{team.name}</strong></p>
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2 bg-green-500/10 text-green-700 dark:text-green-400 border border-green-200/50 dark:border-green-900/30 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
+                        <CheckCircle size={14} className="text-green-500" /> Locked & Verified
+                      </div>
+                    </div>
+
+                    {/* Project Description */}
+                    <div className="bg-slate-50/50 dark:bg-slate-950/20 rounded-xl p-5 border border-slate-100 dark:border-slate-800/60">
+                      <h4 className="text-xs font-bold text-gray-400 dark:text-slate-550 uppercase tracking-wider mb-2.5">Project Description</h4>
+                      <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                        {projectDescription}
+                      </p>
+                    </div>
+
+                    {/* Quick Links Showcase */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-400 dark:text-slate-550 uppercase tracking-wider mb-3">Project Assets & Links</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {githubUrl ? (
+                          <a
+                            href={githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-slate-650 transition-all group"
+                          >
+                            <div className="w-10 h-10 bg-gray-105 dark:bg-slate-800 rounded-lg flex items-center justify-center text-gray-700 dark:text-slate-350 shrink-0 group-hover:scale-105 transition-transform">
+                              <Github size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-gray-800 dark:text-white block group-hover:text-primary transition-colors">GitHub Repo</span>
+                              <span className="text-[10px] text-gray-400 dark:text-slate-500 truncate block mt-0.5">{githubUrl}</span>
+                            </div>
+                            <ExternalLink size={12} className="text-gray-400 dark:text-slate-500 shrink-0" />
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-3 bg-gray-50/50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-xl p-4 opacity-60">
+                            <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-gray-400 shrink-0">
+                              <Github size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold text-gray-400 block">No GitHub Repository</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {videoUrl ? (
+                          <a
+                            href={videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-red-250 dark:hover:border-red-950/30 transition-all group"
+                          >
+                            <div className="w-10 h-10 bg-red-55 dark:bg-red-950/20 rounded-lg flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 group-hover:scale-105 transition-transform">
+                              <Youtube size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-gray-800 dark:text-white block group-hover:text-red-600 transition-colors">Demo Video</span>
+                              <span className="text-[10px] text-gray-400 dark:text-slate-500 truncate block mt-0.5">{videoUrl}</span>
+                            </div>
+                            <ExternalLink size={12} className="text-gray-400 dark:text-slate-500 shrink-0" />
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-3 bg-gray-50/50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-xl p-4 opacity-60">
+                            <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-gray-400 shrink-0">
+                              <Youtube size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold text-gray-400 block">No Demo Video</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {presentationUrl ? (
+                          <a
+                            href={presentationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-indigo-255 dark:hover:border-indigo-950/30 transition-all group"
+                          >
+                            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:scale-105 transition-transform">
+                              <Send size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-gray-800 dark:text-white block group-hover:text-indigo-600 transition-colors">Presentation Slides</span>
+                              <span className="text-[10px] text-gray-400 dark:text-slate-500 truncate block mt-0.5">{presentationUrl}</span>
+                            </div>
+                            <ExternalLink size={12} className="text-gray-400 dark:text-slate-500 shrink-0" />
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-3 bg-gray-50/50 dark:bg-slate-900/50 border border-gray-100 dark:border-slate-800 rounded-xl p-4 opacity-60">
+                            <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-gray-400 shrink-0">
+                              <Send size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-semibold text-gray-400 block">No Presentation Slides</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2.5 mb-2 border-b border-gray-100 pb-4">
                 <Folder className="text-primary" size={20} />
                 <div>
@@ -1428,6 +1521,7 @@ export const ParticipantPortal: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
           </div>
         )}
 
@@ -1497,10 +1591,11 @@ export const ParticipantPortal: React.FC = () => {
                         <input
                           type="url"
                           required
+                          disabled={event_completed}
                           value={socialUrl}
                           onChange={(e) => setSocialUrl(e.target.value)}
                           placeholder="https://x.com/username/status/..."
-                          className="w-full text-xs bg-gray-50 dark:bg-slate-950/40 border border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-900 dark:text-white"
+                          className="w-full text-xs bg-gray-50 dark:bg-slate-955/40 border border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-900 dark:text-white disabled:opacity-60"
                         />
                       </div>
 
@@ -1512,8 +1607,9 @@ export const ParticipantPortal: React.FC = () => {
                             type="file"
                             accept="image/*"
                             required
+                            disabled={event_completed}
                             onChange={(e) => setSocialScreenshot(e.target.files?.[0] || null)}
-                            className="w-full text-xs border border-dashed border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-500 bg-gray-50 dark:bg-slate-950/40"
+                            className="w-full text-xs border border-dashed border-gray-200 dark:border-slate-800 rounded-lg p-2.5 outline-none focus:border-primary transition-colors text-gray-500 bg-gray-50 dark:bg-slate-955/40 disabled:opacity-60"
                           />
                         </div>
                       )}
@@ -1532,7 +1628,7 @@ export const ParticipantPortal: React.FC = () => {
 
                       <button
                         type="submit"
-                        disabled={socialSubmitting}
+                        disabled={socialSubmitting || event_completed === true}
                         className="w-full bg-primary hover:bg-orange-600 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
                       >
                         {socialSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
@@ -1629,13 +1725,15 @@ export const ParticipantPortal: React.FC = () => {
                                   <ExternalLink size={9} className="shrink-0" />
                                 </a>
                               </div>
-                              <button
-                                onClick={() => handleDeletePost(post.id)}
-                                className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-1 rounded transition-all shrink-0"
-                                title="Delete post link"
-                              >
-                                <Trash size={11} />
-                              </button>
+                              {!event_completed && (
+                                <button
+                                  onClick={() => handleDeletePost(post.id)}
+                                  className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 p-1 rounded transition-all shrink-0"
+                                  title="Delete post link"
+                                >
+                                  <Trash size={11} />
+                                </button>
+                              )}
                             </div>
 
                             {/* Row 2: Status badge + engagement */}
@@ -1685,7 +1783,7 @@ export const ParticipantPortal: React.FC = () => {
                             )}
 
                             {/* Row 4: Action buttons for rejected/failed posts */}
-                            {(post.status === 'verification_failed' || post.status === 'fetch_error') && (
+                            {!event_completed && (post.status === 'verification_failed' || post.status === 'fetch_error') && (
                               <div className="mt-2.5 flex items-center gap-2">
                                 {(post.retry_count || 0) >= 3 ? (
                                   <span className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 font-medium text-[9px] px-2.5 py-1.5 rounded-lg border border-red-100 dark:border-red-900/30">
@@ -1734,7 +1832,7 @@ export const ParticipantPortal: React.FC = () => {
                             )}
 
                             {/* Upload proof button for pending/auto posts without screenshot */}
-                            {!post.screenshot_url && post.status !== 'pending_review' && post.status !== 'verification_failed' && post.status !== 'fetch_error' && (
+                            {!event_completed && !post.screenshot_url && post.status !== 'pending_review' && post.status !== 'verification_failed' && post.status !== 'fetch_error' && (
                               <div className="mt-2">
                                 <label className="cursor-pointer inline-flex items-center gap-1 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-400 font-bold text-[9px] px-2.5 py-1.5 rounded-lg transition-colors">
                                   📎 Upload Screenshot Proof
