@@ -559,6 +559,21 @@ async def advance_stage_direct(
         models.SocialPost.event_id == event_id
     ).delete()
 
+    # Reset team social scraping scores and overrides
+    db.query(models.EvaluationScore).filter(models.EvaluationScore.event_id == event_id).delete()
+    db.query(models.PeerReview).filter(models.PeerReview.event_id == event_id).delete()
+    db.query(models.Team).filter(models.Team.event_id == event_id).update({
+        models.Team.final_score: None,
+        models.Team.judge_avg_score: None,
+        models.Team.social_vote_score: 0.0,
+        models.Team.social_vote_override_score: None,
+        models.Team.social_vote_total_votes: 0,
+        models.Team.social_vote_last_updated: None,
+        models.Team.public_vote_score: None,
+        models.Team.ai_proposed_score: None,
+        models.Team.bias_rationale: None
+    })
+
     log = models.ActivityLog(
         event_id=event_id,
         message=f"Pipeline advanced: '{current_stage.name}' → '{next_stage.name}'",
@@ -643,6 +658,21 @@ async def set_stage_direct(
     db.query(models.SocialPost).filter(
         models.SocialPost.event_id == event_id
     ).delete()
+
+    # Reset team social scraping scores and overrides
+    db.query(models.EvaluationScore).filter(models.EvaluationScore.event_id == event_id).delete()
+    db.query(models.PeerReview).filter(models.PeerReview.event_id == event_id).delete()
+    db.query(models.Team).filter(models.Team.event_id == event_id).update({
+        models.Team.final_score: None,
+        models.Team.judge_avg_score: None,
+        models.Team.social_vote_score: 0.0,
+        models.Team.social_vote_override_score: None,
+        models.Team.social_vote_total_votes: 0,
+        models.Team.social_vote_last_updated: None,
+        models.Team.public_vote_score: None,
+        models.Team.ai_proposed_score: None,
+        models.Team.bias_rationale: None
+    })
 
     # Also log in ActivityLog
     log = models.ActivityLog(
