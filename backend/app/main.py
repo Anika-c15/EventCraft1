@@ -45,6 +45,7 @@ def _migrate_db():
                 ("bias_rationale",     "TEXT"),
                 ("judge_avg_score",    "FLOAT"),
                 ("social_vote_score",  "FLOAT"),
+                ("social_vote_override_score", "FLOAT"),
                 ("social_vote_total_votes", "INTEGER DEFAULT 0"),
                 ("social_vote_last_updated", "TIMESTAMP"),
                 ("github_link",        "TEXT"),

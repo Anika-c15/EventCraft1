@@ -485,6 +485,12 @@ export const socialScrapingApi = {
   resetCampaign: (eventId: string) =>
     request<{ status: string; message: string }>(`/api/events/${eventId}/social-scraping/reset-campaign`, { method: 'POST' }),
 
+  overrideTeamSocialScore: (eventId: string, teamId: string, overrideScore: number | null) =>
+    request<any>(`/api/events/${eventId}/social-scraping/teams/${teamId}/override-score`, {
+      method: 'POST',
+      body: JSON.stringify({ override_score: overrideScore }),
+    }),
+
   retryPostProof: async (eventId: string, teamId: string, postId: string, screenshotFile?: File) => {
     const formData = new FormData()
     if (screenshotFile) {

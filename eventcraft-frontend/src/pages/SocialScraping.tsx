@@ -27,6 +27,10 @@ export const SocialScraping: React.FC = () => {
   const [actionScraping, setActionScraping] = useState(false)
   const [actionResetting, setActionResetting] = useState(false)
 
+  // Override Score states
+  const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({})
+  const [savingOverrides, setSavingOverrides] = useState<Record<string, boolean>>({})
+
   // Verification Modal states
   const [selectedPost, setSelectedPost] = useState<any | null>(null)
   const [modalLikes, setModalLikes] = useState<number>(0)
@@ -66,6 +70,13 @@ export const SocialScraping: React.FC = () => {
     try {
       const data = await socialScrapingApi.getCampaignSummary(eventId)
       setCampaignSummary(data)
+      if (data?.team_scores) {
+        const inputs: Record<string, string> = {}
+        data.team_scores.forEach((ts: any) => {
+          inputs[ts.team_id] = ts.override_score !== null && ts.override_score !== undefined ? String(ts.override_score) : ''
+        })
+        setOverrideInputs(inputs)
+      }
     } catch (err: any) {
       console.error(err)
     }
@@ -192,6 +203,54 @@ export const SocialScraping: React.FC = () => {
     } finally {
       setModalSubmitting(false)
     }
+  }
+
+  const handleSaveOverride = async (teamId: string) => {
+    if (!eventId) return
+    const inputVal = overrideInputs[teamId]?.trim()
+    if (inputVal === '' || inputVal === undefined) {
+      toast.error('Please enter a score or click Clear to reset.')
+      return
+    }
+
+    const score = parseFloat(inputVal)
+    if (isNaN(score) || score < 0 || score > 10) {
+      toast.error('Override score must be a number between 0 and 10.')
+      return
+    }
+
+    setSavingOverrides(prev => ({ ...prev, [teamId]: true }))
+    try {
+      await socialScrapingApi.overrideTeamSocialScore(eventId, teamId, score)
+      toast.success('Social score override saved successfully!')
+      loadSummary()
+      loadPosts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save score override')
+    } finally {
+      setSavingOverrides(prev => ({ ...prev, [teamId]: false }))
+    }
+  }
+
+  const handleClearOverride = async (teamId: string) => {
+    if (!eventId) return
+    
+    setSavingOverrides(prev => ({ ...prev, [teamId]: true }))
+    try {
+      await socialScrapingApi.overrideTeamSocialScore(eventId, teamId, null)
+      toast.success('Social score override cleared.')
+      setOverrideInputs(prev => ({ ...prev, [teamId]: '' }))
+      loadSummary()
+      loadPosts()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to clear score override')
+    } finally {
+      setSavingOverrides(prev => ({ ...prev, [teamId]: false }))
+    }
+  }
+
+  const handleInputChange = (teamId: string, val: string) => {
+    setOverrideInputs(prev => ({ ...prev, [teamId]: val }))
   }
 
   // --- Filtering ---
@@ -333,111 +392,194 @@ export const SocialScraping: React.FC = () => {
             <div className="text-center py-20">
               <RefreshCw size={30} className="animate-spin text-gray-300 mx-auto" />
             </div>
-          ) : filteredPosts.length === 0 ? (
+          ) : !campaignSummary?.team_scores || campaignSummary.team_scores.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-gray-200 dark:border-slate-800 rounded-lg">
-              <p className="text-xs text-gray-400 dark:text-slate-500">No submissions found matching filters.</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">No teams found in this event.</p>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              {filteredPosts.map((post) => (
-                <div
-                  key={post.id}
-                  className={`rounded-xl border p-3.5 transition-colors ${
-                    post.status === 'verified'
-                      ? 'border-green-100 dark:border-green-900/30 bg-green-50/20 dark:bg-green-950/10'
-                      : post.status === 'verification_failed'
-                      ? 'border-red-100 dark:border-red-900/30 bg-red-50/20 dark:bg-red-950/10'
-                      : post.status === 'fetch_error'
-                      ? 'border-orange-100 dark:border-orange-900/30 bg-orange-50/20 dark:bg-orange-950/10'
-                      : post.status === 'pending_review'
-                      ? 'border-blue-100 dark:border-blue-900/30 bg-blue-50/10 dark:bg-blue-950/10'
-                      : 'border-gray-100 dark:border-slate-800/80 bg-white dark:bg-slate-900'
-                  }`}
-                >
-                  {/* Row 1: Team + Platform + URL + action buttons */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                      <span className="font-bold text-[11px] text-gray-900 dark:text-white">{post.team_name}</span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500 font-mono">{post.platform}</span>
-                      <a
-                        href={post.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline font-medium text-[10px] flex items-center gap-0.5"
-                        title={post.url}
-                      >
-                        Link <ExternalLink size={9} />
-                      </a>
+            <div className="space-y-6">
+              {campaignSummary.team_scores.map((team: any) => {
+                const teamPosts = filteredPosts.filter(p => p.team_id === team.team_id)
+                const isOverridden = team.override_score !== null && team.override_score !== undefined
+                
+                return (
+                  <div
+                    key={team.team_id}
+                    className="border border-gray-200 dark:border-slate-800/80 rounded-xl bg-slate-50/30 dark:bg-slate-900/40 p-4 space-y-3.5"
+                  >
+                    {/* Team Header inside the box */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-150 dark:border-slate-800/80">
+                      <div>
+                        <h4 className="font-extrabold text-sm text-gray-800 dark:text-slate-100 flex items-center gap-2">
+                          {team.team_name}
+                          {isOverridden && (
+                            <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold border border-amber-500/20 uppercase tracking-wider">
+                              Overridden
+                            </span>
+                          )}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-gray-450 dark:text-slate-500">Social Score:</span>
+                        <span className={`font-mono font-black ${isOverridden ? 'text-amber-500' : 'text-primary'}`}>
+                          {team.score.toFixed(2)} / 10.00
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {post.screenshot_url && (
-                        <button
-                          onClick={() => setPreviewUrl(post.screenshot_url)}
-                          className="text-gray-500 hover:text-gray-700 bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 p-1.5 rounded transition-colors border border-gray-200/40"
-                          title="View screenshot proof"
-                        >
-                          <Eye size={11} />
-                        </button>
+                    {/* Team Submissions List */}
+                    <div className="space-y-2.5">
+                      {teamPosts.length === 0 ? (
+                        <div className="text-center py-6 bg-white dark:bg-slate-900 border border-dashed border-gray-200/60 dark:border-slate-805 rounded-lg">
+                          <p className="text-[11px] text-gray-405 dark:text-slate-500">No social posts submitted yet.</p>
+                        </div>
+                      ) : (
+                        teamPosts.map((post: any) => (
+                          <div
+                            key={post.id}
+                            className={`rounded-xl border p-3.5 bg-white dark:bg-slate-900 transition-colors ${
+                              post.status === 'verified'
+                                ? 'border-green-100 dark:border-green-900/30 bg-green-50/5 dark:bg-green-950/5'
+                                : post.status === 'verification_failed'
+                                ? 'border-red-100 dark:border-red-900/30 bg-red-50/5 dark:bg-red-950/5'
+                                : post.status === 'fetch_error'
+                                ? 'border-orange-100 dark:border-orange-900/30 bg-orange-50/5 dark:bg-orange-950/5'
+                                : post.status === 'pending_review'
+                                ? 'border-blue-100 dark:border-blue-900/30 bg-blue-50/5 dark:bg-blue-950/5'
+                                : 'border-gray-150 dark:border-slate-800'
+                            }`}
+                          >
+                            {/* Row 1: Platform + URL + Actions */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500 font-mono">
+                                  {post.platform}
+                                </span>
+                                <a
+                                  href={post.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline font-medium text-[10px] flex items-center gap-0.5 truncate max-w-[200px] sm:max-w-md"
+                                  title={post.url}
+                                >
+                                  Link <ExternalLink size={9} />
+                                </a>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {post.screenshot_url && (
+                                  <button
+                                    onClick={() => setPreviewUrl(post.screenshot_url)}
+                                    className="text-gray-500 hover:text-gray-700 bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 p-1.5 rounded transition-colors border border-gray-200/40"
+                                    title="View screenshot proof"
+                                  >
+                                    <Eye size={11} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => openVerifyModal(post)}
+                                  disabled={isCompleted}
+                                  className="text-primary hover:text-orange-700 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100 px-2 py-1 rounded transition-colors text-[9px] font-bold border border-orange-200/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Verify
+                                </button>
+                                {!isCompleted && (
+                                  <button
+                                    onClick={() => handleDeletePost(post.team_id, post.id)}
+                                    className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded transition-colors border border-red-200/30"
+                                    title="Delete post"
+                                  >
+                                    <Trash size={11} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Row 2: Status badge + engagement */}
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                                post.status === 'verified' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200/60' :
+                                post.status === 'fetch_error' ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border border-orange-200/60' :
+                                post.status === 'pending_review' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200/60' :
+                                post.status === 'verification_failed' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200/60' :
+                                'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200'
+                              }`}>
+                                {post.status === 'fetch_error' ? 'Fetch Error' : post.status.replace(/_/g, ' ')}
+                              </span>
+                              {post.status === 'verified' && (
+                                <span className="text-[9px] text-gray-400 font-mono">
+                                  {post.likes} likes · {post.shares} reposts
+                                </span>
+                              )}
+                              {post.status !== 'verified' && (
+                                <span className="text-[9px] text-gray-400 font-mono">
+                                  {post.likes}L / {post.shares}R
+                                </span>
+                              )}
+                              {post.retry_count > 0 && (
+                                <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full font-mono">
+                                  {post.retry_count} retr{post.retry_count === 1 ? 'y' : 'ies'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Row 3: Rejection Reason */}
+                            {post.rejection_reason && (post.status === 'verification_failed' || post.status === 'fetch_error') && (
+                              <div className="mt-2 bg-red-50 dark:bg-red-950/10 border border-red-100 dark:border-red-900/20 rounded-lg px-2.5 py-1.5">
+                                <p className="text-[9px] text-red-600 dark:text-red-400 leading-relaxed">
+                                  <span className="font-bold">Rejection reason: </span>{post.rejection_reason}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))
                       )}
-                      <button
-                        onClick={() => openVerifyModal(post)}
-                        disabled={isCompleted}
-                        className="text-primary hover:text-orange-700 bg-orange-50/60 dark:bg-orange-950/20 hover:bg-orange-100 px-2 py-1 rounded transition-colors text-[9px] font-bold border border-orange-200/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Verify
-                      </button>
-                      {!isCompleted && (
+                    </div>
+
+                    {/* Manual Score Override Option below all links inside the box */}
+                    <div className="pt-3 border-t border-dashed border-gray-200 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/40 dark:bg-slate-900/20 p-3 rounded-lg">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
+                          Manual Score Override
+                        </span>
+                        <p className="text-[9px] text-gray-400 dark:text-slate-500">
+                          Directly override this team's social scraping score (0.0 to 10.0)
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="10"
+                          placeholder={isOverridden ? String(team.override_score) : "Override score"}
+                          value={overrideInputs[team.team_id] || ''}
+                          onChange={(e) => handleInputChange(team.team_id, e.target.value)}
+                          disabled={savingOverrides[team.team_id] || isCompleted}
+                          className="w-28 text-xs bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary text-gray-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium font-mono"
+                        />
                         <button
-                          onClick={() => handleDeletePost(post.team_id, post.id)}
-                          className="text-red-500 hover:text-red-700 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-100 p-1.5 rounded transition-colors border border-red-200/30"
-                          title="Delete post"
+                          onClick={() => handleSaveOverride(team.team_id)}
+                          disabled={savingOverrides[team.team_id] || isCompleted || !overrideInputs[team.team_id]?.trim()}
+                          className="bg-primary hover:bg-orange-700 text-white text-[10px] font-bold px-3 py-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          <Trash size={11} />
+                          {savingOverrides[team.team_id] ? 'Saving...' : 'Save'}
                         </button>
-                      )}
+                        {isOverridden && (
+                          <button
+                            onClick={() => handleClearOverride(team.team_id)}
+                            disabled={savingOverrides[team.team_id] || isCompleted}
+                            className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 text-[10px] font-bold px-3 py-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-
-                  {/* Row 2: Status badge + engagement + retry count */}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                      post.status === 'verified' ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200/60' :
-                      post.status === 'fetch_error' ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border border-orange-200/60' :
-                      post.status === 'pending_review' ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200/60' :
-                      post.status === 'verification_failed' ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200/60' :
-                      'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200'
-                    }`}>
-                      {post.status === 'fetch_error' ? 'Fetch Error' : post.status.replace(/_/g, ' ')}
-                    </span>
-                    {post.status === 'verified' && (
-                      <span className="text-[9px] text-gray-400 font-mono">
-                        {post.likes} likes · {post.shares} reposts
-                      </span>
-                    )}
-                    {post.status !== 'verified' && (
-                      <span className="text-[9px] text-gray-400 font-mono">
-                        {post.likes}L / {post.shares}R
-                      </span>
-                    )}
-                    {post.retry_count > 0 && (
-                      <span className="text-[9px] text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
-                        {post.retry_count} retr{post.retry_count === 1 ? 'y' : 'ies'}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Row 3: Rejection reason box */}
-                  {post.rejection_reason && (post.status === 'verification_failed' || post.status === 'fetch_error') && (
-                    <div className="mt-2 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-lg px-2.5 py-1.5">
-                      <p className="text-[9px] text-red-600 dark:text-red-400 leading-relaxed">
-                        <span className="font-bold">Rejection reason: </span>{post.rejection_reason}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

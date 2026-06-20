@@ -38,6 +38,10 @@ class PostVerifyPayload(BaseModel):
     rejection_reason: Optional[str] = None
 
 
+class OverrideScorePayload(BaseModel):
+    override_score: Optional[float] = None
+
+
 def check_social_scraping_allowed(event_id: str, db: Session):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -954,6 +958,50 @@ async def calculate_social_scores(
     return {"status": "success"}
 
 
+@router.post("/teams/{team_id}/override-score")
+@limiter.limit("30/minute")
+async def override_team_social_score(
+    request: Request,
+    event_id: str,
+    team_id: str,
+    payload: OverrideScorePayload,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_committee)
+):
+    require_event_not_completed(event_id, db)
+    check_social_scraping_allowed(event_id, db)
+    
+    team = db.query(models.Team).filter(
+        models.Team.id == team_id,
+        models.Team.event_id == event_id
+    ).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+        
+    if payload.override_score is not None:
+        if payload.override_score < 0.0 or payload.override_score > 10.0:
+            raise HTTPException(400, "Override score must be between 0.0 and 10.0")
+            
+    team.social_vote_override_score = payload.override_score
+    db.commit()
+    
+    await _internal_calculate_scores(event_id, db)
+    db.commit()
+    
+    try:
+        await broadcast(event_id, {
+            "type": "social:scores_updated"
+        })
+    except Exception:
+        pass
+        
+    return {
+        "status": "success",
+        "social_vote_score": team.social_vote_score,
+        "social_vote_override_score": team.social_vote_override_score
+    }
+
+
 # ── Pipeline / Summary Endpoints ───────────────────────────────────────────────
 
 @router.post("/run-pipeline")
@@ -995,6 +1043,7 @@ def get_campaign_summary(
                     "team_id": t.id,
                     "team_name": t.name,
                     "score": t.social_vote_score or 0.0,
+                    "override_score": t.social_vote_override_score,
                     "total_votes": t.social_vote_total_votes or 0
                 }
                 for t in teams
@@ -1038,6 +1087,7 @@ def get_campaign_summary(
                 "team_id": t.id,
                 "team_name": t.name,
                 "score": t.social_vote_score or 0.0,
+                "override_score": t.social_vote_override_score,
                 "total_votes": t.social_vote_total_votes or 0
             }
             for t in teams
@@ -1062,6 +1112,7 @@ def reset_campaign_data(
     teams = db.query(Team).filter(Team.event_id == event_id).all()
     for team in teams:
         team.social_vote_score = 0.0
+        team.social_vote_override_score = None
         team.social_vote_total_votes = 0
         team.social_vote_last_updated = None
         
@@ -1291,7 +1342,10 @@ async def _internal_calculate_scores(event_id: str, db: Session):
         else:
             normalized = 0.0
             
-        team.social_vote_score = normalized
+        if team.social_vote_override_score is not None:
+            team.social_vote_score = team.social_vote_override_score
+        else:
+            team.social_vote_score = normalized
         team.social_vote_total_votes = int(db.query(SocialPost).filter(
             SocialPost.team_id == team.id,
             SocialPost.status == "verified"

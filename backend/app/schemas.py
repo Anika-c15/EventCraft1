@@ -163,6 +163,7 @@ class TeamOut(BaseModel):
     rank: Optional[int]
     judge_avg_score: Optional[float] = None
     social_vote_score: Optional[float] = None
+    social_vote_override_score: Optional[float] = None
     social_vote_total_votes: Optional[int] = None
     public_vote_score: Optional[float] = None   # combined avg(social, peer)
     ai_proposed_score: Optional[float] = None

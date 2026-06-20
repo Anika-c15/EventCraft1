@@ -194,6 +194,7 @@ class Team(Base):
     rank = Column(Integer, nullable=True)
     judge_avg_score = Column(Float, nullable=True)       # cached judge panel average
     social_vote_score = Column(Float, nullable=True)     # raw score from social scraping
+    social_vote_override_score = Column(Float, nullable=True) # manual override score from admin
     social_vote_total_votes = Column(Integer, default=0)
     social_vote_last_updated = Column(DateTime(timezone=True), nullable=True)
     public_vote_score = Column(Float, nullable=True)     # combined avg(social, peer) — the 30%
