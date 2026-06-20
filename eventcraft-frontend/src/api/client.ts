@@ -253,6 +253,10 @@ export const evaluationsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  unlockScore: (eventId: string, teamId: string) =>
+    request<any>(`/api/events/${eventId}/evaluations/teams/${teamId}/unlock-score`, {
+      method: 'POST',
+    }),
   listInvitations: (eventId: string) =>
     request<any[]>(`/api/events/${eventId}/evaluations/judge-invitations`),
   revokeInvitation: (eventId: string, inviteId: string) =>

@@ -788,3 +788,47 @@ async def lock_composite_score(
     })
 
     return {"message": "Score successfully locked", "final_score": team.final_score}
+
+
+@router.post("/teams/{team_id}/unlock-score")
+async def unlock_composite_score(
+    event_id: str,
+    team_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_committee),
+):
+    require_event_not_completed(event_id, db)
+    _enforce_evaluations_active(event_id, db)
+
+    team = db.query(models.Team).filter(
+        models.Team.id == team_id,
+        models.Team.event_id == event_id,
+    ).first()
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    team.final_score = None
+    
+    db.add(models.ActivityLog(
+        event_id=event_id,
+        message=f"Final score unlocked for {team.name} by {current_user.name}",
+        log_type="warning",
+    ))
+    db.commit()
+
+    # WebSocket update to refresh frontend
+    background_tasks.add_task(broadcast, event_id, {
+        "type": "score_locked",
+        "team_id": team_id,
+        "team_name": team.name,
+        "final_score": None,
+    })
+    background_tasks.add_task(broadcast, event_id, {
+        "type": "leaderboard_update",
+        "team_id": team_id,
+        "team_name": team.name,
+        "final_score": None,
+    })
+
+    return {"message": "Score successfully unlocked"}

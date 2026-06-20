@@ -201,6 +201,19 @@ export const Evaluations: React.FC = () => {
     }
   }
 
+  const handleUnlockScore = async (teamId: string) => {
+    try {
+      await evaluationsApi.unlockScore(eventId!, teamId)
+      toast.success('Team score successfully unlocked.')
+      await loadBiasMitigation()
+      await loadScores()
+      await loadApprovals()
+      await loadDashboard()
+    } catch (e: any) {
+      toast.error(e.message || 'Error unlocking score')
+    }
+  }
+
   useEffect(() => {
     if (eventId) {
       setTeams([])
@@ -556,9 +569,21 @@ export const Evaluations: React.FC = () => {
                               )}
                             </div>
                             {isLocked ? (
-                              <Badge variant={m.final_score > 10 || m.final_score < 0 ? 'danger' : 'purple'}>
-                                {m.final_score > 10 || m.final_score < 0 ? '⚠️ ' : ''}Locked ({m.final_score.toFixed(2)})
-                              </Badge>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant={m.final_score > 10 || m.final_score < 0 ? 'danger' : 'purple'}>
+                                  {m.final_score > 10 || m.final_score < 0 ? '⚠️ ' : ''}Locked ({m.final_score.toFixed(2)})
+                                </Badge>
+                                {!isClosed && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => handleUnlockScore(m.team_id)}
+                                    className="px-2 py-0.5 text-[10px] font-bold"
+                                  >
+                                    Unlock
+                                  </Button>
+                                )}
+                              </div>
                             ) : isFlagged ? (
                               <Badge variant="danger">Bias Flagged</Badge>
                             ) : (hasPublic || !isPublicNeeded) ? (
