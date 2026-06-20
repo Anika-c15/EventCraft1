@@ -131,6 +131,7 @@ export interface SocialConfig {
   auto_post_on_evaluation: boolean
   auto_fetch_on_completion: boolean
   min_vote_threshold: number
+  engagement_cap?: number
   social_weight?: number
 }
 

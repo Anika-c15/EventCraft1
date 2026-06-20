@@ -306,7 +306,50 @@ export const SocialScraping: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Engagement Cap Control */}
+          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5" title="Maximum raw engagement (likes + shares×2.5) per team before score capping. Prevents high-follower accounts from dominating.">
+            <span className="text-[9px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Eng. Cap</span>
+            <input
+              type="number"
+              min={10}
+              max={100000}
+              step={10}
+              value={config?.engagement_cap ?? 1000}
+              onChange={(e) => {
+                const val = parseInt(e.target.value)
+                if (!isNaN(val) && config) {
+                  setConfig({ ...config, engagement_cap: val })
+                }
+              }}
+              onBlur={async (e) => {
+                const val = parseInt(e.target.value)
+                if (!isNaN(val) && val >= 10 && val <= 100000 && eventId) {
+                  try {
+                    await socialScrapingApi.updateSocialConfig(eventId, { engagement_cap: val } as any)
+                    toast.success(`Engagement cap updated to ${val}`)
+                  } catch (err: any) {
+                    toast.error(`Failed to update cap: ${err.message}`)
+                  }
+                }
+              }}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  const val = parseInt((e.target as HTMLInputElement).value)
+                  if (!isNaN(val) && val >= 10 && val <= 100000 && eventId) {
+                    try {
+                      await socialScrapingApi.updateSocialConfig(eventId, { engagement_cap: val } as any)
+                      toast.success(`Engagement cap updated to ${val}`)
+                    } catch (err: any) {
+                      toast.error(`Failed to update cap: ${err.message}`)
+                    }
+                  }
+                }
+              }}
+              disabled={isCompleted}
+              className="w-20 text-xs bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary text-gray-700 dark:text-slate-300 font-mono font-bold text-center disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
           <Button
             onClick={handleScrapeTick}
             disabled={actionScraping || posts.length === 0 || isCompleted}

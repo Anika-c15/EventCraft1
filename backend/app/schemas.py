@@ -492,6 +492,7 @@ class SocialConfigUpdate(BaseModel):
     auto_post_on_evaluation: Optional[bool] = None
     auto_fetch_on_completion: Optional[bool] = None
     min_vote_threshold: Optional[int] = None
+    engagement_cap: Optional[int] = Field(None, ge=10, le=100000, description="Max raw engagement score per team before capping (default 1000)")
 
 class InstagramIdPayload(BaseModel):
     story_media_id: str

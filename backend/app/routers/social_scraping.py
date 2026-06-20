@@ -27,7 +27,8 @@ DEFAULT_SOCIAL_CONFIG = {
     "poll_duration_minutes": 1440,
     "auto_post_on_evaluation": False,
     "auto_fetch_on_completion": True,
-    "min_vote_threshold": 30
+    "min_vote_threshold": 30,
+    "engagement_cap": 1000
 }
 
 
@@ -1320,6 +1321,13 @@ async def _internal_calculate_scores(event_id: str, db: Session):
     if not teams:
         return
 
+    # Read dynamic engagement cap from event config (default: 1000)
+    event = db.query(Event).filter(Event.id == event_id).first()
+    engagement_cap = 1000.0
+    if event and event.pipeline_config:
+        social_cfg = event.pipeline_config.get("social_scraping", {})
+        engagement_cap = float(social_cfg.get("engagement_cap", 1000))
+
     # Calculate raw engagement for each team
     # Formula: Raw = Likes + Shares * 2.5
     team_raws = {}
@@ -1330,8 +1338,8 @@ async def _internal_calculate_scores(event_id: str, db: Session):
         ).all()
         
         raw_score = sum(post.likes + (post.shares * 2.5) for post in verified_posts)
-        # Cap raw score to prevent bot abuse
-        team_raws[team.id] = min(1000.0, raw_score)
+        # Cap raw score to prevent bot abuse (dynamic cap set by admin)
+        team_raws[team.id] = min(engagement_cap, raw_score)
 
     max_raw = max(team_raws.values()) if team_raws else 0.0
 
