@@ -309,7 +309,7 @@ export const SocialScraping: React.FC = () => {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Engagement Cap Control */}
           <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5" title="Maximum raw engagement (likes + shares×2.5) per team before score capping. Prevents high-follower accounts from dominating.">
-            <span className="text-[9px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Eng. Cap</span>
+            <span className="text-[9px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Engagement Cap</span>
             <input
               type="number"
               min={10}
