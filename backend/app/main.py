@@ -162,8 +162,9 @@ def _migrate_db():
                     conn.execute(text("""
                         CREATE TABLE subscribers (
                              id            TEXT PRIMARY KEY,
+                             event_id      TEXT REFERENCES events(id),
                              name          TEXT NOT NULL,
-                             email         TEXT NOT NULL UNIQUE,
+                             email         TEXT NOT NULL,
                              notified      BOOLEAN DEFAULT FALSE,
                              subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
@@ -171,6 +172,29 @@ def _migrate_db():
                 print("🚀 Migrated: created subscribers table")
             except Exception as tbl_err:
                  print(f"⚠️ Could not create subscribers table: {tbl_err}")
+        else:
+            # Make sure event_id is present and remove global unique constraint/index on email
+            columns_sub = [col["name"] for col in inspector.get_columns("subscribers")]
+            if "event_id" not in columns_sub:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE subscribers ADD COLUMN event_id VARCHAR(255)"))
+                    print("🚀 Migrated: added event_id to subscribers")
+                except Exception as col_err:
+                    print(f"⚠️ Could not add event_id to subscribers: {col_err}")
+
+            try:
+                with engine.begin() as conn:
+                    if engine.dialect.name == "postgresql":
+                        conn.execute(text("ALTER TABLE subscribers DROP CONSTRAINT IF EXISTS ix_subscribers_email CASCADE"))
+                        conn.execute(text("DROP INDEX IF EXISTS ix_subscribers_email CASCADE"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_subscribers_email ON subscribers (email)"))
+                    else:
+                        conn.execute(text("DROP INDEX IF EXISTS ix_subscribers_email"))
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_subscribers_email ON subscribers (email)"))
+                print("🚀 Migrated: dropped unique constraint/index on subscribers.email and recreated it as non-unique")
+            except Exception as drop_err:
+                print(f"⚠️ Could not alter unique constraint on subscribers: {drop_err}")
 
         # ── social_polls table ──────────────────────────────────────────────
         if "social_polls" not in existing_tables:
