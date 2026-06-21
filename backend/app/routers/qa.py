@@ -35,7 +35,32 @@ def get_messages(
         .order_by(models.QAMessage.created_at)
         .all()
     )
-    return messages
+    
+    results = []
+    for msg in messages:
+        msg_dict = {
+            "id": msg.id,
+            "event_id": msg.event_id,
+            "team_id": msg.team_id,
+            "sender_name": msg.sender_name,
+            "sender_role": msg.sender_role,
+            "message": msg.message,
+            "parent_id": msg.parent_id,
+            "created_at": msg.created_at.isoformat() if msg.created_at else None
+        }
+        if msg_dict["sender_role"] == "judge" and "@" in msg_dict["sender_name"]:
+            invite = db.query(models.JudgeInvitation).filter(
+                models.JudgeInvitation.event_id == event_id,
+                models.JudgeInvitation.judge_email == msg_dict["sender_name"]
+            ).first()
+            if invite:
+                msg_dict["sender_name"] = invite.judge_name
+            else:
+                username = msg_dict["sender_name"].split("@")[0]
+                msg_dict["sender_name"] = f"Judge ({username})"
+        results.append(msg_dict)
+        
+    return results
 
 
 @router.post("")

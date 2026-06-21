@@ -455,6 +455,7 @@ def get_judge_portal(
     return {
         "event_name": event.name,
         "judge_email": judge_data["email"],
+        "judge_name": invitation.judge_name if invitation else "Judge",
         "criteria": criteria,
         "teams": [
             {

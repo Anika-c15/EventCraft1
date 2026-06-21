@@ -362,7 +362,7 @@ export const JudgePortal: React.FC = () => {
                       <QAChat
                         eventId={eventId!}
                         teamId={team.id}
-                        senderName={portalData.judge_email}
+                        senderName={portalData.judge_name || 'Judge'}
                         senderRole="judge"
                         disabled={portalData.event_completed === true}
                       />
